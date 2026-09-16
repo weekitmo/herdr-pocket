@@ -1,5 +1,7 @@
 # herdr pocket
 
+**English** · [简体中文](README.zh-CN.md)
+
 <p align="center">
   <img src="docs/logo.png" width="104" alt="herdr pocket">
 </p>
@@ -24,16 +26,42 @@ Liquid Glass chrome.
 
 ## What it does
 
-- **Status board** — every agent grouped by what it needs. The ordering is the
-  whole argument: `needs you` first, everything quiet last.
-- **Live terminal** — a real character grid for any pane, with scrollback,
-  selection and copy, and a key bar for the keys a soft keyboard cannot send.
-- **Machines** — SSH hosts with credentials in the platform keystore and host
-  keys pinned on first use.
-- **Notifications** — a local alert when an agent starts waiting on you; tapping
-  it opens that agent's terminal.
+**The board.** Every agent on every machine, grouped by what it needs. The
+ordering is the whole argument: `needs you` first, everything quiet last.
 
-Simplified Chinese (default) and English. Light and dark.
+**The terminal.** A real character grid for any pane — scrollback, selection and
+copy, bracketed paste, and a key bar for the keys a soft keyboard cannot send.
+The whole tab's split layout can be mirrored, so a pane that is 20 columns wide
+on the desktop is legible on a phone.
+
+**Files.** Browse a pane's working directory and read a file in it. Previews are
+truncated rather than unbounded, and a binary file says so instead of drawing
+noise. Long-press a file to download it to the phone.
+
+**Git changes.** The pane's directory, read as a repository: staged, unstaged,
+untracked and conflicted files, the ahead/behind count against upstream, and a
+diff for any one of them.
+
+**Starting an agent.** Choose a directory and one of the agents herdr reports it
+can start; the app creates the workspace and starts it there. Tick *use an
+isolated worktree* and it gets a fresh `git worktree` on its own branch instead —
+so an agent can be turned loose on a task without it touching what you are
+looking at. There is a smaller version too: put an agent into a shell pane that
+is already idle, and no workspace is created at all.
+
+**Attaching a file.** Paste a block of text, pick a photo, or take one. It is
+uploaded to the machine and its path typed into the terminal — "look at this
+screenshot" without needing a file manager at either end.
+
+**Machines.** SSH hosts with credentials in the platform keystore and host keys
+pinned on first use. Pairing one is a QR code: run `hdp pair` and scan it, and
+there is no address, port or key to type.
+
+**Notifications.** A local alert when an agent starts waiting on you; tapping it
+opens that agent's terminal.
+
+Simplified Chinese (default) and English, with light and dark colour schemes
+(the terminal takes the scheme's own sixteen colours).
 
 ---
 
@@ -47,7 +75,14 @@ flutter run -d <android-id>   # the real target
 
 ### Connecting to a machine
 
-The app does not discover machines; you add them.
+The app does not discover machines; you add them. There are two ways in.
+
+**Pair by QR code** (recommended) — run `hdp pair` on the machine and scan the
+code it prints. That installs the phone's own key for you and fills in the
+address, so there is nothing to type and no key to paste. See
+[Pairing a phone](#pairing-a-phone-hdp) below.
+
+**Or add it by hand:**
 
 1. Open the board and tap the machines icon (top left).
 2. **Add machine**: label, host, port, username.
@@ -65,6 +100,10 @@ than re-trusting quietly.
 - An SSH server that permits **stream-local forwarding** (the OpenSSH default).
   If it is off you get a specific message rather than a timeout, because the
   fix is one line of `sshd_config`: `AllowStreamLocalForwarding yes`.
+- Nothing else, for the board, the terminal, files, git and starting agents.
+  The **SFTP subsystem** is wanted only to move a whole file — downloading one
+  to the phone, or attaching one to an agent. Turn the SFTP subsystem off and
+  everything else still works; the app says exactly which of the two failed.
 
 Nothing has to be installed beyond herdr itself. There is no bridge binary, no
 helper script to copy over, and no port to open.
@@ -85,12 +124,26 @@ requires a **fork** of herdr that adds the bridge subcommand.
 This client instead uses SSH's `direct-streamlocal@openssh.com` channel type,
 which needs no helper at all, and therefore works against **stock herdr**.
 
+That socket is also the reason files and git work the way they do: the herdr
+protocol has no filesystem API and no git API, so those are asked of the
+machine's **shell** over the same SSH connection — `ls -lA` to list a
+directory, `head -c` to read a file, `git status --porcelain=v2` and
+`git diff` for the changes page. It is the same data source a terminal
+sidebar plugin would use, so the two cannot disagree about what changed.
+
+Only *moving a whole file* uses something else, because a shell command is the
+wrong tool for bytes: downloads and attachments go over **SFTP**. Building the
+upload path is split the other way round — a shell `mkdir -p` for the
+directory (SFTP's mkdir does not create parents) and SFTP for the bytes.
+
 | Concern | Where |
 |---|---|
 | SSH transport, host keys | `lib/data/transport/ssh_socket_transport.dart` |
 | Protocol framing (NDJSON, UTF-8 at line boundaries) | `lib/data/protocol/` |
 | Terminal channel (`herdr terminal session control`) | `lib/data/terminal/` |
 | Board state, fail-closed grouping | `lib/domain/agent/` |
+| Reading a directory, a file, a repository | `lib/data/remote_fs.dart`, `lib/data/git_client.dart` |
+| File transfer (SFTP) | `lib/data/remote_download.dart`, `lib/data/remote_upload.dart` |
 | Design tokens, glass | `lib/ui/design/` |
 
 `lib/domain/` is pure Dart — no Flutter — so the most consequential logic
@@ -173,6 +226,9 @@ are driven by Android's own instrumentation runner.
 
 ## Limits, stated plainly
 
+- **The file browser reads; it does not edit.** It lists, previews and downloads.
+  Editing a file on a phone keyboard is not something this is trying to be good
+  at — the terminal next door is.
 - **Notifications are foreground only.** They fire while the app is alive. Real
   background delivery would need something able to push to the phone, and there
   is nothing to push from: the daemon is on your machine and is reachable only
