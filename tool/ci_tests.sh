@@ -1,5 +1,20 @@
 #!/bin/sh
 #
+# BASH, NOT `sh` — and it re-executes itself to get there. The one thing this
+# script cannot do without is `set -o pipefail`: the suite's output goes through
+# `tee` so the log survives the step, and without pipefail the pipeline reports
+# TEE's status (always 0), so a red suite would print PASS.
+#
+# `sh` is not enough, and on Debian and Ubuntu it is dash. dash has no
+# pipefail, and an unknown `set -o` option does not return non-zero — it KILLS
+# THE SHELL with status 2. `set -o pipefail 2>/dev/null || true` does not catch
+# that, because there is no shell left to run the `||`. Found on the first CI
+# run: the step died between "== flutter test ==" and the first line of output,
+# having printed nothing that pointed at a shell option.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 # The test gate: exactly what CI runs, runnable on a laptop.
 #
 # WHY A SCRIPT AND NOT THE YAML. The last step of this gate is "nothing was
@@ -22,12 +37,16 @@
 #   HP_LIVE_WRITES=1 sh tool/ci_tests.sh   # also run the tests that CREATE things
 #   sh tool/ci_tests.sh test/data        # narrower path, for a quick loop
 #
-# Requirements: `flutter` on PATH, `herdr` on PATH (or already running), and a
-# POSIX shell. `tool/test_sshd.sh` needs `sshd` and `ssh-keygen`.
+# Requirements: `flutter` on PATH, `herdr` on PATH (or already running), and
+# bash. `tool/test_sshd.sh` needs `sshd` and `ssh-keygen`.
 #
 # IT DOES NOT TOUCH THE DEVELOPER'S OWN ~/.ssh: see tool/test_sshd.sh, which
 # starts a second sshd in /tmp with its own host key and its own keys.
-set -eu
+# `-o pipefail` is load-bearing, not hygiene: the suite's output is piped through
+# `tee`, and without it the pipeline reports tee's status — always 0 — so a red
+# suite would end this script with PASS. Guaranteed to work because of the
+# re-exec above.
+set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
@@ -77,10 +96,6 @@ sh tool/test_sshd.sh start
 # ------------------------------------------------------------------- tests --
 
 say "flutter test"
-# `set -o pipefail` is not POSIX, and without it `tee` swallows the exit code —
-# a red suite would print "All tests passed!" at the end of this script.
-# shellcheck disable=SC3040
-set -o pipefail 2>/dev/null || true
 
 if [ "${HP_LIVE_WRITES:-0}" = "1" ]; then
   echo "  (HP_LIVE_WRITES=1: the create/upload paths run against the daemon too)"
