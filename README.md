@@ -202,8 +202,9 @@ test/
   integration/    tests against a live daemon and a live SSH server
 patrol_test/      on-device smoke tests, run by hand (see Testing)
 tool/             the scripts CI runs, runnable by hand
-plannings/        the plan, the findings, the decisions
-docs/             research and handover notes
+cli/hdp/          the host-side pairing CLI, in Go
+docs/             the logo and the two screenshots above
+assets/           fonts, agent marks, colour schemes
 ```
 
 ---
@@ -215,18 +216,6 @@ docs/             research and handover notes
 | `.github/workflows/ci.yml` | every push and pull request | `flutter analyze`, and the test gate above with a real daemon and **no skipped tests** |
 | `.github/workflows/release.yml` | tag `v*` | release APK (split + universal) and a macOS `.dmg`, attached to a GitHub Release |
 | `.github/workflows/hdp-release.yml` | tag `hdp-v*` | the `hdp` CLI's static binaries |
-
-### Signing
-
-Release APKs are signed with a real keystore, configured through CI secrets.
-`tool/make_release_keystore.sh` creates one and prints everything its holder
-needs — **that output is the documentation, and it is deliberately not repeated
-here.** Without a key the build falls back to Flutter's template **debug** key
-and the job says so: that side-loads and upgrades fine, it cannot be distributed.
-
-The macOS `.dmg` is **unsigned** — that needs an Apple Developer certificate, and
-there is not one. A downloaded copy needs a right-click → Open, or
-`xattr -d com.apple.quarantine`.
 
 ## Pairing a phone: `hdp`
 
