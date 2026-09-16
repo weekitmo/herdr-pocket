@@ -1,0 +1,451 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/board_sync.dart';
+import 'package:herdr_pocket/data/herdr_client.dart';
+import 'package:herdr_pocket/data/host_profile.dart';
+import 'package:herdr_pocket/data/notifications/agent_notifier.dart';
+import 'package:herdr_pocket/data/notifications/attention_tracker.dart';
+import 'package:herdr_pocket/data/providers/hosts.dart';
+import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/domain/agent/agent_list.dart';
+
+/// How the connection to the current host is going.
+///
+/// A sealed type rather than a bool + nullable error, because the UI needs to
+/// say four different things ("connecting", "online", "this machine has no
+/// herdr", "your key changed") and the difference between them is the whole
+/// value of showing a status at all.
+sealed class ConnectionStatus {
+  const ConnectionStatus();
+}
+
+class Disconnected extends ConnectionStatus {
+  const Disconnected();
+}
+
+/// How far one dial has got.
+///
+/// Two stages, because the two failures they produce are different sentences:
+/// "your phone cannot reach that machine" and "the machine answered but herdr
+/// did not". Without the split, a dial that has already succeeded at the SSH
+/// layer looks identical to one that never left the phone.
+enum ConnectStage {
+  /// Opening the transport — DNS, TCP, the SSH handshake, host-key approval.
+  dialling,
+
+  /// The transport is up; we are proving the daemon answers on it.
+  verifying,
+}
+
+/// A dial in flight, and how many have already failed.
+///
+/// [attempt] is 1-based and counts TRIES, not retries: attempt 1 is the one the
+/// user asked for, and attempt `connectionMaxAttempts` is the last one there
+/// will be. The UI narrates from this rather than from a separate progress
+/// channel, so what the user reads and what the dialler is doing cannot drift.
+class Connecting extends ConnectionStatus {
+  const Connecting({this.attempt = 1, this.stage = ConnectStage.dialling});
+
+  final int attempt;
+  final ConnectStage stage;
+
+  /// True for every try after the first — what the user would call "retrying".
+  bool get isRetry => attempt > 1;
+
+  /// True on the final try, which gets its own wording: "retrying" is a
+  /// promise that there is another one coming, and on the last try there is
+  /// not.
+  bool get isLastAttempt => attempt >= connectionMaxAttempts;
+}
+
+class Online extends ConnectionStatus {
+  const Online({required this.client, required this.hello, required this.socketPath});
+
+  final HerdrClient client;
+  final HerdrHello hello;
+  final String socketPath;
+
+  String get label => 'herdr ${hello.version}';
+}
+
+class ConnectionFailed extends ConnectionStatus {
+  const ConnectionFailed(this.error, {this.attempts = 1});
+
+  final Object error;
+
+  /// How many dials were spent before giving up. One means "this was never
+  /// worth retrying"; more means time was spent trying.
+  final int attempts;
+
+  /// True when we reached the machine but found no daemon on it.
+  ///
+  /// Two shapes, because the two transports fail differently: the SSH path
+  /// reports our own sentinel from the command wrapper, and the local path
+  /// reports a socket that is not there. Both mean "herdr is not running here",
+  /// which is the one failure the user can actually act on — so it deserves
+  /// real guidance rather than a generic apology.
+  bool get isHerdrMissing {
+    final e = error;
+    if (e is! HerdrTransportException) return false;
+    if (e.failure != TransportFailure.connectFailed) return false;
+    return e.message.contains(herdrNotInstalledSentinel) ||
+        e.message.contains('no herdr socket');
+  }
+
+  bool get isForwardingRefused =>
+      error is HerdrTransportException &&
+      (error as HerdrTransportException).failure ==
+          TransportFailure.forwardingRefused;
+
+  bool get isSecurityRelevant =>
+      error is HerdrTransportException &&
+      (error as HerdrTransportException).isSecurityRelevant;
+}
+
+/// How many times one request may dial before it gives up.
+///
+/// THREE, and it is a ceiling rather than a comfort setting. A dial has a
+/// 15-second timeout, so three tries is already most of a minute of a user's
+/// attention; a phone that can reach the machine at all almost always reaches
+/// it on the second try (the first after a network switch is the one that
+/// fails), and a phone that cannot reach it is not going to start on the
+/// tenth.
+const int connectionMaxAttempts = 3;
+
+/// How long to wait before dialling again.
+///
+/// Short, and deliberately shorter than any exponential ladder would start:
+/// the failures worth retrying here are a sleeping radio or a dropped Wi-Fi
+/// handover, and both are fixed by the time it takes the user to notice the
+/// spinner. A long backoff would turn "the network hiccuped" into "the app is
+/// broken".
+const Duration connectionRetryDelay = Duration(milliseconds: 1200);
+
+/// The delay between dials, as a provider so tests need not wait in real time.
+final connectionRetryDelayProvider = Provider<Duration>(
+  (ref) => connectionRetryDelay,
+);
+
+/// Builds the connector a dial uses.
+///
+/// A provider rather than a literal inside [ConnectionNotifier.build], so the
+/// retry loop can be exercised end to end by a test that scripts the dials —
+/// which is the only way to assert "three tries, then it stops" against the
+/// real code path rather than against a re-implementation of it.
+final hostConnectorProvider = Provider<HostConnector>(
+  (ref) => HostConnector(
+    // Secrets come from the keystore at connect time and are never held on
+    // the profile, so a profile stays safe to log or export.
+    credentialsFor: (profile) =>
+        ref.read(hostSecretsStoreProvider).read(profile.id),
+    // Trust on first use, with the changed-key case kept visibly distinct
+    // from the unknown-host one.
+    verifyHostKey: (prompt) => verifyHostKeyWithStores(ref, prompt),
+  ),
+);
+
+/// Whether dialling again could plausibly change the answer.
+///
+/// THIS IS THE WHOLE POINT OF RETRYING, and getting it wrong is worse than not
+/// retrying at all. A dial that failed because the phone had no signal is
+/// worth repeating — the second try is the one that works. A dial that failed
+/// because the password is wrong, or because the machine's key is not the one
+/// the user approved, will fail identically three times; all three retries
+/// achieve is thirty seconds of spinner before the same sentence, and the user
+/// standing there unable to tell whether the app is working on it.
+bool isWorthRetrying(Object error) {
+  if (error is! HerdrTransportException) return false;
+
+  // Reaching the machine and finding no herdr is the most specific failure
+  // this app has, and the one where a retry is provably pointless: the
+  // command already ran on the other side and reported its answer.
+  if (error.message.contains(herdrNotInstalledSentinel)) return false;
+
+  return switch (error.failure) {
+    // The case this exists for: no route, refused, radio asleep.
+    TransportFailure.connectFailed => true,
+    TransportFailure.timeout => true,
+    TransportFailure.streamClosed => true,
+    // The catch-all. Retried because a `SocketException` from the SSH library
+    // usually lands here, and a dropped packet is exactly what a second try
+    // fixes.
+    TransportFailure.unknown => true,
+    // A credential the user has to change.
+    TransportFailure.authenticationFailed => false,
+    // A question waiting for a human, not for time. Retrying would re-raise
+    // the same sheet — or, worse, answer it twice.
+    TransportFailure.hostKeyUnknown => false,
+    TransportFailure.hostKeyChanged => false,
+    // A server setting. Deterministic until someone edits sshd_config.
+    TransportFailure.forwardingRefused => false,
+    // Also a server setting, and equally deterministic. It is the file
+    // transfer's `AllowStreamLocalForwarding` — a separate case from the one
+    // above because the two are fixed by different lines in different files, so
+    // a retry is pointless for both but the guidance they produce is not the
+    // same guidance.
+    TransportFailure.sftpUnavailable => false,
+  };
+}
+
+/// Owns the live connection to the daemon.
+///
+/// Deliberately an AsyncNotifier rather than a StreamProvider: connecting is a
+/// one-shot operation with a rich outcome, and the interesting states are
+/// "connecting", "online with these capabilities" and "failed for this
+/// specific reason" — none of which a bare `AsyncValue<Client>` expresses.
+class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
+  /// The client this notifier opened, if it has one.
+  ///
+  /// HELD AS A FIELD RATHER THAN READ BACK OFF `state`, because `onDispose` is
+  /// one of the places Riverpod forbids touching `Ref` or `state` — "Cannot use
+  /// Ref or modify other providers inside life-cycles/selectors" — and the
+  /// first version of this did exactly that. It never fired while the app ran,
+  /// because the provider outlives every screen; it fired the moment a test
+  /// disposed its container, which is the only cheap way to prove the socket
+  /// gets closed at all.
+  HerdrClient? _live;
+
+  @override
+  Future<ConnectionStatus> build() async {
+    final host = ref.watch(currentHostProvider);
+    if (host == null) return const Disconnected();
+
+    // Nothing dials until the user asks. See [ConnectRequestNotifier] and
+    // `SettingsState.autoConnect` — the default is "wait", and a build that
+    // opens a network connection the user did not request is the bug this
+    // guard exists to prevent.
+    final auto = ref.watch(settingsProvider.select((s) => s.autoConnect));
+    final requested = ref.watch(connectRequestProvider) > 0;
+    if (!auto && !requested) return const Disconnected();
+
+    ref.onDispose(() {
+      final client = _live;
+      _live = null;
+      if (client != null) unawaited(client.close());
+    });
+
+    return await _dialUntilAnswered(host);
+  }
+
+  /// Dials, and dials again while the failure is one that time can fix.
+  ///
+  /// THE PROGRESS IS WRITTEN TO THIS PROVIDER'S OWN STATE rather than to a
+  /// side channel, so there is exactly one thing for the UI to listen to and
+  /// no way for "the spinner says connecting" and "the dialler is connecting"
+  /// to disagree. Riverpod permits it: the guard that protects against
+  /// cross-provider writes during a build (`element.dart`, "Providers are not
+  /// allowed to modify other providers during their initialization") names the
+  /// offending element, and this is the element doing the building.
+  ///
+  /// The consequence to know about: `connectionProvider.future` resolves with
+  /// the first non-loading value, so a dependent that awaits it during a retry
+  /// window can observe `Connecting`. That is self-correcting — the final
+  /// value re-notifies the future and the dependent rebuilds — and it is the
+  /// price of the UI being able to say "retrying, 2 of 3" at all.
+  Future<ConnectionStatus> _dialUntilAnswered(HostProfile host) async {
+    Object? lastError;
+    var spent = 0;
+
+    for (var attempt = 1; attempt <= connectionMaxAttempts; attempt++) {
+      state = AsyncValue.data(Connecting(attempt: attempt));
+
+      if (attempt > 1) {
+        // Say what is happening BEFORE the wait, not after it. The wait is the
+        // part the user is judging, and silence during it is the difference
+        // between "working on it" and "stuck".
+        await Future<void>.delayed(ref.read(connectionRetryDelayProvider));
+        if (!ref.mounted) return const Disconnected();
+      }
+
+      spent = attempt;
+      HerdrTransport? opened;
+      try {
+        final connector = ref.read(hostConnectorProvider);
+        final connected = await connector.connect(host);
+        opened = connected.bundle.transport;
+
+        // The transport is up. The daemon has still said nothing, and saying
+        // so is the difference between "connecting" and "verifying" for
+        // somebody watching a screen that has not changed in ten seconds.
+        state = AsyncValue.data(
+          Connecting(attempt: attempt, stage: ConnectStage.verifying),
+        );
+
+        final client = HerdrClient(connected.bundle.transport);
+        final hello = await client.ping();
+        _live = client;
+        return Online(
+          client: client,
+          hello: hello,
+          socketPath: connected.socketPath,
+        );
+      } on Object catch (e) {
+        lastError = e;
+        // A transport that was opened and then failed the handshake is still
+        // holding an SSH connection. Dropping it on the floor leaks the
+        // session on the machine for as long as the daemon keeps it alive.
+        if (opened != null) unawaited(opened.close().catchError((_) {}));
+        if (attempt >= connectionMaxAttempts || !isWorthRetrying(e)) break;
+      }
+    }
+
+    return ConnectionFailed(lastError!, attempts: spent);
+  }
+
+  /// Dials now, because the user asked.
+  ///
+  /// Bumps the request counter rather than calling [build] directly: the build
+  /// already knows how to connect, and having exactly one path into the dial
+  /// is what keeps "requested" and "connected" from disagreeing.
+  void connect() => ref.read(connectRequestProvider.notifier).request();
+
+  /// Re-runs the whole connect sequence.
+  ///
+  /// ALSO ONLY A REQUEST, and it used to be a request PLUS a hand-run `build`.
+  /// Both at once is two dials for one tap: the counter bump already rebuilds
+  /// this provider, so the manual `AsyncValue.guard(build)` was a second,
+  /// racing connection whose result could land after the first one's and
+  /// overwrite it. That is a plausible reading of "the status never updates
+  /// and I have to go back a screen" — one dial wins, the other's answer
+  /// arrives late and says something else.
+  void reconnect() => ref.read(connectRequestProvider.notifier).request();
+}
+
+final connectionProvider =
+    AsyncNotifierProvider<ConnectionNotifier, ConnectionStatus>(
+  ConnectionNotifier.new,
+);
+
+/// The board, kept current by events.
+///
+/// Replaces a 3-second poll. The poll was correct but wasteful and slow: it
+/// spent a round trip every three seconds whether anything had changed or not,
+/// and an agent that went blocked could still take three seconds to show up.
+///
+/// The ordering — subscribe, THEN read — is what makes events trustworthy here.
+/// See [BoardSync] for why doing it the other way round loses changes silently.
+class BoardNotifier extends AsyncNotifier<AgentList> {
+  final _attention = AttentionTracker();
+  BoardSync? _sync;
+  StreamSubscription<void>? _changes;
+  Timer? _resubscribe;
+  Timer? _safetyNet;
+
+  /// A slow re-read that runs regardless of events.
+  ///
+  /// Not a substitute for events — insurance against them. A subscription can
+  /// end without either side noticing (a NAT dropping an idle connection is the
+  /// usual cause), and a board that silently stops updating is worse than one
+  /// that updates late. Thirty seconds is slow enough to cost nothing and fast
+  /// enough that the worst case is bounded.
+  static const safetyNetInterval = Duration(seconds: 30);
+
+  /// How long to wait before rebuilding a subscription that ended.
+  static const resubscribeDelay = Duration(seconds: 3);
+
+  @override
+  Future<AgentList> build() async {
+    ref.onDispose(() {
+      _resubscribe?.cancel();
+      _safetyNet?.cancel();
+      unawaited(_changes?.cancel());
+      unawaited(_sync?.close());
+    });
+
+    final connection = await ref.watch(connectionProvider.future);
+    if (connection is! Online) return AgentList.empty();
+
+    await _startSync(connection.client);
+    return await _readBoard(connection.client);
+  }
+
+  Future<void> _startSync(HerdrClient client) async {
+    await _changes?.cancel();
+    await _sync?.close();
+
+    try {
+      // Subscribe BEFORE reading, so nothing that happens during the read is
+      // lost. This is the single line that makes the rest correct.
+      final sync = await BoardSync.start(client);
+      _sync = sync;
+
+      _changes = sync.changes.listen((_) => unawaited(refresh()));
+
+      _safetyNet?.cancel();
+      _safetyNet = Timer.periodic(
+        safetyNetInterval,
+        (_) => unawaited(refresh()),
+      );
+    } on Object {
+      // The daemon may not support subscriptions, or the stream may have died.
+      // Fall back to the safety net alone rather than leaving the board frozen:
+      // slow updates beat no updates.
+      _scheduleResubscribe();
+    }
+  }
+
+  void _scheduleResubscribe() {
+    _resubscribe?.cancel();
+    _resubscribe = Timer(resubscribeDelay, () {
+      unawaited(_resubscribeNow());
+    });
+  }
+
+  Future<void> _resubscribeNow() async {
+    final connection = ref.read(connectionProvider).value;
+    if (connection is! Online) return;
+    await _startSync(connection.client);
+    await refresh();
+  }
+
+  Future<AgentList> _readBoard(HerdrClient client) => client.board();
+
+  /// Raises a notification for any agent that JUST started waiting.
+  ///
+  /// The tracker decides what counts as "just" — see [AttentionTracker]. It
+  /// also means the first board after opening the app is silent, which is the
+  /// difference between a useful feature and one the user turns off in a day.
+  Future<void> _maybeNotify(AgentList board) async {
+    final fired = _attention.observe(board);
+    if (fired.isEmpty) return;
+    if (!ref.read(settingsProvider).notificationsEnabled) return;
+    await ref.read(agentNotifierProvider).notify(fired);
+  }
+
+  /// Re-reads the board without tearing down the connection.
+  ///
+  /// Keeps the previous value on failure instead of flashing an error: a board
+  /// that briefly cannot refresh should show the last known state, not empty
+  /// itself and imply the agents are gone.
+  Future<void> refresh() async {
+    final connection = ref.read(connectionProvider).value;
+    if (connection is! Online) return;
+
+    try {
+      final board = await _readBoard(connection.client);
+      state = AsyncValue.data(board);
+      unawaited(_maybeNotify(board));
+    } on Object catch (e, st) {
+      if (!state.hasValue) state = AsyncValue.error(e, st);
+    }
+  }
+}
+
+/// The notification channel, overridden in tests and on platforms that have
+/// none.
+final agentNotifierProvider = Provider<AgentNotifier>((ref) {
+  final notifier = AgentNotifier(
+    onSelected: (paneId) =>
+        ref.read(pendingPaneProvider.notifier).open = paneId,
+  );
+  // Prepared lazily, on first use, so the permission prompt cannot appear
+  // before the user has a board to look at.
+  unawaited(notifier.initialise());
+  return notifier;
+});
+
+final boardProvider = AsyncNotifierProvider<BoardNotifier, AgentList>(
+  BoardNotifier.new,
+);

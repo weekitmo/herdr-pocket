@@ -1,0 +1,11 @@
+# Localization config for herdr-pocket.
+#
+# Default locale is zh-Hans (the app's primary audience), with en as the
+# secondary. Both are authored from the start rather than retrofitted —
+# `plannings/task_plan.md` Phase 2 makes bilingual a first-class requirement so
+# no screen ever ships with hard-coded copy.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-dir: lib/l10n/generated
+nullable-getter: false

@@ -1,0 +1,156 @@
+# Builds and publishes the `hdp` CLI, so that
+#
+#     curl -sSL https://raw.githubusercontent.com/weekitmo/herdr-pocket/main/cli/hdp/install.sh | sh
+#
+# has something to download.
+#
+# ## Why this is separate from the app's release
+#
+# The app and the CLI ship on different clocks — a Flutter release is a signed
+# APK with fonts in it, and a CLI release is four small static binaries. Sharing
+# one workflow means every CLI fix either waits for an app release or drags the
+# app's build time into it.
+#
+# The tag prefix `hdp-v` is what keeps them apart: pushing `v1.2.0` does nothing
+# here, and pushing `hdp-v0.2.0` does nothing to the app.
+name: hdp release
+
+on:
+  push:
+    tags:
+      - 'hdp-v*'
+  # Run the same checks on a pull request that changes the CLI, so a broken
+  # build is found before a tag rather than by whoever pushed one.
+  pull_request:
+    paths:
+      - 'cli/hdp/**'
+      - '.github/workflows/hdp-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/hdp/go.mod
+          cache-dependency-path: cli/hdp/go.sum
+
+      - name: gofmt
+        # A formatting difference is not a style opinion here — a `gofmt -l`
+        # that prints anything means the committed file is not what the tool
+        # wrote, which is how a merge conflict gets resolved wrongly.
+        run: |
+          cd cli/hdp
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - run: cd cli/hdp && go vet ./...
+      - run: cd cli/hdp && go test ./...
+
+      - name: install.sh, for real
+        # Not `sh -n`: the whole point of install_test.sh is that it runs the
+        # installer against a local server, including the PIPED path where a
+        # stray stdin read silently truncates the script.
+        run: sh cli/hdp/install_test.sh
+
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/hdp-v')
+    runs-on: ubuntu-latest
+    strategy:
+      # Not fail-fast: one platform failing to cross-compile should still leave
+      # the other three released, because a partial release is fixable and a
+      # missing one means the installer 404s for those users.
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/hdp/go.mod
+          cache-dependency-path: cli/hdp/go.sum
+
+      - name: build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          # Static, so a Linux binary built on Ubuntu runs on Alpine and in a
+          # container without glibc. `hdp` is pure Go and has no cgo to lose.
+          CGO_ENABLED: '0'
+        run: |
+          set -eu
+          cd cli/hdp
+          version="${GITHUB_REF_NAME}"              # hdp-v0.1.0
+          bare="${version#hdp-v}"
+          # -s -w drops the symbol table and DWARF: worth ~30% of the binary,
+          # and a stack trace from a paired phone's failed connection is not
+          # something anyone reads.
+          # -X main.version is the whole reason `hdp version` exists: a user
+          # reporting a problem needs to say which build they have.
+          go build -trimpath -ldflags "-s -w -X main.version=${version}" -o hdp .
+
+          asset="hdp_${bare}_${GOOS}_${GOARCH}.tar.gz"
+          tar -czf "../../${asset}" hdp
+          echo "ASSET=${asset}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          # The tarball lands in the repository root so the release job can
+          # collect all four from one place.
+          name: hdp-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: hdp_*.tar.gz
+
+  release:
+    name: publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: checksums
+        # One file for every asset, in the `<sha256>  <filename>` shape that
+        # `install.sh` parses and that `sha256sum -c` understands. Published
+        # beside the binaries in the same release, which is what makes the
+        # installer's verification meaningful for a corrupted download — see
+        # the honest note in install.sh about what it does not cover.
+        run: |
+          set -eu
+          cd dist
+          ls -1
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum hdp_*.tar.gz > checksums.txt
+          else
+            shasum -a 256 hdp_*.tar.gz > checksums.txt
+          fi
+          cat checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/hdp_*.tar.gz
+            dist/checksums.txt
+          # The tag is already the version, so there is nothing to generate —
+          # and a generated changelog that lists commit subjects is worse than
+          # the tag itself.
+          generate_release_notes: true

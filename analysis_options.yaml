@@ -1,0 +1,63 @@
+# Static analysis for herdr-pocket.
+#
+# Base ruleset is `very_good_analysis` (strict). Two project rules cannot be
+# expressed as lints and are enforced by tests instead — see
+# test/architecture/:
+#   1. lib/domain must not import flutter (keeps it pure Dart and testable).
+#   2. No Material: no `package:flutter/material.dart` anywhere in lib/.
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - "**/*.g.dart"
+    # gen-l10n output is generated; linting it is noise.
+    - lib/l10n/generated/**
+    - macos/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  errors:
+    invalid_annotation_target: ignore
+
+linter:
+  rules:
+    # An app, not a published package: public API docs are not the point.
+    public_member_api_docs: false
+    # 80 columns fights the wide token tables in the design system.
+    lines_longer_than_80_chars: false
+    # `// TODO(phase-3):` reads better than the enforced style here.
+    flutter_style_todos: false
+
+    # --- Disabled because the rule is wrong for this codebase ----------------
+
+    # Misfires on `const Foo()` inside a sealed-class hierarchy: the type name
+    # IS required for the const constructor call to be const at all.
+    unnecessary_type_name_in_constructor: false
+
+    # Doc comments legitimately reference types not imported into the file
+    # (e.g. AgentGroup referenced from agent_status.dart, where importing it
+    # would create a cycle).
+    comment_references: false
+
+    # The private generative constructor plus a factory that does the real
+    # work is the intended shape (`AgentList._` + `AgentList()`), because Dart
+    # forbids assigning `final` fields in a constructor body. That puts the
+    # factory first on purpose.
+    sort_unnamed_constructors_first: false
+
+    # `AgentList.empty()` reads better at call sites than a const constructor
+    # for a value that is genuinely "the empty board".
+    prefer_constructors_over_static_methods: false
+
+    # Cascades are not automatically clearer; `..sort()` on a freshly built
+    # list reads fine either way.
+    cascade_invocations: false
+
+    # False positive for a value class whose only field is `final`: the rule
+    # wants an `@immutable` annotation, but the annotation lives in
+    # package:meta and importing it here would be ceremony for no safety.
+    avoid_equals_and_hash_code_on_mutable_classes: false

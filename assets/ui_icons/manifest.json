@@ -1,0 +1,51 @@
+{
+  "package": "@icon-park/svg",
+  "version": "1.4.2",
+  "license": "Apache-2.0",
+  "files": {
+    "Workbench": {
+      "surface": "dock, Board tab",
+      "sha256": "e5593a89adfe968b73ad7c4de4cfc14df815e1bacf32493005ac6ba696c19cac"
+    },
+    "AllApplication": {
+      "surface": "dock, Workspaces tab",
+      "sha256": "7e4da2f959c741076f52f3fae41702d29607a452189f86efd400259dd832c183"
+    },
+    "SettingTwo": {
+      "surface": "dock, Settings tab",
+      "sha256": "7c5ff1837a6f2c277817f17984e53c2539dfeb3127841786331676591df15e41"
+    },
+    "Paperclip": {
+      "surface": "terminal navbar, attach",
+      "sha256": "b225b7fd5a547c61f8f926a0e41e848a06c0e22ec0cfcce22fc5535ccf114056"
+    },
+    "BlocksAndArrows": {
+      "surface": "terminal navbar, pane switcher",
+      "sha256": "4d3a9a383ff16cc0ee7732f7590e5046d2ce1b75991175d6de76965be86345da"
+    },
+    "LayoutFour": {
+      "surface": "terminal navbar, split layout",
+      "sha256": "3074574acca6609f24014a162d6c8cb9e371fa26645d188a1f309980ff4457c3"
+    },
+    "MoreTwo": {
+      "surface": "terminal navbar, overflow",
+      "sha256": "904103b7eecfc273e2b10ed22b5c2324d6b08ee2bf0f492832615d55240925a3"
+    },
+    "Server": {
+      "surface": "board navbar, machine entry",
+      "sha256": "4abb36cc10f0b8392a4127d640cbf6175abaa011b9bde61c4e57bebf1e2f4b7f"
+    },
+    "Folder": {
+      "surface": "terminal menu, browse files",
+      "sha256": "e85210c58ab82a75b487a1c0a8b09cad6de83b2815141b79376729f6e053eb43"
+    },
+    "Branch": {
+      "surface": "terminal menu, git changes",
+      "sha256": "23dbd687a037b20a533a6dd374ab127431fb25c38c18ddaa4220460f9f27369a"
+    },
+    "Aiming": {
+      "surface": "terminal menu, move machine focus",
+      "sha256": "d304ecbcba040586244f7385e6cdd6905c67f5fdaeecb3680314f5373662c1ac"
+    }
+  }
+}

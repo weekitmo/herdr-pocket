@@ -1,0 +1,77 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Widget Preview related
+.widget_preview/
+
+# Release signing material. The keystore must never enter the repository: once
+# it is in a commit it is published forever, and the only remedy is a new
+# application id — every existing installation would refuse to upgrade.
+#
+#   android/key.properties   storeFile / storePassword / keyAlias / keyPassword
+#   *.jks *.keystore         the keystore itself, wherever it was put
+#
+# CI reads the same four values from repository secrets instead; see
+# .github/workflows/release.yml and the signing block in
+# android/app/build.gradle.kts.
+/android/key.properties
+*.jks
+*.keystore
+
+# Gradle's own output. The `/build/` above is ANCHORED TO THE REPOSITORY ROOT —
+# a leading slash means "here", not "anywhere" — so it never covered
+# `android/build/`, and `android/.gitignore` (the Flutter template's) does not
+# list it either. Found by listing what `git` would actually add: a 132 KB
+# `android/build/reports/problems/problems-report.html` was in the list.
+/android/build/
+
+# Patrol's generated build inputs and reports. `test_bundle.dart` says so in
+# its own header: it is regenerated on every `patrol test` and lists the test
+# files that exist at that moment, so committing it means committing a stale
+# list of tests.
+/patrol_test/test_bundle.dart
+/patrol_test/.patrol/
+build/app/reports/

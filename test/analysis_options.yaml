@@ -1,0 +1,20 @@
+# Test files inherit the project ruleset, minus the stylistic lints that only
+# make sense for production code.
+#
+# Rationale: tests are read as prose. `isLive: true` next to other named
+# arguments documents intent even when it matches the default, and a raw string
+# in a regex is often the readable choice. Forcing production style on tests
+# makes them worse, not better.
+include: ../analysis_options.yaml
+
+linter:
+  rules:
+    avoid_redundant_argument_values: false
+    unnecessary_raw_strings: false
+    prefer_single_quotes: false
+    missing_whitespace_between_adjacent_strings: false
+    use_null_aware_elements: false
+    # Tests print what they verified — the daemon's version, how many agents
+    # came back, how many methods it advertises. That output is the evidence,
+    # and routing it through a logger would only hide it.
+    avoid_print: false

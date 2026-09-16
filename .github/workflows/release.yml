@@ -1,0 +1,284 @@
+# What a tag produces: an Android APK, a macOS disk image, and a GitHub Release
+# holding both.
+#
+# ## Why the app and `hdp` are two workflows
+#
+# `hdp-release.yml` publishes the CLI on `hdp-v*`. This one publishes the app on
+# `v*`. They ship on different clocks — a Flutter release is a signed APK with
+# 30 MB of fonts in it, a CLI release is four small static binaries — and sharing
+# one workflow would mean every CLI fix either waits for an app release or drags
+# the app's build time into it.
+#
+# ## What gets signed, and what does not
+#
+#   Android  Signed with a real keystore IF the four secrets below are set;
+#            otherwise with Flutter's template debug key, and the job SAYS SO.
+#            A debug-signed APK side-loads fine and upgrades over an existing
+#            installation (`adb install -r`); it cannot be distributed, and
+#            switching keys later means the app must be uninstalled first,
+#            which also deletes the user's saved machines.
+#
+#   macOS    UNSIGNED, always. Signing and notarising needs an Apple Developer
+#            certificate. A downloaded copy therefore carries the quarantine
+#            flag and needs one of:
+#              right-click → Open, or  xattr -d com.apple.quarantine <app>
+#            which the release notes say in as many words.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # A dry run: builds and uploads the artifacts, publishes nothing. This is how
+  # a signing change gets checked without burning a version number.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to stamp into the artifacts (no leading v)'
+        required: false
+        default: '0.0.0'
+      publish:
+        description: 'Create the GitHub Release as well'
+        type: boolean
+        required: false
+        default: false
+
+# `contents: write` is what lets the publish job create a release. Nothing else
+# in this workflow needs a token at all.
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.47.3'
+  JAVA_VERSION: '17'
+
+jobs:
+  # ------------------------------------------------------------------ gate --
+  #
+  # The same gate CI runs, here as well, because a tag is not a promise that CI
+  # ever ran on this commit — tags can be pushed from anywhere.
+  gate:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+
+      - name: install herdr
+        run: |
+          set -eu
+          curl -fsSL https://herdr.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: install openssh-server
+        run: |
+          set -eu
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-server
+
+      - name: the test gate
+        env:
+          HP_LIVE_WRITES: '1'
+        run: sh tool/ci_tests.sh
+
+  # --------------------------------------------------------------- android --
+  android:
+    name: android apk
+    needs: gate
+    runs-on: ubuntu-latest
+    env:
+      # Empty when the secrets are not configured, which is what the build script
+      # below reads to decide whether to sign for real.
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: version, from the tag or the manual input
+        run: |
+          set -eu
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ inputs.version }}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "  building $version"
+
+      - name: write the keystore, when one is configured
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        run: |
+          set -eu
+          # Written OUTSIDE the checkout, so it cannot be picked up by
+          # `actions/upload-artifact` or by a `git add -A` in a later step.
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "  signing with the configured keystore"
+
+      - name: say which key is being used
+        run: |
+          set -eu
+          if [ -z "${ANDROID_KEYSTORE_PATH:-}" ]; then
+            echo "::warning title=debug-signed build::ANDROID_KEYSTORE_* secrets are not set, so this APK is signed with Flutter's template debug key. It side-loads, but it cannot be distributed. See the release workflow's header comment."
+          fi
+
+      - name: build
+        # ONE INVOCATION PER ABI SHAPE, because `--split-per-abi` writes
+        # `app-<abi>-release.apk` and there is no way to ask for both shapes at
+        # once. The universal APK matters: it is the file you hand somebody who
+        # does not know what an ABI is.
+        run: |
+          set -eu
+          args="--release --build-name=$VERSION --build-number=${GITHUB_RUN_NUMBER}"
+          flutter build apk $args --split-per-abi
+          flutter build apk $args
+          ls -lh build/app/outputs/flutter-apk/*.apk
+
+      - name: name the artifacts after the release
+        run: |
+          set -eu
+          out=build/app/outputs/flutter-apk
+          mkdir -p dist
+          cp "$out/app-arm64-v8a-release.apk"   "dist/HerdrPocket-${VERSION}-arm64-v8a.apk"
+          cp "$out/app-armeabi-v7a-release.apk" "dist/HerdrPocket-${VERSION}-armeabi-v7a.apk"
+          cp "$out/app-release.apk"             "dist/HerdrPocket-${VERSION}-universal.apk"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist/*.apk
+          if-no-files-found: error
+
+  # ----------------------------------------------------------------- macos --
+  macos:
+    name: macos dmg
+    needs: gate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: version, from the tag or the manual input
+        run: |
+          set -eu
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="${{ inputs.version }}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: build
+        run: |
+          set -eu
+          flutter build macos --release \
+            --build-name="$VERSION" --build-number="${GITHUB_RUN_NUMBER}"
+
+      - name: dmg
+        # `hdiutil`, not `create-dmg`. The latter draws a background picture and
+        # positions icons, and needs a Homebrew install on every runner to do it;
+        # this produces a compressed image with the .app inside, which is the
+        # whole artifact. `-srcfolder` is what puts the app at the root of the
+        # mounted volume rather than in a nested directory.
+        run: |
+          set -eu
+          app=build/macos/Build/Products/Release/herdr_pocket.app
+          test -d "$app" || { echo "::error::no app bundle at $app"; exit 1; }
+          mkdir -p dist
+          hdiutil create \
+            -volname "Herdr Pocket" \
+            -srcfolder "$app" \
+            -ov -format UDZO \
+            "dist/HerdrPocket-${VERSION}-macos.dmg"
+          # A disk image that cannot be mounted is a file, not a release.
+          hdiutil verify "dist/HerdrPocket-${VERSION}-macos.dmg"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  # --------------------------------------------------------------- publish --
+  publish:
+    name: publish
+    needs: [android, macos]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          # One flat directory, so the checksums file can name every asset with
+          # no directory prefixes — which is what `sha256sum -c` expects.
+          merge-multiple: true
+
+      - name: checksums
+        # In the `<sha256>  <filename>` shape, beside the binaries in the same
+        # release, so a user can verify a download without trusting the mirror.
+        run: |
+          set -eu
+          cd dist
+          ls -1
+          sha256sum *.apk *.dmg > checksums.txt
+          cat checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.apk
+            dist/*.dmg
+            dist/checksums.txt
+          generate_release_notes: true
+          # The release body carries the one thing a downloader has to know and
+          # cannot find out from the file: what the macOS build is not.
+          append_body: true
+          body: |
+
+            ---
+
+            ### Installing
+
+            **Android** — `adb install -r HerdrPocket-<version>-arm64-v8a.apk`
+            (use `armeabi-v7a` for a 32-bit device, or the `universal` APK if you
+            do not know which one you have).
+
+            **macOS** — open the `.dmg` and drag the app out. The build is
+            **unsigned**, so the first launch needs either a right-click → Open,
+            or:
+
+            ```
+            xattr -d com.apple.quarantine "/Applications/herdr_pocket.app"
+            ```

@@ -1,0 +1,3 @@
+# A build artifact, and one that would otherwise be committed by accident:
+# `go build` with no -o drops the binary in the package directory.
+hdp

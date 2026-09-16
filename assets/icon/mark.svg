@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  herdr pocket's mark. THIS FILE IS THE SOURCE — every PNG under
+  android/app/src/main/res is generated from it (and from tile.svg) by
+  tool/render_app_icon.sh. Editing a PNG by hand puts the icon and its source
+  out of sync, and the next regeneration reverts the change without saying so.
+
+  WHAT THE MARK SAYS. Two things, and the second one is the point.
+
+    terminal  A window with rounded top corners, cut with a shell prompt: the
+              `>` chevron and the block cursor that follows it. This is the
+              product — a terminal client.
+    pocket    The window does not sit ON anything. It goes INTO it: a wide
+              pouch, straight across the top, deeply rounded at the bottom,
+              swallowing the window's lower half so the window reads as
+              half-swallowed rather than parked. Two units of the window's
+              sides overlap the pocket's top edge on purpose — shapes that
+              merely touch are anti-aliased separately, and their two
+              half-covered rows of pixels add up to a hairline of background
+              showing through the joint. Overlapping makes the boundary
+              interior, where it cannot show.
+
+  WHY THE PROMPT IS A HOLE. It is cut out of the window with a mask, not drawn
+  in the background colour, because Android 13's themed icons repaint the whole
+  drawable in one system colour: a shape that was merely *coloured* to match
+  its surroundings comes back as a solid blob the moment the launcher
+  recolours it. One material, real alpha, and the monochrome layer works.
+
+  WHY THE PROMPT IS THIS SIZE. At 100% the prompt filled three quarters of the
+  window and read as a glyph rather than as a prompt — a terminal shows a
+  cursor, not a billboard. At 70% it leaves the window air around it and the
+  cursor still survives the mdpi render (`mipmap-mdpi/ic_launcher.png`, 48 px).
+  Its bottom edge is flush with the pocket's mouth, so it reads as sitting in
+  the opening rather than floating in the window.
+
+  WHY THERE ARE NO SIZE NUMBERS IN HERE. How big the mark is drawn — and where
+  — is decided by tool/render_app_icon.sh from the safe zone, not by the
+  artwork. The viewBox below is TIGHT to the ink (x 10..86, y 8..86) so that
+  the script can measure the artwork's real reach and fit it; a margin baked
+  into this file would be double-counted. The previous mark was placed by hand
+  at 60% of the adaptive canvas and its corners reached 170 px from the centre
+  where the safe circle's radius is 132 — a launcher that masks to that circle
+  (which is what the icon on the real device was hitting) shaved the corners
+  off. The script now derives the scale and refuses to write a foreground whose
+  ink leaves the circle.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 8 76 78" width="76" height="78">
+
+  <defs>
+    <!-- Luminance mask: white keeps, black cuts. -->
+    <mask id="prompt-cut">
+      <rect x="0" y="0" width="120" height="120" fill="#fff"/>
+      <!-- The chevron: 45-degree arms, 5.5 thick, 17 tall, its point at x 47.5.
+           The prompt block — chevron, gap, cursor — is centred on the window at
+           x 48, and its baseline is y 40, which is exactly the pocket's mouth. -->
+      <path d="M33.5 23h5.5l8.5 8.5-8.5 8.5h-5.5l8.5-8.5z" fill="#000"/>
+      <!-- The block cursor, half the chevron's height and sitting on the same
+           baseline — the one shape every terminal draws. -->
+      <rect x="53.5" y="34.5" width="9" height="5.5" fill="#000"/>
+    </mask>
+  </defs>
+
+  <g fill="#13162A" mask="url(#prompt-cut)">
+    <!-- The window. Its bottom edge is at y 50, ten units BELOW the pocket's
+         top edge at y 40: the pocket covers the last third of it, which is what
+         makes the window read as inserted rather than as standing on a plinth. -->
+    <path d="M28 8h40a11 11 0 0 1 11 11v31H17V19A11 11 0 0 1 28 8z"/>
+    <!-- The pocket. Straight and square where the window enters, rounded hard at
+         the bottom — those two together are the whole pocket vocabulary, and
+         they have to survive a 48 px render, so there is nothing else. -->
+    <path d="M10 40h76v30a16 16 0 0 1-16 16H26a16 16 0 0 1-16-16z"/>
+  </g>
+
+</svg>

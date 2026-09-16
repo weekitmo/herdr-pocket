@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The adaptive icon's background layer: white, with the mark in
+         HerdrColors.dark.ground (#13162A). This is the same white as
+         assets/icon/tile.svg — the tile is what non-adaptive launchers get as a
+         complete icon, and this is the layer adaptive ones get behind the mark.
+         Change one without the other and the icon becomes two different icons
+         depending on the device. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+</resources>

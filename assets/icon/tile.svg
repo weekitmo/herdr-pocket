@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The tile the mark sits on, for the launchers and screens that get a finished
+  icon rather than a layer: everything older than adaptive icons, and Android
+  12's splash screen. Adaptive launchers never see this file — they take
+  mark.svg on transparency and supply both the shape and the colour themselves
+  (so this colour has a twin in values/colors.xml, `ic_launcher_background`, and
+  the two have to move together).
+
+  WHITE, with the mark in near-black. A white tile is also what the splash
+  screen's own background already is, so on those devices the tile disappears
+  and the mark appears to float — which is the desired reading, and the reason
+  the tile is not, say, a tinted surface.
+
+  A rounded square at 22% corner radius. The radius is the one number here worth
+  arguing about: too small and the icon reads as Android's old square tiles, too
+  large and it fights the launcher's own mask, which on most devices is a circle
+  drawn over the top.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <rect x="0" y="0" width="96" height="96" rx="21" fill="#FFFFFF"/>
+</svg>

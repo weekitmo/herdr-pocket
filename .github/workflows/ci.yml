@@ -1,0 +1,145 @@
+# Everything that has to be true before a change is trusted.
+#
+# ## Two jobs, two questions
+#
+#   analyze — does it compile, and do the project's own rules hold?
+#   tests   — does the logic work, against real servers rather than fakes?
+#
+# ## Why there is no on-device job
+#
+# There was one: `patrol test` on an Android emulator, driving the real app
+# through its dock and settings screens. It worked, and it cost about ten
+# minutes a run — booting the emulator, building the test APK, installing two
+# APKs, then the tests. Ten minutes of every pull request to re-answer a
+# question that a `flutter analyze` and 750 tests usually answer already.
+#
+# So the smoke tests live in `patrol_test/` and are run BY HAND, which is what
+# they are for: before touching the app shell, the plugin set or the fonts, when
+# "does it still come up on a phone" is the actual question.
+# See `patrol_test/smoke_test.dart`.
+#
+# ## Why the tests job installs a real herdr
+#
+# Nine test files under test/integration/ skip themselves when there is no
+# daemon socket or no SSH server on the machine. That is the right behaviour for
+# a developer's laptop and a disaster in CI: `flutter test` would report
+# "All tests passed!" while quietly exercising none of the SSH transport, none
+# of the terminal framing and none of the socket protocol. So this job installs
+# herdr, starts a headless daemon and a throwaway sshd, and then FAILS IF
+# ANYTHING SKIPPED. A skip in CI is a missing test, not a green tick.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's answer stale, so it is
+# cancelled rather than paid for. Not `github.ref` alone: a tag and a branch can
+# share a name, and cancelling one another's runs would be baffling.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned rather than `channel: stable`, because this project's font metrics
+  # test asserts advances measured through Flutter's OWN layout: a toolchain
+  # upgrade that changes text shaping would change the numbers, and that should
+  # arrive as a deliberate bump with a re-measurement, not as a red build on an
+  # unrelated pull request.
+  FLUTTER_VERSION: '3.47.3'
+  JAVA_VERSION: '17'
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: generated localizations are up to date
+        # `l10n.yaml` writes into lib/l10n/generated and the result is COMMITTED
+        # (the build machine has no l10n toolchain of its own). That makes it
+        # possible to edit an .arb, forget `flutter gen-l10n`, and ship a UI
+        # whose strings are the previous commit's — which looks like a broken
+        # translation rather than a missing build step.
+        run: |
+          set -eu
+          flutter gen-l10n
+          git diff --exit-code -- lib/l10n/generated
+
+      - run: flutter analyze
+
+      - name: vendored icon artwork still matches its recorded hashes
+        # Same class of mistake as the .arb one: `tool/fetch_ui_icons.py` records
+        # a hash per downloaded icon, so an edit in place — or a re-fetch that
+        # silently changed artwork — fails here instead of shipping.
+        run: python3 tool/fetch_ui_icons.py --check
+
+  tests:
+    name: tests (with a real herdr and a real sshd)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: install herdr
+        # The PUBLIC installer, so CI tests the build users get. There is no mock
+        # daemon here on purpose: the protocol details this project has been
+        # bitten by (an error envelope with an empty id, `params` being mandatory
+        # even when empty, a socket that closes after a single reply) are exactly
+        # the ones a fake would get right by accident.
+        run: |
+          set -eu
+          curl -fsSL https://herdr.dev/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: install openssh-server
+        # `tool/test_sshd.sh` starts a SECOND sshd in /tmp with its own host key
+        # and its own authorised_keys, so it never touches the runner's own SSH
+        # configuration. Ubuntu's image ships the client; the server is the part
+        # that has to be asked for.
+        run: |
+          set -eu
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq openssh-server
+
+      - name: the test gate
+        # One script, also runnable on a laptop ("sh tool/ci_tests.sh"). It
+        # starts a headless herdr daemon and a throwaway sshd if they are not
+        # already up, runs the suite, and then FAILS IF ANYTHING SKIPPED — which
+        # is the whole point: without that, a broken SSH transport still produces
+        # a green tick, and the nine self-skipping files under test/integration/
+        # quietly test nothing.
+        env:
+          # The write-path tests create a workspace and upload a file. On a
+          # developer's machine that is somebody's working session; here the
+          # daemon was started a minute ago and dies with the runner, so the
+          # destructive half runs too.
+          HP_LIVE_WRITES: '1'
+        run: sh tool/ci_tests.sh
+
+      - name: the test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-log
+          path: /tmp/herdr-pocket-ci-tests.log
+          if-no-files-found: ignore
+          retention-days: 7

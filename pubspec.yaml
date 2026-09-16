@@ -1,0 +1,200 @@
+name: herdr_pocket
+description: "Herdr Pocket — a calm status board and live terminal for your coding agents"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  # Icons: Cupertino only. Material Icons are deliberately NOT bundled
+  # (see `uses-material-design: false` below and AGENTS.md rule #2).
+  cupertino_icons: ^1.0.8
+
+  # Transport. `SSHClient.forwardLocalUnix()` speaks
+  # `direct-streamlocal@openssh.com`, which is how we reach the herdr Unix
+  # socket without any bridge binary on the remote host.
+  dartssh2: ^4.1.0
+
+  # Pull to refresh. Chosen over `CupertinoSliverRefreshControl` for one reason:
+  # it is an ENGINE, not a look. `Header`/`Footer` are abstract, so the indicator
+  # is ours while the drag physics, the arming threshold, the spring and the task
+  # lifecycle are the package's — and two of the three animations we borrow
+  # (Taurus, Delivery) come with it. It does import `package:flutter/material.dart`
+  # internally; nothing under our lib/ may, which is what
+  # test/architecture/no_material_test.dart still enforces.
+  easy_refresh: ^3.5.1
+
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: ^22.3.0
+  flutter_localizations:
+    sdk: flutter
+
+  # State. NOTE: riverpod_lint/custom_lint are deliberately ABSENT — they pull
+  # analyzer -> macros -> _macros, which no longer exists in the Dart SDK, and
+  # riverpod_lint additionally pins riverpod to 2.x. Verified unresolvable on
+  # Dart 3.13.3; codegen + very_good_analysis covers us instead.
+  flutter_riverpod: ^3.4.3
+
+  # SSH credentials (private keys, passphrases) at rest.
+  flutter_secure_storage: ^11.1.0
+
+
+  # Brand marks for the agent chips (assets/agent_icons/). Chosen over a raster
+  # icon font because herdr reports an open-ended set of agent ids and the marks
+  # are vector logos we must not recolour. Verified to pull in NO Material
+  # package: `flutter pub deps --style=compact | grep -i material` matches only
+  # `material_color_utilities`, which the Flutter SDK itself depends on.
+  flutter_svg: ^2.3.0
+  image_picker: ^1.2.3
+  intl: ^0.20.3
+  # Scanning the pairing code `hdp pair` prints.
+  #
+  # THE COST IS REAL AND WAS ACCEPTED DELIBERATELY. This is the one dependency
+  # in the file that adds megabytes rather than kilobytes: it brings ML Kit's
+  # barcode model, which is 3–10 MB bundled, plus a `CAMERA` runtime permission.
+  # Both figures and the `useUnbundled=true` mitigation (~600 KB, at the price
+  # of a Play Services download on first use) are recorded in
+  # `docs/research/04-flutter-stack.md` §8.1.
+  #
+  # Bundled, not unbundled, and that is a deliberate choice: the verification
+  # device list includes an AOSP emulator with no Play Services, where an
+  # unbundled model simply never arrives. A pairing screen that works on the
+  # phone it is tested on and shows a black rectangle on the emulator is worse
+  # than a larger APK.
+  #
+  # Chosen over `flutter_zxing` because it declares and requests its own camera
+  # permission, so there is no permission plumbing of ours to get wrong, and
+  # over `google_mlkit_barcode_scanning` because that one leaves the camera to
+  # us — which is the whole of the work.
+  mobile_scanner: ^7.4.2
+
+  package_info_plus: ^10.2.1
+  # Ed25519 key GENERATION, which dartssh2 can parse but not create.
+  #
+  # `dartssh2` renders a key pair to OpenSSH PEM and reads one back, and has no
+  # way to make a new one — its `SSHEd25519Signature` only ever derives a
+  # signature from a private key it was handed. Pairing needs a key that was
+  # born on the phone, so something has to do the scalar multiplication.
+  #
+  # `pinenacl` rather than `cryptography` or a fresh ed25519 package: dartssh2
+  # ALREADY depends on it (`dartssh2 -> pinenacl ^0.6.0`), so naming it here
+  # adds no new package to the lock file, no new license and no new audit
+  # surface — it only makes an existing transitive dependency one we are allowed
+  # to import. `very_good_analysis`'s `depend_on_referenced_packages` is right to
+  # insist on that distinction.
+  pinenacl: ^0.6.0
+  riverpod_annotation: ^4.0.7
+
+  # Non-secret host profiles, preferences.
+  shared_preferences: ^2.5.5
+
+
+  # Headless VT model for the herdr terminal stream. We consume
+  # `package:xterm/core.dart` (Flutter-free) and render it ourselves so the
+  # Apple look is ours, not xterm's default Material-flavoured view.
+  xterm: ^4.0.0
+
+dev_dependencies:
+  build_runner: ^2.16.1
+  flutter_test:
+    sdk: flutter
+
+  # E2E tests that can reach OUTSIDE the Flutter view — the notification shade,
+  # the runtime-permission dialog, the camera in the pairing scanner.
+  #
+  # WHY NOT `integration_test` ALONE. `flutter test` runs everything in one
+  # process and can only touch widgets we drew. This app's failure modes live at
+  # the boundary: POST_NOTIFICATIONS is a runtime permission, the scanner needs
+  # CAMERA, and the directory picker is a system Activity. A test that can only
+  # tap Flutter widgets cannot tell "the permission dialog appeared" from "the
+  # button did nothing".
+  #
+  # WHY A dev_dependency: `patrol` ships a native Android plugin (that is how it
+  # drives Espresso/UIAutomator), so it does add an `androidTest` APK to the
+  # build. Nothing under `lib/` imports it, and `flutter build apk` never
+  # compiles `patrol_test/`.
+  #
+  # ⚠️ `patrol test` CANNOT be replaced by `flutter test`. The tests under
+  # `patrol_test/` are driven natively; `flutter test` on them fails with a
+  # missing PatrolAppService. Both suites run in CI, each minding its own
+  # business — see .github/workflows/ci.yml.
+  patrol: ^4.10.0
+  riverpod_generator: ^4.0.9
+  very_good_analysis: ^11.0.0
+
+flutter:
+  # gen-l10n: generates AppLocalizations from lib/l10n/*.arb (see l10n.yaml).
+  generate: true
+
+  # FALSE, AND THE REASON IS NOT SIZE — that claim was measurably wrong.
+  #
+  # Measured with `easy_refresh` in the tree (2026-09-15):
+  #   release APK  MaterialIcons subset to 1,144 B  (99.9% of 1.6 MB tree-shaken)
+  #   debug APK    the full 1,645,184 B, because debug does not tree-shake
+  # so a release build pays ~0.9 KB, not 1.6 MB. The reason to keep it off is
+  # that it is a GUARD: with no Material icon font in the bundle, an accidental
+  # `Icon(Icons.add)` renders as tofu — loud, immediate, unmissable. Switching
+  # it on makes the same mistake render a plausible-looking Material glyph
+  # instead, which is the exact failure ADR-004 exists to prevent. The
+  # belt-and-braces half is test/architecture/no_material_test.dart, which fails
+  # the build on the import itself.
+  #
+  # The cost of keeping it off is one line of build output: a dependency that
+  # declares `uses-material-design: true` (easy_refresh does) is reported,
+  # because the tool cannot know which of its widgets we actually draw. Ours
+  # never touch a Material icon — see plannings/findings.md section 37.3.
+  uses-material-design: false
+
+  # Per-agent brand marks. One SVG per agent id; provenance, licences and the
+  # re-fetch/verify path are in assets/agent_icons/README.md and
+  # tool/fetch_agent_icons.sh. Agents herdr can report but nobody publishes a
+  # usable mark for fall back to the letter monogram — see
+  # lib/ui/components/agent_icon.dart.
+  assets:
+    - assets/agent_icons/
+    # Colour schemes: one palette drives the terminal AND the app chrome
+    # (see lib/domain/theme/). Extracted from the published theme gallery —
+    # provenance in docs/research/09-moshi-theme-colors.md.
+    - assets/themes/
+
+  fonts:
+    # Two bundled faces that behave as ONE grid. Read this before changing
+    # either of them.
+    #
+    # A terminal is a fixed grid: every cell is the same width, and a full-width
+    # CJK glyph must occupy exactly TWO cells. Whether that holds is a property
+    # of the fonts' ADVANCES, not of the platform — and Android's monospace
+    # family has no CJK glyphs at all, so the system falls back to a
+    # proportional CJK face and the right edge of every mixed line goes ragged.
+    #
+    # Iosevka carries Latin and the Nerd Font icon range and has NO Han at all;
+    # Noto Sans Mono CJK carries Han. They agree because the numbers agree:
+    #
+    #     Iosevka  'M' 0.5000 em      Noto  'M' 0.5000 em
+    #     Noto     '汉' 1.0000 em  ->  exactly 2 x 0.5 em
+    #
+    # Both measured from the font files with a cmap/hmtx probe, and asserted
+    # through Flutter's own layout in test/ui/terminal_font_metrics_test.dart.
+    # The earlier Maple Mono NF CN pairing is why this is measured rather than
+    # assumed: Iosevka (0.5 em) beside Maple's Han (1.2 em) gives 2.4, not 2.0,
+    # and every Chinese character drifts out of its cell.
+    #
+    # The rule for a replacement, then, is not "find a CJK mono" but "find one
+    # whose Han advance is exactly twice the Latin advance you already have".
+    - family: IosevkaNerdFontMono
+      fonts:
+        - asset: assets/fonts/IosevkaNerdFontMono-Regular.ttf
+    - family: NotoSansMonoCJKsc
+      fonts:
+        - asset: assets/fonts/NotoSansMonoCJKsc-Regular.otf
+
+# Read by `patrol_cli`, never by the app. `app_name` is the label the test
+# process looks for to decide the app under test is up; `package_name` is what
+# it installs and force-stops between tests.
+patrol:
+  app_name: Herdr Pocket
+  test_directory: patrol_test
+  android:
+    package_name: dev.maddax.herdrpocket
