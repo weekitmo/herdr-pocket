@@ -5,3 +5,9 @@
 # Xcode-related
 **/dgph
 **/xcuserdata/
+
+# SwiftPM's lockfile, which Flutter regenerates from `pubspec.lock` on every
+# build. `pubspec.lock` is the real pin — this one is derived from it plus the
+# macOS plugin list, and Xcode rewrites it whenever it resolves. Committing it
+# would only give the tree a file that goes dirty on its own.
+**/xcshareddata/swiftpm/

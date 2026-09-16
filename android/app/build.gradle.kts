@@ -116,6 +116,13 @@ android {
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
+                // v3 carries a proof-of-rotation, which is what lets the signing
+                // key be replaced later WITHOUT every installed copy having to be
+                // uninstalled first — and uninstalling deletes the user's saved
+                // machines. v2 alone is enough to install on every device this
+                // app supports (minSdk 24), so the APK stays installable either
+                // way; v3 is the part that makes a lost keystore recoverable.
+                enableV3Signing = true
             }
         }
     }
