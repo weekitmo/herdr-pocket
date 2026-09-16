@@ -36,6 +36,7 @@ class PaneInfo {
     this.isFocused = false,
     this.revision,
     this.scrollOffsetFromBottom,
+    this.viewportRows,
   });
 
   factory PaneInfo.fromJson(Map<String, Object?> json) {
@@ -57,12 +58,22 @@ class PaneInfo {
       },
       scrollOffsetFromBottom: switch (json['scroll']) {
         // `PaneScrollInfo` = how far this pane's viewport is scrolled back,
-        // out of how far it can go. The client cannot infer either from the
-        // frames it receives — a rendered frame of history looks exactly like a
-        // rendered frame of the present — so this is the only place the app can
-        // learn that somebody (another client) left the pane scrolled.
+        // out of how far it can go, and how many rows it has. The client cannot
+        // infer any of it from the frames it receives — a rendered frame of
+        // history looks exactly like a rendered frame of the present, and a
+        // frame is always the size the client asked for — so this is the only
+        // place the app can learn that somebody (another client) left the pane
+        // scrolled, or that the pane is taller than the window being rendered
+        // for it.
         final Map<Object?, Object?> m => switch (m['offset_from_bottom']) {
           final int v => v,
+          _ => null,
+        },
+        _ => null,
+      },
+      viewportRows: switch (json['scroll']) {
+        final Map<Object?, Object?> m => switch (m['viewport_rows']) {
+          final int v when v > 0 => v,
           _ => null,
         },
         _ => null,
@@ -101,6 +112,15 @@ class PaneInfo {
   /// Lines this pane's viewport is scrolled back from the live bottom, when the
   /// daemon reports it. Null means "not reported", NOT "at the bottom".
   final int? scrollOffsetFromBottom;
+
+  /// How many rows this pane's terminal HAS, in cells.
+  ///
+  /// The number the daemon is asked to render at, because it crops a pane
+  /// rather than reflowing it: ask for fewer rows than this and the bottom of
+  /// the pane is simply not in the frame. Null means "not reported" — the
+  /// caller then falls back to the widget's own height, which is the old
+  /// behaviour.
+  final int? viewportRows;
 
   bool get isAgent => agent.isNotEmpty;
 

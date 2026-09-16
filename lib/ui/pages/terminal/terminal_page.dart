@@ -16,10 +16,10 @@ import 'package:herdr_pocket/domain/agent/attachment.dart';
 import 'package:herdr_pocket/domain/terminal/key_bar.dart';
 import 'package:herdr_pocket/domain/terminal/pinch.dart';
 import 'package:herdr_pocket/domain/terminal/swipe.dart';
+import 'package:herdr_pocket/domain/terminal/window.dart';
 import 'package:herdr_pocket/domain/workspace/jump_target.dart';
 import 'package:herdr_pocket/domain/workspace/pane_actions.dart';
 import 'package:herdr_pocket/domain/workspace/pane_info.dart';
-import 'package:herdr_pocket/domain/workspace/workspace_tree.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/menu_popover.dart';
 import 'package:herdr_pocket/ui/components/pane_actions_sheet.dart';
@@ -32,6 +32,7 @@ import 'package:herdr_pocket/ui/pages/files/file_tree_page.dart';
 import 'package:herdr_pocket/ui/pages/git/git_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/layout_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/pane_switcher.dart';
+import 'package:herdr_pocket/ui/pages/terminal/terminal_composer.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:xterm/core.dart';
@@ -86,7 +87,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// one small allocation when the user asks for a different pane.
   Terminal _terminal = Terminal(maxLines: 4000);
   final _repaint = _Repaint();
-  final _controller = TextEditingController();
 
   TerminalSession? _session;
   bool _attaching = false;
@@ -124,7 +124,32 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// Opening before the first frame has measured the widget therefore resizes
   /// someone's terminal twice: once to a guess, once to the truth, with their
   /// TUI redrawing itself at both. So the session waits for a measured size.
+  ///
+  /// IT ALSO WAITS FOR THE PANE'S OWN HEIGHT when that can be had (see
+  /// [_seedFromTree]), because that height, not the widget's, is what the grid
+  /// is asked for — and a session opened at the wrong row count renders the
+  /// wrong slice of the pane until the correction lands. Bounded by
+  /// [_seedDeadline] so a machine that will not answer costs one re-render
+  /// rather than the terminal itself.
   final _sizeReady = Completer<void>();
+
+  /// A measured grid has been reported by a layout pass.
+  bool _measured = false;
+
+  /// The pane's own height is known, or the lookup has finished without it.
+  bool _paneSized = false;
+
+  Timer? _seedDeadline;
+
+  /// The pane's height in cells, as the daemon describes it.
+  ///
+  /// NOT the widget's: the daemon crops a pane rather than reflowing it, so the
+  /// window into a pane is chosen in the pane's units. See
+  /// `domain/terminal/window.dart` for the measurement behind that.
+  int? _paneRows;
+
+  /// The first buffer row that reaches the screen. See [firstVisibleRow].
+  int _topRow = 0;
 
   /// Which modifiers are armed on the key bar, and what that means for the next
   /// keystroke. Held on the PAGE rather than inside the bar so the soft
@@ -157,7 +182,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   double _lastCellWidth = 8;
   bool get _following => _scrollOffset == 0;
   int _rows = 24;
-  String _previousInput = '';
 
   /// Which pane this screen is attached to. Starts as the one it was pushed
   /// with, and changes when the user picks another from the switcher.
@@ -188,37 +212,71 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     //
     // `read(...future)` rather than `watch`: kick the read off, but do not
     // rebuild this page every time an agent prints.
-    unawaited(_seedScrollFromTree());
-    // Watch what the user types and translate it into terminal keystrokes.
-    _controller.addListener(_onComposerChanged);
+    unawaited(_seedFromTree());
+    // And a ceiling on how long that read may hold the session back. A machine
+    // that is slow, or a tree that never answers, must degrade to the old
+    // behaviour rather than to a terminal that never opens.
+    _seedDeadline = Timer(const Duration(milliseconds: 1200), () {
+      if (_paneSized) return;
+      _paneSized = true;
+      _openIfMeasured();
+    });
   }
 
-  /// Learns whether the pane is ALREADY scrolled before this screen opened.
+  /// Learns what the pane IS before this screen attaches to it.
   ///
-  /// Nothing that arrives over the terminal stream says so: a rendered frame of
-  /// history is indistinguishable from a rendered frame of the present. The pane
-  /// census is the only place the daemon reports `offset_from_bottom`, so the
-  /// "N lines back" bar is seeded from it — otherwise a pane another client left
-  /// scrolled would open showing history with no way back. (Found exactly that
-  /// way: a reload reset the mirror to 0 while the daemon was still at 20.)
+  /// Two facts come from the pane census, and neither is visible in the
+  /// terminal stream itself:
   ///
-  /// A tree that cannot be read is NOT an error here — the bar simply starts
-  /// hidden — so the failure is swallowed rather than left to bubble as an
-  /// unhandled future. That distinction is not cosmetic: the original
-  /// fire-and-forget read was fine because Riverpod itself listens to the
-  /// future, but a `.then()` chain is a NEW future with no error handler, and
-  /// every test whose scripted daemon lacks `workspace.list` failed on it.
-  Future<void> _seedScrollFromTree() async {
-    final WorkspaceTree tree;
+  ///  * **How far back the pane is scrolled.** A rendered frame of history is
+  ///    indistinguishable from a rendered frame of the present, and
+  ///    `offset_from_bottom` is the only place the daemon reports it — without
+  ///    it, a pane another client left scrolled would open showing history with
+  ///    no way back. (Found exactly that way: a reload reset the mirror to 0
+  ///    while the daemon was still at 20.)
+  ///
+  ///  * **How tall the pane is, in cells.** That is the number the daemon is
+  ///    asked to render at, because it CROPS a pane rather than reflowing it —
+  ///    see `domain/terminal/window.dart`. Getting it a moment late costs one
+  ///    re-render; not getting it at all costs the bottom of the pane, which is
+  ///    where the user is typing.
+  ///
+  /// A tree that cannot be read is NOT an error here — the bar starts hidden
+  /// and the grid falls back to the widget's own height — so the failure is
+  /// swallowed rather than left to bubble as an unhandled future. That
+  /// distinction is not cosmetic: the original fire-and-forget read was fine
+  /// because Riverpod itself listens to the future, but a `.then()` chain is a
+  /// NEW future with no error handler, and every test whose scripted daemon
+  /// lacks `workspace.list` failed on it.
+  Future<void> _seedFromTree() async {
+    // Whether the pane's own height arrived. It decides which half of this
+    // method's tail runs: with it, the session waits for the NEXT layout pass
+    // (the report that carries the new row count); without it, nothing more is
+    // coming and the fallback geometry opens now.
+    var sized = false;
     try {
-      tree = await ref.read(navTreeProvider.future);
+      final tree = await ref.read(navTreeProvider.future);
+      if (!mounted) return;
+      final pane = tree.paneById(_paneId);
+      final offset = pane?.scrollOffsetFromBottom;
+      final rows = pane?.viewportRows;
+      final foundRows = rows != null && rows > 0;
+      setState(() {
+        if (offset != null && offset != 0 && _scrollOffset == 0) {
+          _scrollOffset = offset;
+        }
+        if (foundRows) _paneRows = rows;
+      });
+      sized = foundRows;
     } on Object {
-      return;
+      // Nothing to do: the fallbacks are the old behaviour.
+    } finally {
+      // WHETHER OR NOT IT WORKED. This is what unblocks the session, so a
+      // machine that answers nothing must still let the terminal open.
+      _paneSized = true;
+      _seedDeadline?.cancel();
+      if (!sized) _openIfMeasured();
     }
-    if (!mounted) return;
-    final offset = tree.paneById(_paneId)?.scrollOffsetFromBottom;
-    if (offset == null || offset == 0 || _scrollOffset != 0) return;
-    setState(() => _scrollOffset = offset);
   }
 
   @override
@@ -226,12 +284,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     // Nothing is waiting on a size once this screen is gone, but a completer
     // that never completes leaves `_open` suspended forever.
     if (!_sizeReady.isCompleted) _sizeReady.complete();
+    _seedDeadline?.cancel();
     _inputFocus.dispose();
     _resizeDebounce?.cancel();
     _repaint.dispose();
-    _controller
-      ..removeListener(_onComposerChanged)
-      ..dispose();
     unawaited(_session?.close());
     super.dispose();
   }
@@ -270,10 +326,17 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       _terminal = Terminal(maxLines: 4000);
       _scrollOffset = 0;
       _dragCarry = 0;
-      _previousInput = '';
       _selection = null;
       _selectionAnchor = null;
+      // The height belongs to the pane we just left. Cleared rather than kept,
+      // because a wrong height is a crop, and a crop shows the owner of this
+      // screen the wrong part of their own terminal.
+      _paneRows = null;
+      _topRow = 0;
     });
+    // The new pane has its own height and its own scroll position.
+    _paneSized = false;
+    unawaited(_seedFromTree());
     await _open();
   }
 
@@ -385,45 +448,41 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     }
   }
 
-  /// Turns text-field edits into terminal bytes.
+  /// Sends text the user typed on the phone's own keyboard.
   ///
-  /// A text field is the only reliable way to raise the soft keyboard, but it
-  /// thinks in strings while a terminal thinks in keystrokes. Diffing against
-  /// the previous value recovers both: characters typed become input, and
-  /// characters removed become DEL, which is what makes backspace work.
-  void _onComposerChanged() {
+  /// The keystroke half of the composer: the widget in `terminal_composer.dart`
+  /// knows what the keyboard reported, and this knows what the terminal expects
+  /// — including the armed modifiers, which apply to the SOFT KEYBOARD as much
+  /// as to the bar. That is the half that matters most: `Ctrl` + `d` typed on
+  /// the phone is the only way to reach Ctrl+D, or Ctrl+R, or any other control
+  /// code with no button.
+  void _onTyped(String text) {
     final session = _session;
     if (session == null) return;
 
-    final current = _controller.text;
-    final previous = _previousInput;
-    _previousInput = current;
+    _jumpToBottom();
+    final outcome = _keys.type(text);
+    if (_keys.armed.isNotEmpty) {
+      // Typing consumes the armed modifiers, and the bar has to show it:
+      // leaving `Ctrl` lit after it has already been spent would make the next
+      // keystroke look like it should be controlled too.
+      setState(() => _keys = KeyBarState(armed: outcome.armed));
+    }
+    session.sendText(outcome.bytes ?? '');
+  }
 
-    if (current.length > previous.length) {
-      _jumpToBottom();
-      // Armed modifiers apply to the KEYBOARD too, not only to the dozen keys
-      // on the bar. This is the half that matters most: `Ctrl` + typing `d` on
-      // the phone's own keyboard is the only way to reach Ctrl+D, or Ctrl+R, or
-      // any other control code that has no button.
-      final outcome = _keys.type(current.substring(previous.length));
-      if (_keys.armed.isNotEmpty) {
-        // Typing consumes the armed modifiers, and the bar has to show it:
-        // leaving `Ctrl` lit after it has already been spent would make the
-        // next keystroke look like it should be controlled too.
-        setState(() => _keys = KeyBarState(armed: outcome.armed));
-      }
-      session.sendText(outcome.bytes ?? '');
-    } else if (current.length < previous.length) {
-      final removed = previous.length - current.length;
-      for (var i = 0; i < removed; i++) {
-        session.sendBytes(const [0x7F]); // DEL — the terminal's backspace
-      }
-    }
-    // Keep the field empty so it never accumulates a visible buffer.
-    if (current.isNotEmpty) {
-      _previousInput = '';
-      _controller.clear();
-    }
+  /// Sends the terminal's own backspace for every character the keyboard
+  /// deleted.
+  ///
+  /// DEL (0x7F), not the field's edit, and that is the point: the pane's input
+  /// line is the terminal's business, and it may hold text this phone never
+  /// typed — a command another client started, or a prompt the user is halfway
+  /// through answering. One DEL per deleted character is what a physical
+  /// keyboard would have sent, and it deletes exactly one of whatever is there.
+  void _onBackspace(int count) {
+    final session = _session;
+    if (session == null || count <= 0) return;
+    session.sendBytes(List<int>.filled(count, 0x7F));
   }
 
   /// Moves to the tab [delta] places away, wrapping at the ends.
@@ -700,11 +759,14 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   ///
   /// Goes through the viewport offset, so a selection made while scrolled back
   /// refers to the history the user is actually looking at rather than to
-  /// whatever happens to be at that height on the live screen.
+  /// whatever happens to be at that height on the live screen — and through
+  /// [_topRow], so a selection made with the keyboard up refers to the rows
+  /// that are actually on screen rather than to the ones the shift moved off
+  /// the top of it.
   (int, int)? _cellAt(Offset local) {
     if (_lastCellWidth <= 0 || _lastCellHeight <= 0) return null;
 
-    final row = (local.dy / _lastCellHeight).floor();
+    final row = (local.dy / _lastCellHeight).floor() + _topRow;
     final column = (local.dx / _lastCellWidth).floor();
     if (row < 0 || column < 0) return null;
 
@@ -714,6 +776,8 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       viewHeight: _rows,
       scrollOffset: _scrollOffset,
     );
+    // Past the bottom of the frame, which is empty surface rather than a cell.
+    if (row >= window.rowCount) return null;
     final lineIndex = window.start + row;
     if (lineIndex < 0 || lineIndex >= total) return null;
     return (lineIndex, column);
@@ -748,20 +812,39 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     });
   }
 
+  /// Opens the session once both halves of the measurement are in: the widget
+  /// has reported a grid, and the pane's own height is known (or given up on).
+  ///
+  /// Completing early is not harmless — the session opens at whatever geometry
+  /// it is given, and the daemon renders exactly that — so the first frame the
+  /// user sees would be the wrong slice of their pane until the correction
+  /// arrived.
+  void _openIfMeasured() {
+    if (_sizeReady.isCompleted) return;
+    if (!_measured || !_paneSized) return;
+    _sizeReady.complete();
+  }
+
   /// Reports a new viewport size to the daemon.
   ///
   /// Debounced, because a rotation or a keyboard animation fires many layout
   /// passes and every one of them would otherwise be a round trip that the
   /// daemon has to re-render for.
+  ///
+  /// THE GRID IS THE PANE'S, NOT THE WIDGET'S, for the row count: see
+  /// [rowsToRequest]. The widget's height decides how much of it is VISIBLE
+  /// ([firstVisibleRow]), not how much is asked for — which is why the software
+  /// keyboard opening costs no round trip at all on this link.
   Timer? _resizeDebounce;
   void _reportSize(int cols, int rows) {
     // The very first report is not a resize, it is the measurement the session
     // has been waiting on. There is no session yet, so there is nothing to
     // debounce or to tell.
     if (!_sizeReady.isCompleted) {
+      _measured = true;
       _cols = cols;
       _rows = rows;
-      _sizeReady.complete();
+      _openIfMeasured();
       return;
     }
     if (cols == _cols && rows == _rows) return;
@@ -918,39 +1001,18 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                   )
                 else
                   _keyBar(palette),
-                // The real input surface: invisible, nearly zero-height, and
-                // the only thing that reliably raises the soft keyboard on both
-                // platforms.
-                //
-                // THE RETURN KEY HAS TO BE WIRED UP EXPLICITLY. A single-line
-                // text field with no `onSubmitted` does not insert a newline AND
-                // does not submit anything — the IME's action key is simply a
-                // no-op. That is exactly how it behaved: type a command, press
-                // return, nothing happens, and it reads as "the app is
-                // unfinished" rather than as a bug.
-                SizedBox(
-                  height: 1,
-                  child: CupertinoTextField(
-                    controller: _controller,
-                    focusNode: _inputFocus,
-                    autofocus: true,
-                    showCursor: false,
-                    decoration: null,
-                    style: const TextStyle(
-                      color: Color(0x00000000),
-                      fontSize: 1,
-                    ),
-                    // Labels the IME key "send", rather than a return arrow that
-                    // would suggest it inserts a line break.
-                    textInputAction: TextInputAction.send,
-                    // Reuses the key bar's own Enter, so an armed Ctrl applies
-                    // to the keyboard's return exactly as it does to the bar's.
-                    onSubmitted: (_) => _onKeyTap(SoftKey.enter),
-                    // Keeps focus. The default for a non-newline action is to
-                    // unfocus, which would drop the keyboard after every
-                    // command.
-                    onEditingComplete: () {},
-                  ),
+                // The real input surface: invisible, one point tall, and the
+                // only thing that reliably raises the soft keyboard on both
+                // platforms. See [TerminalComposer] — it owns the input
+                // connection, and the sentinel that makes the delete key work
+                // even when nothing has been typed into this field.
+                TerminalComposer(
+                  focusNode: _inputFocus,
+                  onInsert: _onTyped,
+                  onDelete: _onBackspace,
+                  // Reuses the key bar's own Enter, so an armed Ctrl applies to
+                  // the keyboard's return exactly as it does to the bar's.
+                  onEnter: () => _onKeyTap(SoftKey.enter),
                 ),
               ],
             ),
@@ -1216,8 +1278,26 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     final cellWidth = metrics.width / 2;
     final cellHeight = metrics.height;
 
-    final cols = (constraints.maxWidth / cellWidth).floor().clamp(20, 400);
-    final rows = (constraints.maxHeight / cellHeight).floor().clamp(5, 400);
+    final fitsCols = (constraints.maxWidth / cellWidth).floor().clamp(20, 400);
+    final fitsRows = (constraints.maxHeight / cellHeight).floor().clamp(5, 400);
+
+    // WHAT THE PANE IS, NOT WHAT THE BOX IS. The daemon renders the geometry it
+    // is given and crops a bigger pane to fit it — measured, see
+    // `domain/terminal/window.dart` — so asking for the box's height is what
+    // made an agent's input box disappear the moment the soft keyboard opened.
+    // Columns stay the box's: a pane wider than the phone is cropped on purpose.
+    final cols = fitsCols;
+    final rows = rowsToRequest(paneRows: _paneRows ?? 0, boxRows: fitsRows);
+
+    // Which part of that frame reaches the screen. The grid above is fixed, so
+    // a keyboard that takes a third of the screen moves this number instead of
+    // triggering a re-render of somebody's terminal.
+    final topRow = firstVisibleRow(
+      frameRows: rows,
+      boxRows: fitsRows,
+      following: _following,
+    );
+
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _reportSize(cols, rows),
     );
@@ -1234,6 +1314,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     _lastCellHeight = cellHeight;
     _lastCellWidth = cellWidth;
+    _topRow = topRow;
 
     return Stack(
       children: [
@@ -1298,6 +1379,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               // offset — `_scrollOffset` describes the far end's viewport, not
               // a window into our buffer.
               scrollOffset: 0,
+              // The frame's bottom is what fits when the box is short: see
+              // [firstVisibleRow].
+              topRow: topRow,
               selection: _selection,
               repaint: _repaint,
             ),

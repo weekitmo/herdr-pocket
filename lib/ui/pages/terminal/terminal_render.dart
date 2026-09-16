@@ -239,6 +239,7 @@ class TerminalPainter extends CustomPainter {
     required this.scrollOffset,
     required this.selection,
     required super.repaint,
+    this.topRow = 0,
   });
 
   final Terminal terminal;
@@ -260,6 +261,17 @@ class TerminalPainter extends CustomPainter {
 
   /// The run being selected, in buffer coordinates. Null when nothing is.
   final TerminalSelection? selection;
+
+  /// The first buffer row drawn at the top of the canvas.
+  ///
+  /// Non-zero when the frame is TALLER than the box it is drawn into — the
+  /// soft keyboard has taken part of the screen, or the user has pinched the
+  /// text up — and then the frame's bottom is what belongs on screen, because
+  /// the bottom of a terminal is where the prompt and every TUI's composer
+  /// live. Zero in the split view, where each pane is rendered at its own size
+  /// and there is nothing to shift. The arithmetic is in
+  /// `domain/terminal/window.dart`, where it is tested without a canvas.
+  final int topRow;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -283,8 +295,12 @@ class TerminalPainter extends CustomPainter {
       scrollOffset: scrollOffset,
     );
 
-    for (var y = 0; y < window.rowCount; y++) {
-      final lineIndex = window.start + y;
+    // The rows this canvas can hold, after the shifted-away ones. Drawing the
+    // rest would only paint them under the keyboard bar.
+    final drawnRows = math.max(0, window.rowCount - topRow);
+
+    for (var y = 0; y < drawnRows; y++) {
+      final lineIndex = window.start + topRow + y;
       if (lineIndex >= buffer.lines.length) break;
 
       final line = buffer.lines[lineIndex];
@@ -393,7 +409,7 @@ class TerminalPainter extends CustomPainter {
       }
     }
 
-    _paintSelection(canvas, window.start, window.rowCount);
+    _paintSelection(canvas, window.start + topRow, drawnRows);
     _paintCursor(canvas);
   }
 
@@ -442,9 +458,16 @@ class TerminalPainter extends CustomPainter {
     final y = buffer.cursorY;
     if (x < 0 || y < 0 || y >= terminal.viewHeight) return;
 
+    // `cursorY` is a row of the LIVE SCREEN — xterm keeps it relative to the
+    // viewport, not to the history — and with the viewport at the bottom that
+    // screen starts exactly at the frame's top. So the only thing between it
+    // and the canvas is the shift.
+    final row = y - topRow;
+    if (row < 0 || row >= terminal.viewHeight) return;
+
     final rect = Rect.fromLTWH(
       x * cellWidth,
-      y * cellHeight,
+      row * cellHeight,
       cellWidth,
       cellHeight,
     );
@@ -521,6 +544,7 @@ class TerminalPainter extends CustomPainter {
   bool shouldRepaint(TerminalPainter old) =>
       old.terminal != terminal ||
       old.scrollOffset != scrollOffset ||
+      old.topRow != topRow ||
       old.selection != selection ||
       old.cellWidth != cellWidth ||
       old.fontSize != fontSize ||
