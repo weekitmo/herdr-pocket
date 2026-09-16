@@ -216,36 +216,13 @@ docs/             research and handover notes
 | `.github/workflows/release.yml` | tag `v*` | release APK (split + universal) and a macOS `.dmg`, attached to a GitHub Release |
 | `.github/workflows/hdp-release.yml` | tag `hdp-v*` | the `hdp` CLI's static binaries |
 
-### Signing an Android release
+### Signing
 
-Out of the box a release APK is signed with Flutter's template **debug** key: it
-side-loads and upgrades over an existing install, and it cannot be distributed.
-To sign for real, once per machine:
-
-```sh
-sh tool/make_release_keystore.sh
-```
-
-That writes a keystore to `~/.config/herdr-pocket/` — **outside this repository**,
-on purpose — and prints four values to paste into GitHub → *Settings → Secrets
-and variables → Actions*:
-
-```
-ANDROID_KEYSTORE_BASE64     <!-- contents of release-keystore.jks.base64 -->
-ANDROID_KEYSTORE_PASSWORD
-ANDROID_KEY_ALIAS
-ANDROID_KEY_PASSWORD
-```
-
-With those set, `release.yml` signs with the real key; without them it warns and
-signs with the debug key. For a local release build, put the same four values in
-`android/key.properties` (in `.gitignore`).
-
-> **The keystore and its passwords are the whole value.** Back up
-> `~/.config/herdr-pocket/` somewhere that is neither this machine nor this
-> repository. A keystore in a commit cannot be unpublished, and a keystore whose
-> password is lost cannot sign anything — either way the only way forward is a
-> new application id, and every existing installation has to be replaced by hand.
+Release APKs are signed with a real keystore, configured through CI secrets.
+`tool/make_release_keystore.sh` creates one and prints everything its holder
+needs — **that output is the documentation, and it is deliberately not repeated
+here.** Without a key the build falls back to Flutter's template **debug** key
+and the job says so: that side-loads and upgrades fine, it cannot be distributed.
 
 The macOS `.dmg` is **unsigned** — that needs an Apple Developer certificate, and
 there is not one. A downloaded copy needs a right-click → Open, or
