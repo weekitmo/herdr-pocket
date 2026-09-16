@@ -115,10 +115,14 @@ LaunchSurface evaluateLaunchSurface({
 
   if (process == null) return const CannotLaunch(LaunchBlock.unknown);
 
-  if (process.foregroundProcesses.isNotEmpty) {
+  // NOT `foregroundProcesses`: the daemon lists the pane's own shell in there
+  // too, so the raw list is never empty on a pane that is perfectly free. See
+  // `pane_process.dart`.
+  final others = process.otherForegroundProcesses;
+  if (others.isNotEmpty) {
     return CannotLaunch(
       LaunchBlock.busy,
-      holder: process.foregroundProcesses.first.displayName,
+      holder: others.first.displayName,
     );
   }
 

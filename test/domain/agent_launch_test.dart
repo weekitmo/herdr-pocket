@@ -82,6 +82,25 @@ void main() {
       );
       expect((surface as CannotLaunch).reason, LaunchBlock.unknown);
     });
+
+    test('a pane whose shell is listed as a foreground process CAN host one', () {
+      // End to end over the real macOS shape. The first version of this rule
+      // asked whether the list was empty, and on macOS it never is — so this
+      // returned `busy: zsh` for an idle pane and the "start it in an existing
+      // pane" half of the launch screen could not be used at all.
+      final surface = evaluateLaunchSurface(
+        pane: pane(cwd: '/repo'),
+        process: PaneProcessInfo.fromJson({
+          'pane_id': 'wR:p1',
+          'shell_pid': 16345,
+          'foreground_processes': [
+            {'pid': 16345, 'name': 'zsh', 'argv': ['-zsh']},
+          ],
+        }),
+        paneIsLive: true,
+      );
+      expect(surface, isA<CanLaunch>());
+    });
   });
 
   group('suggestAgentName', () {
@@ -145,6 +164,36 @@ void main() {
       });
       expect(info.shellOwnsForeground, isFalse);
       expect(info.foregroundProcesses.first.displayName, 'pi');
+    });
+
+    test('the shell listed among the foreground processes is still free', () {
+      // THE SHAPE macOS ACTUALLY SENDS, copied from a live 0.9.0. Note
+      // `pid == shell_pid`: the pane is idle, and by the old length-based rule
+      // it read as busy — which made "start an agent in an existing pane"
+      // refuse every pane on that machine.
+      final info = PaneProcessInfo.fromJson({
+        'pane_id': 'wR:p1',
+        'shell_pid': 16345,
+        'foreground_process_group_id': 16345,
+        'foreground_processes': [
+          {'pid': 16345, 'name': 'zsh', 'argv0': 'zsh', 'argv': ['-zsh']},
+        ],
+      });
+      expect(info.shellOwnsForeground, isTrue);
+      expect(info.otherForegroundProcesses, isEmpty);
+    });
+
+    test('a real process alongside the shell is not free', () {
+      final info = PaneProcessInfo.fromJson({
+        'pane_id': 'wR:p1',
+        'shell_pid': 16345,
+        'foreground_processes': [
+          {'pid': 16345, 'name': 'zsh', 'argv': ['-zsh']},
+          {'pid': 16474, 'name': 'mise', 'argv0': 'mise'},
+        ],
+      });
+      expect(info.shellOwnsForeground, isFalse);
+      expect(info.otherForegroundProcesses.single.displayName, 'mise');
     });
 
     test('a process with no argv0 still names itself', () {

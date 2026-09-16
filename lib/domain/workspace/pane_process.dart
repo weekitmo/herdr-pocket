@@ -6,9 +6,22 @@
 /// foreground process is something else is not a candidate no matter how idle
 /// its agent status looks.
 ///
-/// Verified against a live 0.9.0: an agent pane answers with
-/// `foreground_processes: [{argv0: "pi", name: "node", pid: 977, cwd: …}]`,
-/// while a plain shell answers with an empty list and only `shell_pid` set.
+/// ⚠️ **THE LIST INCLUDES THE PANE'S OWN SHELL, AND ON macOS IT STAYS THERE.**
+/// This was first read as "a plain shell answers with an empty list and only
+/// `shell_pid` set", and that is wrong often enough to break the feature. A
+/// probe of a freshly created pane on macOS (herdr 0.9.0, twelve samples over
+/// six seconds) answered, every time from the moment the shell settled:
+///
+/// ```json
+/// "shell_pid": 16345,
+/// "foreground_processes": [{"pid": 16345, "name": "zsh", "argv": ["-zsh"]}]
+/// ```
+///
+/// Note `pid == shell_pid`. A rule of "the list is empty" therefore never fires
+/// here, every pane looks busy, and starting an agent in an existing pane is
+/// refused by us before the daemon is even asked. The rule is about the pid, not
+/// about the length: the shell being in the foreground is exactly what we want,
+/// and the question is whether anything ELSE is there with it.
 library;
 
 /// One process holding a pane's foreground.
@@ -83,13 +96,29 @@ class PaneProcessInfo {
   /// The pane's allotted shell. Null when the shell has exited.
   final int? shellPid;
 
-  /// Empty means the shell owns the foreground — the condition `agent.start`
-  /// needs.
+  /// Every process the daemon calls a foreground process — **including the
+  /// pane's own shell**, whose pid is [shellPid].
+  ///
+  /// Do not test this for emptiness; ask [otherForegroundProcesses] instead.
   final List<ForegroundProcess> foregroundProcesses;
 
   final String? tty;
 
-  bool get shellOwnsForeground => foregroundProcesses.isEmpty;
+  /// The foreground processes that are NOT the pane's own shell.
+  ///
+  /// This is the list that answers "is anything running in here?" — see the
+  /// note on the library for why the raw list cannot.
+  ///
+  /// When [shellPid] is null the shell has exited, so there is nothing to
+  /// subtract and the list is returned as-is; a pane with no shell cannot host
+  /// an agent anyway, and the caller refuses it on other grounds.
+  List<ForegroundProcess> get otherForegroundProcesses => shellPid == null
+      ? foregroundProcesses
+      : foregroundProcesses
+            .where((p) => p.pid != shellPid)
+            .toList(growable: false);
+
+  bool get shellOwnsForeground => otherForegroundProcesses.isEmpty;
 }
 
 String? _str(Object? v) => v is String ? v : null;

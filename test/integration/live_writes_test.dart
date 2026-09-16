@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_pocket/data/agent_launcher.dart';
 import 'package:herdr_pocket/data/herdr_client.dart';
 import 'package:herdr_pocket/data/remote_upload.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
@@ -160,12 +161,24 @@ void main() {
         return;
       }
 
-      final agent = await client.agentStart(
+      // THROUGH `AgentLauncher`, WHICH IS THE POINT.
+      //
+      // Calling `client.agentStart` directly here is a race, and this test lost
+      // it: `workspace.create` returns as soon as the workspace exists, but its
+      // root pane's shell takes a moment to take the foreground, and
+      // `agent.start` refuses with `agent_pane_busy` until it has. Run alone the
+      // timing works out and the test passes; run inside the full suite, where
+      // the machine is busy, it fails — which is the worst shape a test can
+      // have, because the gate that ships a release is the one that runs it
+      // under load.
+      //
+      // The app does not have this bug because it goes through the launcher.
+      // Neither should the test whose entire reason for existing is to prove the
+      // app's write path against something real.
+      final agent = await AgentLauncher(client).startWhenReady(
+        paneId: paneId,
         name: 'pocket-live-check',
         kind: available.first.target,
-        paneId: paneId,
-        // The same allowance the app gives a brand-new pane's shell.
-        timeoutMs: 10000,
       );
       expect(agent, isNotNull);
       print('  started ${available.first.target} in $paneId');
