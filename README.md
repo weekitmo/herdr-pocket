@@ -60,6 +60,14 @@ there is no address, port or key to type.
 **Notifications.** A local alert when an agent starts waiting on you; tapping it
 opens that agent's terminal.
 
+**Updating itself.** Settings → *Check for updates* asks GitHub for a newer
+release, downloads the APK with a progress bar you can cancel (a cancelled
+download keeps what arrived, and the next attempt continues from it), checks it
+against the release's own `checksums.txt`, and hands it to the system installer.
+Turning on *Check automatically* makes the app ask once per launch, and say so
+with one line if there is something new. The download follows the phone's HTTP
+proxy, so a connection that is slow without one is not slow with it.
+
 Simplified Chinese (default) and English, with light and dark colour schemes
 (the terminal takes the scheme's own sixteen colours).
 
@@ -236,6 +244,10 @@ are driven by Android's own instrumentation runner.
   unfinished feature.
 - **Stock herdr only.** Gram messaging, their push notifications and federated
   machines live in a fork and are not supported.
+- **In-app updating is Android-only.** The check runs everywhere, but only
+  Android has a way to hand a downloaded APK to its installer. On macOS the
+  panel stops at the release page — and the macOS build is unsigned, so
+  replacing it by hand is what you would be doing anyway.
 - **The App Sandbox is off** on macOS. A herdr client must read a socket under
   the user's home directory and open outbound SSH connections; a sandboxed app
   can do neither.

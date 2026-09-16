@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/local/download_target.dart';
+import 'package:herdr_pocket/data/providers/app_info.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
+import 'package:herdr_pocket/data/update/update_controller.dart';
 import 'package:herdr_pocket/domain/theme/theme_definition.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
@@ -15,24 +17,15 @@ import 'package:herdr_pocket/ui/components/menu_popover.dart';
 import 'package:herdr_pocket/ui/components/settings_list.dart';
 import 'package:herdr_pocket/ui/components/theme_swatch.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
+import 'package:herdr_pocket/ui/components/update_sheet.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/settings/icons_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/key_bar_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/theme_page.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 /// The sentinel standing for "follow the system" in the language picker.
 const _kSystem = '__system__';
-
-/// The app's own version, for the About group.
-///
-/// Read from the built package rather than written here. A hard-coded version
-/// string is a lie the moment anyone forgets to update it, and it is the one
-/// number a bug report actually needs.
-final packageInfoProvider = FutureProvider<PackageInfo>(
-  (ref) => PackageInfo.fromPlatform(),
-);
 
 /// Appearance, behaviour, type size, about.
 ///
@@ -290,6 +283,30 @@ class SettingsPage extends ConsumerWidget {
 
             SliverToBoxAdapter(
               child: SettingsGroup(
+                title: l10n.settingsUpdates,
+                rows: [
+                  // The row carries the CURRENT ANSWER, not just a verb. A row
+                  // that says only "Check for updates" tells the user nothing
+                  // until they press it, and pressing it is exactly the thing
+                  // they were trying to avoid.
+                  _CheckUpdateRow(colors: colors),
+                  SettingsSwitchRow(
+                    label: l10n.settingsAutoUpdate,
+                    value: settings.autoUpdateCheck,
+                    onChanged: (v) => notifier.setAutoUpdateCheck(enabled: v),
+                  ),
+                ],
+              ),
+            ),
+
+            // BELOW THE CARD, at the footnote inset — the third row of a card
+            // whose other two rows are controls would read as another control.
+            SliverToBoxAdapter(
+              child: SettingsNote(text: l10n.settingsUpdatesFooter),
+            ),
+
+            SliverToBoxAdapter(
+              child: SettingsGroup(
                 title: l10n.settingsAbout,
                 rows: [
                   _Value(
@@ -409,6 +426,54 @@ class _ThemeRow extends StatelessWidget {
   }
 }
 
+/// 「检查更新」, carrying the answer the last check produced.
+///
+/// A ROW THAT IS AN ACTION AND A RESULT, which is unusual on this screen and
+/// deliberate: every other row here changes a setting, while this one does
+/// something and reports what came of it. The value on the right IS the report,
+/// because a row reading only "检查更新" tells the user nothing until they press
+/// it — and pressing it is the thing they were trying to avoid.
+class _CheckUpdateRow extends ConsumerWidget {
+  const _CheckUpdateRow({required this.colors});
+
+  final HerdrColors colors;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final status = ref.watch(updateControllerProvider);
+    final latest = status.latest;
+    final current = ref.watch(appVersionProvider);
+    // The comparison is made HERE rather than trusted from the state, so a
+    // version remembered from a previous launch stops being news the moment the
+    // app is updated — which is exactly what would otherwise leave "有新版本
+    // 0.2.0" sitting under a 0.2.0 build.
+    final newer = (current != null && latest != null && latest.isNewerThan(current))
+        ? latest
+        : null;
+
+    final value = switch (status.phase) {
+      UpdateChecking() => l10n.updateRowChecking,
+      // Before the failure cases: a download that failed still has something to
+      // announce, and "有新版本" is more useful than "上次检查失败" — the latter is
+      // about the attempt, this one about the thing.
+      _ when newer != null => l10n.updateRowAvailable(newer.toString()),
+      UpdateFailed() => l10n.updateRowFailed,
+      UpdateIdle() =>
+        status.checkedAt == null ? l10n.updateRowNever : l10n.updateRowUpToDate,
+      _ => l10n.updateRowUpToDate,
+    };
+
+    return _Disclosure(
+      label: l10n.settingsCheckUpdate,
+      colors: colors,
+      value: value,
+      valueTint: newer == null ? null : colors.accent,
+      onTap: () => showUpdateSheet(context),
+    );
+  }
+}
+
 /// Picks how the app decides whether to keep clear of the system's edge
 /// gestures.
 ///
@@ -508,12 +573,20 @@ class _Disclosure extends StatelessWidget {
     required this.colors,
     required this.value,
     required this.onTap,
+    this.valueTint,
   });
 
   final String label;
   final HerdrColors colors;
   final String value;
   final VoidCallback onTap;
+
+  /// Overrides the value's colour when the row has something to announce.
+  ///
+  /// ACCENT ONLY — never one of the four status colours. Those mean "what an
+  /// agent is doing", and a settings row borrowing one would be the same
+  /// mistake the switch's active colour made once already.
+  final Color? valueTint;
 
   @override
   Widget build(BuildContext context) {
@@ -527,7 +600,10 @@ class _Disclosure extends StatelessWidget {
           children: [
             Text(
               value,
-              style: TextStyle(color: colors.textFaint, fontSize: TextSize.note),
+              style: TextStyle(
+                color: valueTint ?? colors.textFaint,
+                fontSize: TextSize.note,
+              ),
             ),
             const SizedBox(width: Space.xs),
             Icon(

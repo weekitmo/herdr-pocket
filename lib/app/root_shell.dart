@@ -4,8 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/update/update_controller.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
+import 'package:herdr_pocket/ui/components/toast.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/board/board_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/settings_page.dart';
@@ -33,6 +35,33 @@ class RootShell extends ConsumerStatefulWidget {
 
 class _RootShellState extends ConsumerState<RootShell> {
   RootView _current = RootView.board;
+
+  @override
+  void initState() {
+    super.initState();
+    // THE LAUNCH CHECK, and the only place it can live.
+    //
+    // Below `CupertinoApp` (so there is an `Overlay` to toast into — the app
+    // root is above it and would find none), once per process (this state is
+    // created once), and after the first frame (so a check that fails instantly
+    // does not delay the board by a network round trip).
+    //
+    // SILENT ON FAILURE, ALWAYS. The user did not ask for this request; it is a
+    // setting they turned on. A toast saying "could not check for updates"
+    // would be the app reporting a background chore as if it were news. Only a
+    // find is worth speaking about, and even then it is one line that expires.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (!ref.read(settingsProvider).autoUpdateCheck) return;
+
+      final outcome =
+          await ref.read(updateControllerProvider.notifier).check();
+      if (!mounted || outcome != UpdateCheckOutcome.available) return;
+      final latest = ref.read(updateControllerProvider).latest;
+      if (latest == null) return;
+      showHerdrToast(context, AppLocalizations.of(context).updateToast(latest.toString()));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

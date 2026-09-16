@@ -419,5 +419,103 @@
   "hostPair": "Pair by QR code (recommended)",
   "hostAddManually": "Add manually",
   "hostPairHint": "Run hdp pair on the computer and scan its QR code — no address, port or key to type.",
-  "actionDone": "Done"
+  "actionDone": "Done",
+  "settingsUpdates": "Updates",
+  "settingsCheckUpdate": "Check for updates",
+  "settingsAutoUpdate": "Check automatically",
+  "settingsAutoUpdateFooter": "Checks once each time the app starts. Off by default.",
+  "settingsUpdatesFooter": "Updates come from GitHub Releases (weekitmo/herdr-pocket). Downloads follow the phone's HTTP proxy when one is set.",
+  "updateSheetTitle": "Software update",
+  "updateChecking": "Asking GitHub…",
+  "updateUpToDate": "Up to date — {version}",
+  "@updateUpToDate": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateAvailableTitle": "Version {version} is available",
+  "@updateAvailableTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateResumeHint": "{size} already downloaded — it will continue from there",
+  "@updateResumeHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNotInstallable": "This platform cannot install an update itself. The release page has the file:",
+  "updateNotesTitle": "RELEASE NOTES",
+  "updateDownload": "Download",
+  "updateResume": "Continue download",
+  "updateOpenRelease": "Open release page",
+  "updateDownloading": "Downloading",
+  "updateCancelDownload": "Cancel — keep what has arrived",
+  "updateCancelled": "Cancelled. What arrived is kept; press Download to continue.",
+  "updateReady": "{version} downloaded and checked",
+  "@updateReady": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateVerified": "Package name and signing key match the installed app, so it can be installed over it.",
+  "updateNeedsPermission": "Android has not allowed this app to install packages yet.",
+  "updateAllowInstall": "Allow installing apps",
+  "updateInstall": "Install",
+  "updateInstallFootnote": "Android will show its own confirmation. The app restarts into the new version afterwards.",
+  "updateFailedOffline": "Could not reach GitHub. Check the connection.",
+  "updateFailedProxy": "The proxy at {address} did not answer.",
+  "@updateFailedProxy": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedProxyUnknown": "A proxy is configured but did not answer.",
+  "updateFailedTls": "The HTTPS certificate was rejected. An intercepting proxy needs its CA trusted by the system; this app does not trust user-installed CAs.",
+  "updateFailedTimedOut": "Connected, then nothing arrived for a minute.",
+  "updateFailedRateLimited": "GitHub's anonymous limit is used up (60 requests an hour). Try again later.",
+  "updateFailedHttp": "GitHub returned an error.",
+  "updateFailedPayload": "The answer was not what was expected — a Wi-Fi sign-in page can look like this.",
+  "updateFailedNoRelease": "No release is published for this app yet.",
+  "updateFailedNoAsset": "That release has no build for this device's CPU.",
+  "updateFailedStorage": "Could not write the file to the phone. Out of space?",
+  "updateFailedChecksum": "The file did not match the release's checksum. It has been deleted; retrying downloads it again.",
+  "updateFailedSize": "The download ended with the wrong number of bytes. It has been deleted.",
+  "updateFailedInstallBlocked": "Android is not letting this app install packages.",
+  "updateFailedSignature": "This APK is signed with a different key than the installed app, so Android would refuse it. The copy on this phone is probably one built locally with the debug key — installing this one means uninstalling first, WHICH DELETES THE SAVED MACHINES AND SSH KEYS.",
+  "updateFailedWrongPackage": "That file is not Herdr Pocket.",
+  "updateFailedVersionOld": "The file is older than what is installed, so Android would refuse it.",
+  "updateFailedUnknown": "The update failed.",
+  "updateRowChecking": "Checking…",
+  "updateRowAvailable": "Version {version} available",
+  "@updateRowAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateRowUpToDate": "Up to date",
+  "updateRowFailed": "Last check failed",
+  "updateRowNever": "Never checked",
+  "updateToast": "Herdr Pocket {version} is available — see Settings",
+  "@updateToast": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateUrlCopied": "Link copied"
 }

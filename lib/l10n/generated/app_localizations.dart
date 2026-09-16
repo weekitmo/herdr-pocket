@@ -2053,6 +2053,300 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get actionDone;
+
+  /// No description provided for @settingsUpdates.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates'**
+  String get settingsUpdates;
+
+  /// No description provided for @settingsCheckUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get settingsCheckUpdate;
+
+  /// No description provided for @settingsAutoUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check automatically'**
+  String get settingsAutoUpdate;
+
+  /// No description provided for @settingsAutoUpdateFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Checks once each time the app starts. Off by default.'**
+  String get settingsAutoUpdateFooter;
+
+  /// No description provided for @settingsUpdatesFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'Updates come from GitHub Releases (weekitmo/herdr-pocket). Downloads follow the phone\'s HTTP proxy when one is set.'**
+  String get settingsUpdatesFooter;
+
+  /// No description provided for @updateSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Software update'**
+  String get updateSheetTitle;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Asking GitHub…'**
+  String get updateChecking;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date — {version}'**
+  String updateUpToDate(String version);
+
+  /// No description provided for @updateAvailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is available'**
+  String updateAvailableTitle(String version);
+
+  /// No description provided for @updateResumeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} already downloaded — it will continue from there'**
+  String updateResumeHint(String size);
+
+  /// No description provided for @updateNotInstallable.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform cannot install an update itself. The release page has the file:'**
+  String get updateNotInstallable;
+
+  /// No description provided for @updateNotesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'RELEASE NOTES'**
+  String get updateNotesTitle;
+
+  /// No description provided for @updateDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get updateDownload;
+
+  /// No description provided for @updateResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue download'**
+  String get updateResume;
+
+  /// No description provided for @updateOpenRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'Open release page'**
+  String get updateOpenRelease;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get updateDownloading;
+
+  /// No description provided for @updateCancelDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel — keep what has arrived'**
+  String get updateCancelDownload;
+
+  /// No description provided for @updateCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled. What arrived is kept; press Download to continue.'**
+  String get updateCancelled;
+
+  /// No description provided for @updateReady.
+  ///
+  /// In en, this message translates to:
+  /// **'{version} downloaded and checked'**
+  String updateReady(String version);
+
+  /// No description provided for @updateVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Package name and signing key match the installed app, so it can be installed over it.'**
+  String get updateVerified;
+
+  /// No description provided for @updateNeedsPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Android has not allowed this app to install packages yet.'**
+  String get updateNeedsPermission;
+
+  /// No description provided for @updateAllowInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow installing apps'**
+  String get updateAllowInstall;
+
+  /// No description provided for @updateInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get updateInstall;
+
+  /// No description provided for @updateInstallFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Android will show its own confirmation. The app restarts into the new version afterwards.'**
+  String get updateInstallFootnote;
+
+  /// No description provided for @updateFailedOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach GitHub. Check the connection.'**
+  String get updateFailedOffline;
+
+  /// No description provided for @updateFailedProxy.
+  ///
+  /// In en, this message translates to:
+  /// **'The proxy at {address} did not answer.'**
+  String updateFailedProxy(String address);
+
+  /// No description provided for @updateFailedProxyUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'A proxy is configured but did not answer.'**
+  String get updateFailedProxyUnknown;
+
+  /// No description provided for @updateFailedTls.
+  ///
+  /// In en, this message translates to:
+  /// **'The HTTPS certificate was rejected. An intercepting proxy needs its CA trusted by the system; this app does not trust user-installed CAs.'**
+  String get updateFailedTls;
+
+  /// No description provided for @updateFailedTimedOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected, then nothing arrived for a minute.'**
+  String get updateFailedTimedOut;
+
+  /// No description provided for @updateFailedRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub\'s anonymous limit is used up (60 requests an hour). Try again later.'**
+  String get updateFailedRateLimited;
+
+  /// No description provided for @updateFailedHttp.
+  ///
+  /// In en, this message translates to:
+  /// **'GitHub returned an error.'**
+  String get updateFailedHttp;
+
+  /// No description provided for @updateFailedPayload.
+  ///
+  /// In en, this message translates to:
+  /// **'The answer was not what was expected — a Wi-Fi sign-in page can look like this.'**
+  String get updateFailedPayload;
+
+  /// No description provided for @updateFailedNoRelease.
+  ///
+  /// In en, this message translates to:
+  /// **'No release is published for this app yet.'**
+  String get updateFailedNoRelease;
+
+  /// No description provided for @updateFailedNoAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'That release has no build for this device\'s CPU.'**
+  String get updateFailedNoAsset;
+
+  /// No description provided for @updateFailedStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not write the file to the phone. Out of space?'**
+  String get updateFailedStorage;
+
+  /// No description provided for @updateFailedChecksum.
+  ///
+  /// In en, this message translates to:
+  /// **'The file did not match the release\'s checksum. It has been deleted; retrying downloads it again.'**
+  String get updateFailedChecksum;
+
+  /// No description provided for @updateFailedSize.
+  ///
+  /// In en, this message translates to:
+  /// **'The download ended with the wrong number of bytes. It has been deleted.'**
+  String get updateFailedSize;
+
+  /// No description provided for @updateFailedInstallBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Android is not letting this app install packages.'**
+  String get updateFailedInstallBlocked;
+
+  /// No description provided for @updateFailedSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'This APK is signed with a different key than the installed app, so Android would refuse it. The copy on this phone is probably one built locally with the debug key — installing this one means uninstalling first, WHICH DELETES THE SAVED MACHINES AND SSH KEYS.'**
+  String get updateFailedSignature;
+
+  /// No description provided for @updateFailedWrongPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not Herdr Pocket.'**
+  String get updateFailedWrongPackage;
+
+  /// No description provided for @updateFailedVersionOld.
+  ///
+  /// In en, this message translates to:
+  /// **'The file is older than what is installed, so Android would refuse it.'**
+  String get updateFailedVersionOld;
+
+  /// No description provided for @updateFailedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The update failed.'**
+  String get updateFailedUnknown;
+
+  /// No description provided for @updateRowChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get updateRowChecking;
+
+  /// No description provided for @updateRowAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} available'**
+  String updateRowAvailable(String version);
+
+  /// No description provided for @updateRowUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get updateRowUpToDate;
+
+  /// No description provided for @updateRowFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Last check failed'**
+  String get updateRowFailed;
+
+  /// No description provided for @updateRowNever.
+  ///
+  /// In en, this message translates to:
+  /// **'Never checked'**
+  String get updateRowNever;
+
+  /// No description provided for @updateToast.
+  ///
+  /// In en, this message translates to:
+  /// **'Herdr Pocket {version} is available — see Settings'**
+  String updateToast(String version);
+
+  /// No description provided for @updateUrlCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get updateUrlCopied;
 }
 
 class _AppLocalizationsDelegate

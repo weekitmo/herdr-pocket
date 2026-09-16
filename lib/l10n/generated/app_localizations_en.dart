@@ -1092,4 +1092,186 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionDone => 'Done';
+
+  @override
+  String get settingsUpdates => 'Updates';
+
+  @override
+  String get settingsCheckUpdate => 'Check for updates';
+
+  @override
+  String get settingsAutoUpdate => 'Check automatically';
+
+  @override
+  String get settingsAutoUpdateFooter =>
+      'Checks once each time the app starts. Off by default.';
+
+  @override
+  String get settingsUpdatesFooter =>
+      'Updates come from GitHub Releases (weekitmo/herdr-pocket). Downloads follow the phone\'s HTTP proxy when one is set.';
+
+  @override
+  String get updateSheetTitle => 'Software update';
+
+  @override
+  String get updateChecking => 'Asking GitHub…';
+
+  @override
+  String updateUpToDate(String version) {
+    return 'Up to date — $version';
+  }
+
+  @override
+  String updateAvailableTitle(String version) {
+    return 'Version $version is available';
+  }
+
+  @override
+  String updateResumeHint(String size) {
+    return '$size already downloaded — it will continue from there';
+  }
+
+  @override
+  String get updateNotInstallable =>
+      'This platform cannot install an update itself. The release page has the file:';
+
+  @override
+  String get updateNotesTitle => 'RELEASE NOTES';
+
+  @override
+  String get updateDownload => 'Download';
+
+  @override
+  String get updateResume => 'Continue download';
+
+  @override
+  String get updateOpenRelease => 'Open release page';
+
+  @override
+  String get updateDownloading => 'Downloading';
+
+  @override
+  String get updateCancelDownload => 'Cancel — keep what has arrived';
+
+  @override
+  String get updateCancelled =>
+      'Cancelled. What arrived is kept; press Download to continue.';
+
+  @override
+  String updateReady(String version) {
+    return '$version downloaded and checked';
+  }
+
+  @override
+  String get updateVerified =>
+      'Package name and signing key match the installed app, so it can be installed over it.';
+
+  @override
+  String get updateNeedsPermission =>
+      'Android has not allowed this app to install packages yet.';
+
+  @override
+  String get updateAllowInstall => 'Allow installing apps';
+
+  @override
+  String get updateInstall => 'Install';
+
+  @override
+  String get updateInstallFootnote =>
+      'Android will show its own confirmation. The app restarts into the new version afterwards.';
+
+  @override
+  String get updateFailedOffline =>
+      'Could not reach GitHub. Check the connection.';
+
+  @override
+  String updateFailedProxy(String address) {
+    return 'The proxy at $address did not answer.';
+  }
+
+  @override
+  String get updateFailedProxyUnknown =>
+      'A proxy is configured but did not answer.';
+
+  @override
+  String get updateFailedTls =>
+      'The HTTPS certificate was rejected. An intercepting proxy needs its CA trusted by the system; this app does not trust user-installed CAs.';
+
+  @override
+  String get updateFailedTimedOut =>
+      'Connected, then nothing arrived for a minute.';
+
+  @override
+  String get updateFailedRateLimited =>
+      'GitHub\'s anonymous limit is used up (60 requests an hour). Try again later.';
+
+  @override
+  String get updateFailedHttp => 'GitHub returned an error.';
+
+  @override
+  String get updateFailedPayload =>
+      'The answer was not what was expected — a Wi-Fi sign-in page can look like this.';
+
+  @override
+  String get updateFailedNoRelease =>
+      'No release is published for this app yet.';
+
+  @override
+  String get updateFailedNoAsset =>
+      'That release has no build for this device\'s CPU.';
+
+  @override
+  String get updateFailedStorage =>
+      'Could not write the file to the phone. Out of space?';
+
+  @override
+  String get updateFailedChecksum =>
+      'The file did not match the release\'s checksum. It has been deleted; retrying downloads it again.';
+
+  @override
+  String get updateFailedSize =>
+      'The download ended with the wrong number of bytes. It has been deleted.';
+
+  @override
+  String get updateFailedInstallBlocked =>
+      'Android is not letting this app install packages.';
+
+  @override
+  String get updateFailedSignature =>
+      'This APK is signed with a different key than the installed app, so Android would refuse it. The copy on this phone is probably one built locally with the debug key — installing this one means uninstalling first, WHICH DELETES THE SAVED MACHINES AND SSH KEYS.';
+
+  @override
+  String get updateFailedWrongPackage => 'That file is not Herdr Pocket.';
+
+  @override
+  String get updateFailedVersionOld =>
+      'The file is older than what is installed, so Android would refuse it.';
+
+  @override
+  String get updateFailedUnknown => 'The update failed.';
+
+  @override
+  String get updateRowChecking => 'Checking…';
+
+  @override
+  String updateRowAvailable(String version) {
+    return 'Version $version available';
+  }
+
+  @override
+  String get updateRowUpToDate => 'Up to date';
+
+  @override
+  String get updateRowFailed => 'Last check failed';
+
+  @override
+  String get updateRowNever => 'Never checked';
+
+  @override
+  String updateToast(String version) {
+    return 'Herdr Pocket $version is available — see Settings';
+  }
+
+  @override
+  String get updateUrlCopied => 'Link copied';
 }

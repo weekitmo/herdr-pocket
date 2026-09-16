@@ -37,6 +37,7 @@ void main() {
       'flutter.settings.terminalTextScale': 1.4,
       'flutter.settings.keyBarKeys': <String>['esc', 'ctrl'],
       'flutter.settings.iconSet': 'system',
+      'flutter.settings.autoUpdateCheck': true,
     });
     final prefs = await SharedPreferences.getInstance();
     final settings = launch(prefs).read(settingsProvider);
@@ -51,6 +52,7 @@ void main() {
     expect(settings.terminalTextScale, 1.4);
     expect(settings.keyBarKeys, [SoftKey.esc, SoftKey.ctrl]);
     expect(settings.iconSet, AppIconSet.system);
+    expect(settings.autoUpdateCheck, isTrue);
   });
 
   test('what one launch writes is what the next launch reads', () async {
@@ -62,6 +64,7 @@ void main() {
     await first.read(settingsProvider.notifier).setGlassEnabled(enabled: true);
     await first.read(settingsProvider.notifier).setKeyBarKeys([SoftKey.esc]);
     await first.read(settingsProvider.notifier).setIconSet(AppIconSet.system);
+    await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: true);
 
     // A second launch against the same store — which is what closing and
     // reopening the app does.
@@ -70,6 +73,7 @@ void main() {
     expect(second.glassEnabled, isTrue);
     expect(second.keyBarKeys, [SoftKey.esc]);
     expect(second.iconSet, AppIconSet.system);
+    expect(second.autoUpdateCheck, isTrue);
 
     // And clearing goes all the way back to the built-in palette rather than
     // leaving a stale id that no longer exists.
@@ -93,5 +97,8 @@ void main() {
     // monochrome alternative rendered beside it — so an empty store opening on
     // it is correct rather than a fallback nobody thought about.
     expect(settings.iconSet, AppIconSet.themed);
+    // And this one is OFF on purpose: opening an app is not a request to make a
+    // network connection.
+    expect(settings.autoUpdateCheck, isFalse);
   });
 }

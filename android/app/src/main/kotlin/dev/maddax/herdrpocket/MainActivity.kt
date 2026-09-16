@@ -2,52 +2,58 @@ package dev.maddax.herdrpocket
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
+import android.content.pm.Signature
+import android.net.ConnectivityManager
+import android.net.ProxyInfo
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
+import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 import java.io.OutputStream
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The Storage Access Framework half of file download.
+ * The platform half of file download and of self-update.
  *
- * ## Why this is hand-written instead of a package
+ * THREE CHANNELS, one per concern, all hand-written:
  *
- * Downloading a build artifact means writing a file the USER chose the location
- * for, repeatedly, across app restarts, without a permission prompt — which on
- * Android 10+ is exactly `ACTION_OPEN_DOCUMENT_TREE` plus
- * `takePersistableUriPermission` plus `DocumentsContract.createDocument`. That
- * is the ~200 lines below.
+ *   `download_dir`  SAF write access to a folder the user picked. See the class
+ *                   comment below.
+ *   `system_proxy`  the phone's HTTP proxy, which `dart:io` does not read.
+ *   `app_update`    inspecting and installing a downloaded APK.
  *
- * The packages that offer it (`saf_util` + `saf_stream` are the maintained
- * pair) would replace those lines with two dependencies, one of which
- * (`saf_stream`) pulls in the `jni` package and with it a JNI build layer. This
- * project already justifies each dependency in `pubspec.yaml`; a JNI toolchain
- * is a large thing to accept for a directory picker and an output stream, and
- * it is a new way for `flutter build apk` to fail.
- *
- * The other packages people reach for — `file_picker`, `file_selector` — pick a
- * directory and hand back a path or a URI, but cannot CREATE a file inside it
- * later, which is the operation this feature is entirely made of.
- *
- * ## The two rules that make this correct
- *
- * 1. **The persisted permission is the feature.** Read+write, taken on the
- *    result of the picker, or the app loses access at the next process start
- *    and the user is asked to pick the folder every time.
- * 2. **Never hold a Uri open across calls.** A session maps to an open
- *    `OutputStream`, and the Dart side is responsible for closing it — but a
- *    session that is never closed leaks a file descriptor until the process
- *    dies, so `abortWrite` exists and `onDestroy` drains whatever is left.
+ * The second and third exist because the alternative is a package for each, and
+ * the one thing that genuinely has to be Kotlin here — reading an APK's signing
+ * certificate to catch an install that would fail and demand an uninstall — has
+ * no package at all. Once that is written, FileProvider and
+ * `canRequestPackageInstalls` are twenty more lines beside it.
  */
 class MainActivity : FlutterActivity() {
 
     private companion object {
         const val CHANNEL = "dev.maddax.herdrpocket/download_dir"
+        const val PROXY_CHANNEL = "dev.maddax.herdrpocket/system_proxy"
+        const val UPDATE_CHANNEL = "dev.maddax.herdrpocket/app_update"
         const val PICK_DIRECTORY_REQUEST = 0x4844 // 'HD'
+
+        /** Log tag for everything this activity says. */
+        const val TAG = "HerdrPocket"
+
+        /** Where downloaded APKs wait. Mirrors `res/xml/update_paths.xml`. */
+        const val UPDATE_DIR = "updates"
+
+        /** What the system installer is told the content is. */
+        const val APK_MIME = "application/vnd.android.package-archive"
     }
 
     /** The in-flight `pickDirectory` call, held until the picker returns. */
@@ -69,7 +75,58 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result -> handle(call, result) }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PROXY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "getProxy") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                try {
+                    result.success(readProxy())
+                } catch (t: Throwable) {
+                    // Never an error: "this phone has no proxy" and "we could
+                    // not read it" lead to the same behaviour — a direct
+                    // connection — and a failed update check is a much worse
+                    // way to learn about a missing permission. LOGGED, though:
+                    // a silent catch here once turned a working proxy into
+                    // "no proxy at all" and there was nothing anywhere saying
+                    // why.
+                    Log.w(TAG, "reading the system proxy failed", t)
+                    result.success(null)
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL)
+            .setMethodCallHandler { call, result -> handleUpdate(call, result) }
     }
+
+    // --------------------------------------------------------- file download ---
+    //
+    // ## Why the SAF half is hand-written instead of a package
+    //
+    // Downloading a file to a folder the USER chose, repeatedly, across app
+    // restarts, without a permission prompt — on Android 10+ that is exactly
+    // `ACTION_OPEN_DOCUMENT_TREE` plus `takePersistableUriPermission` plus
+    // `DocumentsContract.createDocument`.
+    //
+    // The packages that offer it (`saf_util` + `saf_stream` are the maintained
+    // pair) would replace those lines with two dependencies, one of which
+    // (`saf_stream`) pulls in the `jni` package and with it a JNI build layer.
+    // The other packages people reach for — `file_picker`, `file_selector` —
+    // pick a directory and hand back a path or a URI, but cannot CREATE a file
+    // inside it later, which is the operation this feature is entirely made of.
+    //
+    // ## The two rules that make it correct
+    //
+    // 1. **The persisted permission is the feature.** Read+write, taken on the
+    //    result of the picker, or the app loses access at the next process
+    //    start and the user is asked to pick the folder every time.
+    // 2. **Never hold a Uri open across calls.** A session maps to an open
+    //    `OutputStream`, and the Dart side is responsible for closing it — but
+    //    a session that is never closed leaks a file descriptor until the
+    //    process dies, so `abortWrite` exists and `onDestroy` drains whatever
+    //    is left.
 
     private fun handle(call: MethodCall, result: MethodChannel.Result) {
         try {
@@ -235,6 +292,229 @@ class MainActivity : FlutterActivity() {
         runCatching { stream?.close() }
         result.success(null)
     }
+
+    // --------------------------------------------------------- system proxy ---
+
+    /**
+     * The phone's HTTP proxy, in the shape `SystemProxy.fromChannel` reads.
+     *
+     * `ConnectivityManager.getDefaultProxy()` is the modern answer (API 23+):
+     * the global proxy if one is set, otherwise the proxy of the network this
+     * process is bound to, otherwise the default network's. `LinkProperties` is
+     * the same information reached a different way, for the versions and OEM
+     * builds where the first call comes back empty.
+     *
+     * Null means "no proxy", which is the common case — including every phone
+     * whose proxy is a VPN in tun mode, where the routing happens below the
+     * socket layer and there is nothing for an app to configure.
+     */
+    private fun readProxy(): Map<String, Any?>? {
+        val info = proxyInfo() ?: return null
+        // EACH FIELD ON ITS OWN, because a getter that throws takes the whole
+        // reading with it and the result of that is not a warning — it is a
+        // download that quietly bypasses the proxy the user configured. The
+        // host and port are the ones that matter; the rest are decoration and
+        // degrade to empty.
+        return mapOf(
+            "host" to (runCatching { info.host }.getOrNull() ?: ""),
+            "port" to runCatching { info.port }.getOrDefault(-1),
+            "pacUrl" to (runCatching { info.pacFileUrl?.toString() }.getOrNull() ?: ""),
+            // TO A LIST, because `getExclusionList()` returns a Java
+            // `String[]` and Flutter's StandardMessageCodec cannot encode an
+            // array — `result.success(map)` throws IllegalArgumentException
+            // ("Unsupported value: [Ljava.lang.String;"), the whole reading is
+            // lost, and the app then reports "this phone has no proxy" while
+            // the phone demonstrably has one. Found on the emulator, where the
+            // symptom was a download that ignored a proxy it had read correctly
+            // two lines earlier.
+            "exclusions" to runCatching { info.exclusionList?.toList() }
+                .getOrNull()
+                .orEmpty(),
+        )
+    }
+
+    private fun proxyInfo(): ProxyInfo? {
+        val manager = runCatching {
+            getSystemService(ConnectivityManager::class.java)
+        }.getOrNull() ?: return null
+
+        // API 23+: the global proxy, or the bound network's, or the default
+        // network's — one call, and the documented meaning of all three.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val fromDefault = runCatching { manager.defaultProxy }
+                .onFailure { Log.w(TAG, "getDefaultProxy() failed", it) }
+                .getOrNull()
+            if (fromDefault != null) return fromDefault
+        }
+
+        // The same information reached a different way. Worth the second try:
+        // OEM builds have been known to answer the first call with null.
+        val network = runCatching { manager.activeNetwork }.getOrNull() ?: return null
+        return runCatching { manager.getLinkProperties(network)?.httpProxy }
+            .onFailure { Log.w(TAG, "getLinkProperties() failed", it) }
+            .getOrNull()
+    }
+
+    // ------------------------------------------------------------ the update ---
+
+    private fun handleUpdate(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            when (call.method) {
+                "stagingDirectory" -> result.success(stagingDirectory())
+                "canInstall" -> result.success(canInstallPackages())
+                "openInstallSettings" -> openInstallSettings(result)
+                "inspect" -> result.success(inspect(call))
+                "install" -> install(call, result)
+                "openUrl" -> openUrl(call, result)
+                else -> result.notImplemented()
+            }
+        } catch (e: Exception) {
+            result.error("update", e.message ?: e.javaClass.simpleName, null)
+        }
+    }
+
+    /** Where the Dart side writes a downloaded APK. Mirrors `update_paths.xml`. */
+    private fun stagingDirectory(): String {
+        val dir = File(filesDir, UPDATE_DIR)
+        dir.mkdirs()
+        return dir.absolutePath
+    }
+
+    /**
+     * Whether the system will let this app hand an APK to the installer.
+     *
+     * Before Android 8 this is not a per-app switch at all — there is one
+     * global "unknown sources" setting — so the honest answer there is yes and
+     * the installer decides.
+     */
+    private fun canInstallPackages(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+
+    private fun openInstallSettings(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            result.success(null)
+            return
+        }
+        startActivity(
+            Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName"),
+            ),
+        )
+        result.success(null)
+    }
+
+    private fun inspect(call: MethodCall): Map<String, Any?> {
+        val file = fileFrom(call) ?: return mapOf("readable" to false)
+        val archive = packageManager.getPackageArchiveInfo(file.absolutePath, archiveFlags())
+            ?: return mapOf("readable" to false)
+        return mapOf(
+            "readable" to true,
+            "packageName" to archive.packageName,
+            "versionCode" to versionCodeOf(archive),
+            "signatureMatches" to signaturesMatch(archive),
+        )
+    }
+
+    private fun install(call: MethodCall, result: MethodChannel.Result) {
+        val file = fileFrom(call)
+        if (file == null) {
+            result.error("file_missing", "no APK at ${call.argument<String>("path")}", null)
+            return
+        }
+        if (!canInstallPackages()) {
+            result.error("install_blocked", "this app may not install packages yet", null)
+            return
+        }
+
+        val uri = FileProvider.getUriForFile(this, "$packageName.updates", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, APK_MIME)
+            // The grant is what lets the INSTALLER read a file it has no other
+            // way to reach. It lasts for this intent and no longer — which is
+            // also why the APK is never made world-readable.
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(intent)
+        result.success(null)
+    }
+
+    private fun openUrl(call: MethodCall, result: MethodChannel.Result) {
+        val url = call.argument<String>("url")
+        if (url.isNullOrBlank()) {
+            result.error("bad_args", "openUrl needs url", null)
+            return
+        }
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        result.success(null)
+    }
+
+    private fun fileFrom(call: MethodCall): File? {
+        val path = call.argument<String>("path") ?: return null
+        val file = File(path)
+        return if (file.isFile) file else null
+    }
+
+    private fun archiveFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+
+    private fun versionCodeOf(info: PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+
+    /**
+     * Whether this APK could replace the installed app.
+     *
+     * THE CHECK THAT EARNS ITS KEEP. Installing over an app signed with a
+     * different key fails with "app not installed" and no way forward except
+     * uninstalling — which deletes the user's saved machines and SSH
+     * credentials. Anyone who builds this app locally (debug key) while also
+     * installing the released APK (release key) hits exactly that, and the
+     * installer never says why.
+     *
+     * UNKNOWN MEANS YES. If either side's certificates cannot be read, this
+     * reports a match and lets the system do what it would have done anyway: a
+     * false "the signatures differ" would block a legitimate update with a
+     * warning about losing data, which is far worse than the failure it
+     * predicts.
+     */
+    private fun signaturesMatch(archive: PackageInfo): Boolean {
+        val theirs = signerDigests(archive)
+        val ours = runCatching {
+            signerDigests(packageManager.getPackageInfo(packageName, archiveFlags()))
+        }.getOrNull() ?: emptySet()
+        if (theirs.isEmpty() || ours.isEmpty()) return true
+        // Every signer of the installed app must also sign the APK — that is
+        // what the platform requires for an in-place upgrade.
+        return theirs.containsAll(ours)
+    }
+
+    private fun signerDigests(info: PackageInfo): Set<String> {
+        val signatures: Array<Signature> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // `apkContentsSigners` is the set that signs THIS file. The history
+            // in `signingCertificateHistory` is about key rotation, which this
+            // app does not do and must not be compared as if it did.
+            info.signingInfo?.apkContentsSigners ?: return emptySet()
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures ?: return emptySet()
+        }
+        return signatures.mapTo(HashSet()) { sha256(it.toByteArray()) }
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     override fun onDestroy() {
         // A session the Dart side forgot (an error path, a hot restart) would

@@ -105,6 +105,7 @@ class SettingsState {
     this.fileTransferEnabled = false,
     this.downloadDirUri,
     this.downloadDirLabel,
+    this.autoUpdateCheck = false,
   });
 
   final AppThemeMode themeMode;
@@ -178,6 +179,17 @@ class SettingsState {
   /// one.
   final String? downloadDirLabel;
 
+  /// Whether the app asks GitHub for a newer version on launch.
+  ///
+  /// OFF, and the reason is the same one [autoConnect] carries: opening an app
+  /// is not a request to make a network connection. It is also the difference
+  /// between an app that is quiet on a phone in a pocket and one that lights up
+  /// a radio every time it is tapped. The manual「检查更新」row is right there.
+  ///
+  /// When it IS on, the check is one request per launch, silent on failure, and
+  /// a single toast when there is something new — never a dialog.
+  final bool autoUpdateCheck;
+
   /// Which keys the terminal's key bar offers, in the order it offers them.
   ///
   /// Stored as [SoftKey]s rather than ids here and as ids on disk, so the
@@ -203,6 +215,7 @@ class SettingsState {
     String? downloadDirUri,
     String? downloadDirLabel,
     bool clearDownloadDir = false,
+    bool? autoUpdateCheck,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -224,6 +237,7 @@ class SettingsState {
           clearDownloadDir ? null : (downloadDirUri ?? this.downloadDirUri),
       downloadDirLabel:
           clearDownloadDir ? null : (downloadDirLabel ?? this.downloadDirLabel),
+      autoUpdateCheck: autoUpdateCheck ?? this.autoUpdateCheck,
     );
   }
 }
@@ -248,6 +262,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kFileTransfer = 'settings.fileTransferEnabled';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
   static const _kDownloadDirLabel = 'settings.downloadDirLabel';
+  static const _kAutoUpdate = 'settings.autoUpdateCheck';
 
   /// Opens on the stored settings, read SYNCHRONOUSLY.
   ///
@@ -281,6 +296,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
       downloadDirUri: prefs.getString(_kDownloadDirUri),
       downloadDirLabel: prefs.getString(_kDownloadDirLabel),
+      autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? false,
     );
   }
 
@@ -346,6 +362,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(fileTransferEnabled: enabled);
     final prefs = _prefs;
     await prefs.setBool(_kFileTransfer, enabled);
+  }
+
+  Future<void> setAutoUpdateCheck({required bool enabled}) async {
+    state = state.copyWith(autoUpdateCheck: enabled);
+    await _prefs.setBool(_kAutoUpdate, enabled);
   }
 
   /// Records the folder the user granted, or clears it.

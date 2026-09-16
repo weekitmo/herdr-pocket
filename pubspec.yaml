@@ -7,6 +7,19 @@ environment:
   sdk: ^3.13.3
 
 dependencies:
+  # SHA-256, for the update download's integrity check against the release's
+  # own `checksums.txt`.
+  #
+  # Already in the lock file as a transitive dependency of `flutter_secure_storage`
+  # and `dartssh2`, so naming it adds no package, no license and no audit
+  # surface — it only makes an existing package one this code is allowed to
+  # import. Same reasoning as `pinenacl` below, and `depend_on_referenced_packages`
+  # insists on the distinction either way.
+  #
+  # Written from scratch it would be ~200 lines of bit-twiddling that nobody
+  # should review, which is why this is not a hand-rolled loop.
+  crypto: ^3.0.6
+
   # Icons: Cupertino only. Material Icons are deliberately NOT bundled
   # (see `uses-material-design: false` below and AGENTS.md rule #2).
   cupertino_icons: ^1.0.8
@@ -15,6 +28,21 @@ dependencies:
   # `direct-streamlocal@openssh.com`, which is how we reach the herdr Unix
   # socket without any bridge binary on the remote host.
   dartssh2: ^4.1.0
+
+  # HTTP, for the update check and the APK download.
+  #
+  # WHY NOT `dart:io`'s HttpClient DIRECTLY. It is all there — but dio is where
+  # the things a download actually needs are already assembled and reviewed:
+  # redirect following (release assets 302 to a CDN), a stall timeout
+  # (`receiveTimeout` measures the gap BETWEEN byte events, so it fails a stuck
+  # transfer without failing a slow one), `CancelToken`, progress callbacks, and
+  # the documented way to point it at a proxy. Hand-rolling that layer to prove
+  # a point would be exactly the wheel this project has a rule against building.
+  #
+  # It brings no Material and nothing native: `dio` is pure Dart. The one thing
+  # taken from it beyond `dio` itself is `package:dio/io.dart`'s
+  # `IOHttpClientAdapter`, which is how the system proxy reaches `HttpClient`.
+  dio: ^5.11.1
 
   # Pull to refresh. Chosen over `CupertinoSliverRefreshControl` for one reason:
   # it is an ENGINE, not a look. `Header`/`Footer` are abstract, so the indicator

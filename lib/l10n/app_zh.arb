@@ -418,5 +418,103 @@
   "hostPair": "扫码配对（推荐）",
   "hostAddManually": "手动添加",
   "hostPairHint": "在电脑上运行 hdp pair，用相机扫它的二维码，省掉手填地址和密钥。",
-  "actionDone": "完成"
+  "actionDone": "完成",
+  "settingsUpdates": "更新",
+  "settingsCheckUpdate": "检查更新",
+  "settingsAutoUpdate": "自动检查更新",
+  "settingsAutoUpdateFooter": "每次启动应用时检查一次。默认关闭。",
+  "settingsUpdatesFooter": "更新来自 GitHub Releases（weekitmo/herdr-pocket）。下载会跟随手机设置的 HTTP 代理。",
+  "updateSheetTitle": "软件更新",
+  "updateChecking": "正在向 GitHub 查询…",
+  "updateUpToDate": "已是最新版本 {version}",
+  "@updateUpToDate": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateAvailableTitle": "有新版本 {version}",
+  "@updateAvailableTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateResumeHint": "已下载 {size}，会接着下",
+  "@updateResumeHint": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "updateNotInstallable": "这台设备不支持应用内安装，请到发布页自行下载：",
+  "updateNotesTitle": "更新说明",
+  "updateDownload": "下载",
+  "updateResume": "继续下载",
+  "updateOpenRelease": "打开发布页",
+  "updateDownloading": "下载中",
+  "updateCancelDownload": "取消（保留已下载部分）",
+  "updateCancelled": "已取消。已下载的部分保留着，按「下载」可以接着下。",
+  "updateReady": "已下载 {version} 并校验通过",
+  "@updateReady": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateVerified": "包名与签名跟已装版本一致，可以直接覆盖安装。",
+  "updateNeedsPermission": "系统还没允许本应用安装应用。",
+  "updateAllowInstall": "去允许安装",
+  "updateInstall": "安装",
+  "updateInstallFootnote": "系统会弹出自己的确认框。装完后应用会重启到新版本。",
+  "updateFailedOffline": "连不上 GitHub，检查一下网络。",
+  "updateFailedProxy": "代理 {address} 没有响应。",
+  "@updateFailedProxy": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "updateFailedProxyUnknown": "系统配了代理，但它没有响应。",
+  "updateFailedTls": "HTTPS 证书被拒绝。解密型代理需要系统信任它的 CA，而本应用不信任用户安装的 CA。",
+  "updateFailedTimedOut": "连上了，但一分钟没有任何数据。",
+  "updateFailedRateLimited": "GitHub 的匿名额度用完了（每小时 60 次），过一会儿再试。",
+  "updateFailedHttp": "GitHub 返回了错误。",
+  "updateFailedPayload": "返回的内容不是预期格式（公共 Wi-Fi 的登录页会这样）。",
+  "updateFailedNoRelease": "这个应用还没有发布任何版本。",
+  "updateFailedNoAsset": "这个版本没有适配本机 CPU 的安装包。",
+  "updateFailedStorage": "写不进手机存储，可能是空间不够。",
+  "updateFailedChecksum": "文件校验失败，已经删掉了；重试会重新下载。",
+  "updateFailedSize": "下载的字节数不对，已经删掉了。",
+  "updateFailedInstallBlocked": "系统不允许本应用安装应用。",
+  "updateFailedSignature": "这个安装包和已装版本的签名不同，系统会拒绝安装。手机上这个多半是你自己构建的 debug 包；要装这个就得先卸载，而卸载会删掉已保存的机器和 SSH 密钥。",
+  "updateFailedWrongPackage": "这个安装包不是 Herdr Pocket。",
+  "updateFailedVersionOld": "这个包比已装的版本旧，系统会拒绝安装。",
+  "updateFailedUnknown": "更新失败。",
+  "updateRowChecking": "检查中…",
+  "updateRowAvailable": "有新版本 {version}",
+  "@updateRowAvailable": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateRowUpToDate": "已是最新",
+  "updateRowFailed": "上次检查失败",
+  "updateRowNever": "还没检查过",
+  "updateToast": "有新版本 {version}，可在设置里更新",
+  "@updateToast": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateUrlCopied": "链接已复制"
 }

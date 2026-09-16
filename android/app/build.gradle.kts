@@ -163,6 +163,17 @@ dependencies {
     // user picked once" about twenty lines instead of two hundred.
     implementation("androidx.documentfile:documentfile:1.0.1")
 
+    // Backs the update path's `FileProvider`: an APK in private storage reaches
+    // the system installer as a `content://` URI with a one-intent read grant,
+    // which is the only supported way to do it on Android 7+ — a `file://` URI
+    // is refused outright with FileUriExposedException.
+    //
+    // `androidx.core` is almost certainly on the classpath already through
+    // other plugins; naming it is what makes the import in MainActivity a
+    // promise rather than a coincidence, and the version here is the lowest one
+    // that has everything that code uses.
+    implementation("androidx.core:core:1.13.1")
+
     // Patrol's `testOptions.execution = ANDROIDX_TEST_ORCHESTRATOR` above is a
     // promise on the test APK; this is the runner that keeps it. Without the
     // line, `patrol test` fails at install time with "Test orchestrator ...

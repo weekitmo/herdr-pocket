@@ -10,6 +10,32 @@
          from the debug manifest. -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- Reading the phone's HTTP proxy, so an update download honours the proxy
+         the user configured instead of quietly going direct.
+
+         `normal` protection level (AOSP core AndroidManifest.xml), so there is
+         no prompt and nothing for the user to grant — but `ConnectivityManager`
+         throws a SecurityException without it, which would silently read as
+         "this phone has no proxy". Both `getDefaultProxy()` and
+         `LinkProperties.getHttpProxy()` go through the same check. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+
+    <!-- Handing a downloaded APK to the system installer.
+
+         Declared here BEFORE anything is asked at runtime, for the same reason
+         POST_NOTIFICATIONS is: this is the half that makes the runtime half
+         meaningful. On Android 8+ the user grants it per app, in
+         Settings → Apps → Special access → Install unknown apps, and the app
+         asks `PackageManager.canRequestPackageInstalls()` before it offers the
+         install button.
+
+         AOSP gives this permission protection level `signature`, which reads
+         alarming and is not: every side-loading app that installs its own
+         updates declares it, and the real gate is the per-app special access
+         above, which only the user can flip. There is no silent install on
+         Android without device owner or root, and this app is neither. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <!-- Android 13 (SDK 33) made notifications a runtime permission, but it
          still has to be DECLARED before the runtime request does anything.
          `requestNotificationsPermission()` in agent_notifier.dart is the
@@ -48,6 +74,27 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- THE ONLY WAY AN APK IN PRIVATE STORAGE REACHES THE INSTALLER.
+
+             A `file://` URI is refused outright on Android 7+ (FileUriExposed-
+             Exception), and the right answer is a content URI from a provider —
+             which is this. `filesDir/updates` is not reachable by any other app,
+             so the grant below is the entire exposure, and it lasts exactly as
+             long as the install intent (`FLAG_GRANT_READ_URI_PERMISSION`).
+
+             `exported="false"` and a `${applicationId}`-scoped authority: the
+             provider is ours alone, and the authority cannot collide with
+             another app's. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

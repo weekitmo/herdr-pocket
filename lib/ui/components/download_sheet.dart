@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/data/remote_download.dart';
 import 'package:herdr_pocket/domain/files/file_transfer.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
+import 'package:herdr_pocket/ui/components/transfer_progress.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 
 /// Starts a download and shows what is happening to it.
@@ -91,12 +92,12 @@ class _DownloadSheetState extends ConsumerState<_DownloadSheet> {
             ),
             const SizedBox(height: Space.lg),
             switch (state) {
-              TransferIdle() => _Line(
+              TransferIdle() => TransferLine(
                   colors: colors,
                   text: l10n.downloadPreparing,
                   dim: true,
                 ),
-              TransferRunning(:final received, :final total) => _Progress(
+              TransferRunning(:final received, :final total) => TransferProgress(
                   colors: colors,
                   text: total == null
                       ? l10n.downloadUnknownSize(
@@ -113,21 +114,19 @@ class _DownloadSheetState extends ConsumerState<_DownloadSheet> {
                   cancelLabel: l10n.downloadCancel,
                   onCancel: ref.read(downloadControllerProvider.notifier).cancel,
                 ),
-              TransferDone(:final directoryLabel) => _Outcome(
+              TransferDone(:final directoryLabel) => TransferOutcome(
                   colors: colors,
                   icon: CupertinoIcons.check_mark_circled_solid,
                   tint: colors.statusTextDone,
                   text: (directoryLabel.isEmpty
                       ? l10n.downloadDoneNoDir
                       : l10n.downloadDone(directoryLabel)),
-                  buttonLabel: l10n.downloadClose,
                 ),
-              TransferFailed(:final reason) => _Outcome(
+              TransferFailed(:final reason) => TransferOutcome(
                   colors: colors,
                   icon: CupertinoIcons.exclamationmark_circle_fill,
                   tint: colors.statusTextDied,
                   text: _failureText(l10n, reason),
-                  buttonLabel: l10n.downloadClose,
                 ),
             },
             const SizedBox(height: Space.lg),
@@ -176,163 +175,6 @@ String _failureText(AppLocalizations l10n, DownloadFailure reason) =>
       DownloadFailure.connectionLost => l10n.downloadFailedConnection,
       DownloadFailure.unknown => l10n.downloadFailedUnknown,
     };
-
-class _Progress extends StatelessWidget {
-  const _Progress({
-    required this.colors,
-    required this.text,
-    required this.fraction,
-    required this.label,
-    required this.cancelLabel,
-    required this.onCancel,
-  });
-
-  final HerdrColors colors;
-  final String text;
-  final double? fraction;
-  final String label;
-  final String cancelLabel;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = fraction;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: colors.textDim, fontSize: TextSize.note),
-        ),
-        const SizedBox(height: Space.sm),
-        if (value != null)
-          // No Material progress indicator anywhere in this app; the bar is
-          // two boxes and a clip, which is also the only way to keep it on the
-          // app's own accent rather than Cupertino's blue.
-          _Bar(colors: colors, value: value)
-        else
-          // An indeterminate sweep rather than a stuck-at-zero bar: a bar that
-          // does not move is indistinguishable from a hang, and the far end not
-          // reporting a size is common enough to deserve an honest answer.
-          Align(
-            alignment: Alignment.centerLeft,
-            child: CupertinoActivityIndicator(color: colors.textDim),
-          ),
-        const SizedBox(height: Space.sm),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: colors.textDim,
-            fontSize: TextSize.meta,
-            fontFamily: HerdrFonts.mono,
-            fontFamilyFallback: HerdrFonts.monoFallback,
-          ),
-        ),
-        const SizedBox(height: Space.md),
-        CupertinoButton(
-          padding: const EdgeInsets.symmetric(vertical: Space.sm),
-          onPressed: onCancel,
-          child: Text(
-            cancelLabel,
-            style: TextStyle(color: colors.accent, fontSize: TextSize.body),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Bar extends StatelessWidget {
-  const _Bar({required this.colors, required this.value});
-
-  final HerdrColors colors;
-  final double value;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(Radii.uniform),
-      child: SizedBox(
-        height: 6,
-        // The full-width requirement from `AGENTS.md`: inside a Column a bare
-        // ColoredBox gets a loose cross-axis constraint and resolves to zero
-        // width, which draws nothing at all and looks like the transfer is
-        // stuck before it started.
-        width: double.infinity,
-        child: Stack(
-          children: [
-            Container(color: colors.surfaceRaised),
-            FractionallySizedBox(
-              widthFactor: value,
-              child: Container(color: colors.accent),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Outcome extends StatelessWidget {
-  const _Outcome({
-    required this.colors,
-    required this.icon,
-    required this.tint,
-    required this.text,
-    required this.buttonLabel,
-  });
-
-  final HerdrColors colors;
-  final IconData icon;
-  final Color tint;
-  final String text;
-  final String buttonLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 28, color: tint),
-        const SizedBox(height: Space.sm),
-        Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: colors.text,
-            fontSize: TextSize.body,
-            height: 1.4,
-            fontFamily: HerdrFonts.mono,
-            fontFamilyFallback: HerdrFonts.monoFallback,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Line extends StatelessWidget {
-  const _Line({required this.colors, required this.text, this.dim = false});
-
-  final HerdrColors colors;
-  final String text;
-  final bool dim;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        color: dim ? colors.textDim : colors.text,
-        fontSize: TextSize.body,
-      ),
-    );
-  }
-}
 
 /// The sheet's own surface, so it is the app's material and not Cupertino's.
 class _SheetSurface extends StatelessWidget {

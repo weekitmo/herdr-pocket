@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the FileProvider will hand out.
+
+  ONE ENTRY, and only the directory the updater writes into. A provider path is
+  a grant of reachability, so the file lists the smallest thing that works
+  rather than the whole of `filesDir` — `files-path` can name a subdirectory and
+  this is why.
+
+  Must stay in step with `stagingDirectory()` in MainActivity.kt, which creates
+  and returns the same directory.
+-->
+<paths>
+    <files-path name="updates" path="updates/" />
+</paths>
