@@ -23,6 +23,7 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/board/ask_page.dart';
 import 'package:herdr_pocket/ui/pages/hosts/hosts_page.dart';
+import 'package:herdr_pocket/ui/pages/shell/shell_entry.dart';
 import 'package:herdr_pocket/ui/pages/terminal/jump_sheet.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
 
@@ -182,86 +183,109 @@ class _BoardPageState extends ConsumerState<BoardPage> {
     // chrome that really does float: the dock and the terminal's key bar.
     return CupertinoPageScaffold(
       backgroundColor: colors.ground,
-      child: EasyRefresh(
-        header: HerdrRefreshHeader(deck: ref.watch(refreshStyleDeckProvider)),
-        // Pull to refresh, because a status board is the one screen where
-        // "is this still true?" is the question being asked. Wired to the
-        // same read the events and the safety net use — the gesture is a
-        // shortcut, not a second mechanism.
-        onRefresh: () => withRefreshAnimation(() async {
-          final notifier = ref.read(connectionProvider.notifier);
-          if (ref.read(connectionProvider).value is! Online) {
-            notifier.connect();
-            return;
-          }
-          await ref.read(boardProvider.notifier).refresh();
-        }),
-        child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          HerdrSliverTopBar(
-            title: l10n.boardTitle,
-            // The board is a root: the dock is how you leave it, so there is no
-            // way back. What sits on the LEFT is the way to the machines —
-            // one tap away rather than behind a settings tab, because on a
-            // phone this is the screen you need when the board says "offline",
-            // which is exactly when you are least able to go hunting through
-            // menus.
-            leading: HerdrBarButton(
-              identifier: UiId.openMachines,
-              label: l10n.hostsTitle,
-              onPressed: _openMachines,
-              // Which glyphs the chrome uses is one setting, read here rather
-              // than threaded through: the dock and the terminal ask the same
-              // question, and a parameter would have to travel through four
-              // widgets to arrive at the three places that draw it.
-              child: ref.watch(settingsProvider.select((s) => s.iconSet)) ==
-                      AppIconSet.themed
-                  ? UiIcon(
-                      UiIconName.machine,
-                      size: 22,
-                      variant: UiIconVariant.themed,
-                      background: colors.surface,
-                    )
-                  : const Icon(CupertinoIcons.rectangle_stack),
-            ),
-            // The bar carries two things: the way to anywhere on the machine,
-            // and whether this machine is reachable.
-            actions: [
-              HerdrBarButton(
-                identifier: UiId.openJump,
-                label: l10n.jumpTitle,
-                // Only meaningful with a tree to jump around in, and the
-                // button is the answer to "where is that agent" — a question
-                // nobody asks before connecting.
-                onPressed: !idle && failure == null ? _openJump : null,
-                child: const Icon(CupertinoIcons.arrow_up_right_square),
+      // A Stack, so the way into a terminal floats over the board
+      // rather than taking a row of it: the board's content is the
+      // cards, and a button in the flow would push whichever card is
+      // last off the bottom on a short screen.
+      child: Stack(
+        children: [
+          EasyRefresh(
+            header: HerdrRefreshHeader(deck: ref.watch(refreshStyleDeckProvider)),
+            // Pull to refresh, because a status board is the one screen where
+            // "is this still true?" is the question being asked. Wired to the
+            // same read the events and the safety net use — the gesture is a
+            // shortcut, not a second mechanism.
+            onRefresh: () => withRefreshAnimation(() async {
+              final notifier = ref.read(connectionProvider.notifier);
+              if (ref.read(connectionProvider).value is! Online) {
+                notifier.connect();
+                return;
+              }
+              await ref.read(boardProvider.notifier).refresh();
+            }),
+            child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              HerdrSliverTopBar(
+                title: l10n.boardTitle,
+                // The board is a root: the dock is how you leave it, so there is no
+                // way back. What sits on the LEFT is the way to the machines —
+                // one tap away rather than behind a settings tab, because on a
+                // phone this is the screen you need when the board says "offline",
+                // which is exactly when you are least able to go hunting through
+                // menus.
+                leading: HerdrBarButton(
+                  identifier: UiId.openMachines,
+                  label: l10n.hostsTitle,
+                  onPressed: _openMachines,
+                  // Which glyphs the chrome uses is one setting, read here rather
+                  // than threaded through: the dock and the terminal ask the same
+                  // question, and a parameter would have to travel through four
+                  // widgets to arrive at the three places that draw it.
+                  child: ref.watch(settingsProvider.select((s) => s.iconSet)) ==
+                          AppIconSet.themed
+                      ? UiIcon(
+                          UiIconName.machine,
+                          size: 22,
+                          variant: UiIconVariant.themed,
+                          background: colors.surface,
+                        )
+                      : const Icon(CupertinoIcons.rectangle_stack),
+                ),
+                // The bar carries two things: the way to anywhere on the machine,
+                // and whether this machine is reachable.
+                actions: [
+                  HerdrBarButton(
+                    identifier: UiId.openJump,
+                    label: l10n.jumpTitle,
+                    // Only meaningful with a tree to jump around in, and the
+                    // button is the answer to "where is that agent" — a question
+                    // nobody asks before connecting.
+                    onPressed: !idle && failure == null ? _openJump : null,
+                    child: const Icon(CupertinoIcons.arrow_up_right_square),
+                  ),
+                  _ConnectionBadge(
+                    status: status,
+                    colors: colors,
+                    loading: connection.isLoading,
+                  ),
+                ],
               ),
-              _ConnectionBadge(
-                status: status,
-                colors: colors,
-                loading: connection.isLoading,
+              // WHERE THE REFRESH ANIMATION GROWS, and the position is not
+              // cosmetic: this sliver is a PLACE, not a flag. Put at the end of the
+              // list it would open the panel at the bottom of the page.
+              //
+              // Directly under the navigation bar rather than above it, so the bar
+              // stays put and the panel opens underneath — the arrangement the
+              // easy_refresh examples use, and the one that keeps the large title
+              // from being dragged off by a gesture about something else.
+              const HeaderLocator.sliver(),
+              ...body,
+              // Room for the floating dock. Reserved from the dock's own
+              // arithmetic so the two cannot drift: a hard-coded number here is how
+              // the last card ends up half-covered on one screen and not another.
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  // The dock's band PLUS the button's: the button floats in the
+                  // gap above the dock, so leaving only the dock's reserve puts
+                  // the last card underneath it.
+                  height: HerdrDock.reserveOf(context) +
+                      ShellEntryButton.bandOf(context),
+                ),
               ),
             ],
+            ),
           ),
-          // WHERE THE REFRESH ANIMATION GROWS, and the position is not
-          // cosmetic: this sliver is a PLACE, not a flag. Put at the end of the
-          // list it would open the panel at the bottom of the page.
-          //
-          // Directly under the navigation bar rather than above it, so the bar
-          // stays put and the panel opens underneath — the arrangement the
-          // easy_refresh examples use, and the one that keeps the large title
-          // from being dragged off by a gesture about something else.
-          const HeaderLocator.sliver(),
-          ...body,
-          // Room for the floating dock. Reserved from the dock's own
-          // arithmetic so the two cannot drift: a hard-coded number here is how
-          // the last card ends up half-covered on one screen and not another.
-          SliverToBoxAdapter(
-            child: SizedBox(height: HerdrDock.reserveOf(context)),
+          Positioned(
+            right: Space.lg,
+            // ABOVE the dock, not beside it. The dock is a centred
+            // pill, so on a narrow phone the gap between its right edge
+            // and the screen edge is only a few dozen points — a button
+            // sharing that band sits on the pill on a smaller screen.
+            bottom: HerdrDock.reserveOf(context),
+            child: const ShellEntryButton(),
           ),
         ],
-        ),
       ),
     );
   }

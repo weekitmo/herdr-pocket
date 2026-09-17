@@ -94,12 +94,27 @@ class SshShellTransport implements RemoteShellRunner {
   SshShellTransport({
     required this.credentials,
     required this.verifyHostKey,
+    this.command,
     this.termType = 'xterm-256color',
     this.connectTimeout = const Duration(seconds: 15),
   });
 
   final SshCredentials credentials;
   final HostKeyVerifier verifyHostKey;
+
+  /// What to run on the PTY. Null or blank means the login shell.
+  ///
+  /// RUN IN THE PTY, NOT TYPED INTO ONE. The obvious alternative — open a login
+  /// shell and write the command into it — echoes the command as if the user had
+  /// typed it, depends on the remote shell's dialect to parse it, and leaves the
+  /// shell alive when it finishes: the session then never ends and there is no
+  /// exit status to report. `ssh host <command>` runs it directly, and so does
+  /// this.
+  ///
+  /// The size goes with it either way: [SSHClient.execute] takes a full
+  /// [SSHPtyConfig], so a full-screen program is laid out once, at the right
+  /// geometry, rather than drawing an 80x24 screen and then being resized.
+  final String? command;
 
   /// What we tell the remote side we are.
   ///
@@ -126,9 +141,11 @@ class SshShellTransport implements RemoteShellRunner {
 
     final client = await _dialer.dial();
     try {
-      final session = await client.shell(
-        pty: SSHPtyConfig(type: termType, width: cols, height: rows),
-      );
+      final pty = SSHPtyConfig(type: termType, width: cols, height: rows);
+      final run = command?.trim() ?? '';
+      final session = run.isEmpty
+          ? await client.shell(pty: pty)
+          : await client.execute(run, pty: pty);
       return PtySession(
         stream: session.stdout,
         write: session.stdin.add,

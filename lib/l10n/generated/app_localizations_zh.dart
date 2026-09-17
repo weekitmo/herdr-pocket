@@ -1259,4 +1259,58 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get updateUrlCopied => '链接已复制';
+
+  @override
+  String get shellConnecting => '正在打开终端…';
+
+  @override
+  String get shellConnectingBody => '正在通过 SSH 连接并申请一个终端。';
+
+  @override
+  String get shellFailed => '打不开终端';
+
+  @override
+  String get shellEnded => '会话已结束';
+
+  @override
+  String get shellExitUnknown => '远端没有报告退出码。';
+
+  @override
+  String get shellReopen => '重新打开';
+
+  @override
+  String get shellBackToLive => '回到最新';
+
+  @override
+  String shellExitCode(int code) {
+    return '进程退出码 $code。';
+  }
+
+  @override
+  String get shellOpen => '打开终端';
+
+  @override
+  String get shellPickMachine => '在哪台机器上打开终端？';
+
+  @override
+  String get shellNoMachines => '还没有保存任何机器。先到「机器」里添一台，配好 SSH 之后就能在这里开终端了。';
+
+  @override
+  String get shellCommandTitle => '终端命令';
+
+  @override
+  String get shellCommandLabel => '打开时运行';
+
+  @override
+  String get shellCommandNote => '这条命令在远端 PTY 里直接执行，不经过登录 shell。';
+
+  @override
+  String get shellCommandPlaceholder => '留空 = 登录 shell';
+
+  @override
+  String get shellCommandRestore => '恢复默认命令';
+
+  @override
+  String get shellCommandFooter =>
+      '默认是 tmux new -A -s herdr-pocket：有就接上、没有就新建，所以关掉 App 再回来，看到的是同一个会话和它的回滚缓冲。这台机器没装 tmux 时会报 command not found——那就留空，直接开登录 shell。';
 }

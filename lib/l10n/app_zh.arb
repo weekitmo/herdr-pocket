@@ -545,5 +545,30 @@
       }
     }
   },
-  "updateUrlCopied": "链接已复制"
+  "updateUrlCopied": "链接已复制",
+  "shellConnecting": "正在打开终端…",
+  "shellConnectingBody": "正在通过 SSH 连接并申请一个终端。",
+  "shellFailed": "打不开终端",
+  "shellEnded": "会话已结束",
+  "shellExitUnknown": "远端没有报告退出码。",
+  "shellReopen": "重新打开",
+  "shellBackToLive": "回到最新",
+  "shellExitCode": "进程退出码 {code}。",
+  "@shellExitCode": {
+    "description": "会话结束时显示的退出码。不猜、不美化：失败的命令必须看起来像失败。",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "shellOpen": "打开终端",
+  "shellPickMachine": "在哪台机器上打开终端？",
+  "shellNoMachines": "还没有保存任何机器。先到「机器」里添一台，配好 SSH 之后就能在这里开终端了。",
+  "shellCommandTitle": "终端命令",
+  "shellCommandLabel": "打开时运行",
+  "shellCommandNote": "这条命令在远端 PTY 里直接执行，不经过登录 shell。",
+  "shellCommandPlaceholder": "留空 = 登录 shell",
+  "shellCommandRestore": "恢复默认命令",
+  "shellCommandFooter": "默认是 tmux new -A -s herdr-pocket：有就接上、没有就新建，所以关掉 App 再回来，看到的是同一个会话和它的回滚缓冲。这台机器没装 tmux 时会报 command not found——那就留空，直接开登录 shell。"
 }

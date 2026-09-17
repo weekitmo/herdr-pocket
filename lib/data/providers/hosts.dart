@@ -180,6 +180,17 @@ final hostKeyApprovalProvider =
   HostKeyApprovalNotifier.new,
 );
 
+/// The same verifier, bound to a provider's own [Ref].
+///
+/// Exists because [verifyHostKeyWithStores] takes a [Ref] and a
+/// `ConsumerState`'s `ref` is a `WidgetRef` — two types that both mean "ask
+/// Riverpod" and do not convert. Anything that is not itself a provider (the
+/// shell page, which resolves keystore secrets before it can dial) reads this
+/// instead of re-implementing the policy.
+final hostKeyVerifierProvider = Provider<HostKeyVerifier>(
+  (ref) => (prompt) => verifyHostKeyWithStores(ref, prompt),
+);
+
 /// The host-key verifier the SSH transport calls.
 ///
 /// Implements the policy: a matching pin is trusted silently, an unknown host

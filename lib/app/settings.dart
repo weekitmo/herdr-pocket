@@ -89,6 +89,14 @@ const String builtInThemeId = '__builtin__';
 ///
 /// Deliberately hand-rolled rather than generated: these are three scalars, and
 /// a codegen round-trip for three scalars buys nothing but a build step.
+/// The shell command the SSH terminal opens with.
+///
+/// `tmux new -A -s <name>` is attach-or-create: it gives the session a name,
+/// attaches if one is already there, and starts it if not. That is what makes a
+/// phone terminal survive the phone — closing the app detaches, and coming back
+/// finds the same scrollback rather than a fresh prompt.
+const String defaultSessionCommand = 'tmux new -A -s herdr-pocket';
+
 class SettingsState {
   const SettingsState({
     this.themeMode = AppThemeMode.system,
@@ -104,6 +112,7 @@ class SettingsState {
     this.safetyInset = SafetyInsetMode.auto,
     this.fileTransferEnabled = false,
     this.composerEnabled = true,
+    this.sessionCommand = defaultSessionCommand,
     this.downloadDirUri,
     this.downloadDirLabel,
     this.autoUpdateCheck = true,
@@ -227,6 +236,15 @@ class SettingsState {
   /// that is permanently unavailable is a worse answer than one that is absent.
   final bool composerEnabled;
 
+  /// What the SSH shell runs when it opens. Blank means the login shell.
+  ///
+  /// A SETTING RATHER THAN A CONSTANT, because the same feature is two different
+  /// things to two machines: on a machine that has tmux this should attach to a
+  /// session that outlives the phone, and on a machine that does not, a `tmux`
+  /// command is an error message. The user knows which machine they are on; the
+  /// app does not.
+  final String sessionCommand;
+
   SettingsState copyWith({
     AppThemeMode? themeMode,
     String? languageCode,
@@ -247,6 +265,7 @@ class SettingsState {
     bool clearDownloadDir = false,
     bool? autoUpdateCheck,
     bool? composerEnabled,
+    String? sessionCommand,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -263,6 +282,7 @@ class SettingsState {
       safetyInset: safetyInset ?? this.safetyInset,
       fileTransferEnabled: fileTransferEnabled ?? this.fileTransferEnabled,
       composerEnabled: composerEnabled ?? this.composerEnabled,
+      sessionCommand: sessionCommand ?? this.sessionCommand,
       // Both or neither: a label without a URI names a folder the app cannot
       // write to, and a URI without a label is a row full of percent-escapes.
       downloadDirUri:
@@ -293,6 +313,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kSafetyInset = 'settings.safetyInset';
   static const _kFileTransfer = 'settings.fileTransferEnabled';
   static const _kComposer = 'settings.composerEnabled';
+  static const _kSessionCommand = 'settings.sessionCommand';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
   static const _kDownloadDirLabel = 'settings.downloadDirLabel';
   static const _kAutoUpdate = 'settings.autoUpdateCheck';
@@ -328,6 +349,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       safetyInset: _safetyInsetFrom(prefs.getString(_kSafetyInset)),
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
       composerEnabled: prefs.getBool(_kComposer) ?? true,
+      sessionCommand: prefs.getString(_kSessionCommand) ?? defaultSessionCommand,
       downloadDirUri: prefs.getString(_kDownloadDirUri),
       downloadDirLabel: prefs.getString(_kDownloadDirLabel),
       autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? true,
@@ -401,6 +423,16 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setComposerEnabled({required bool enabled}) async {
     state = state.copyWith(composerEnabled: enabled);
     await _prefs.setBool(_kComposer, enabled);
+  }
+
+  /// Sets the command the SSH terminal runs.
+  ///
+  /// Blank and whitespace are stored as given and interpreted at use: "no
+  /// command" is a legitimate choice — the login shell — and trimming it here
+  /// would make the settings field fight the user's cursor.
+  Future<void> setSessionCommand(String command) async {
+    state = state.copyWith(sessionCommand: command);
+    await _prefs.setString(_kSessionCommand, command);
   }
 
   Future<void> setAutoUpdateCheck({required bool enabled}) async {

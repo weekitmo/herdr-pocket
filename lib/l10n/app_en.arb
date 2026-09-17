@@ -546,5 +546,30 @@
       }
     }
   },
-  "updateUrlCopied": "Link copied"
+  "updateUrlCopied": "Link copied",
+  "shellConnecting": "Opening a terminal…",
+  "shellConnectingBody": "Connecting over SSH and asking for a pty.",
+  "shellFailed": "Could not open a terminal",
+  "shellEnded": "The session ended",
+  "shellExitUnknown": "The remote side did not report an exit code.",
+  "shellReopen": "Open again",
+  "shellBackToLive": "Back to live",
+  "shellExitCode": "The process exited with code {code}.",
+  "@shellExitCode": {
+    "description": "Shown when a session ends, with the code the remote process reported.",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "shellOpen": "Open a terminal",
+  "shellPickMachine": "Open a terminal on which machine?",
+  "shellNoMachines": "No machines are saved yet. Add one under Machines, and once its SSH is set up you can open a terminal from here.",
+  "shellCommandTitle": "Terminal command",
+  "shellCommandLabel": "Run on open",
+  "shellCommandNote": "Runs directly on the remote pty, not through a login shell.",
+  "shellCommandPlaceholder": "blank = login shell",
+  "shellCommandRestore": "Restore the default command",
+  "shellCommandFooter": "The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback. On a machine without tmux it reports command not found — leave the field blank there and you get a plain login shell."
 }

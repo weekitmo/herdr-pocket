@@ -22,6 +22,7 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/settings/icons_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/key_bar_page.dart';
+import 'package:herdr_pocket/ui/pages/settings/shell_command_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/theme_page.dart';
 
 /// The sentinel standing for "follow the system" in the language picker.
@@ -263,6 +264,28 @@ class SettingsPage extends ConsumerWidget {
                     onTap: () => Navigator.of(context).push(
                       CupertinoPageRoute<void>(
                         builder: (_) => const KeyBarPage(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              // The SSH terminal's command is its own card rather than a row in
+              // the key-bar group above: that group is about what the strip
+              // above the keyboard is made of, and this is about what the
+              // terminal RUNS. Two questions, and a card that answers both is
+              // how a heading ends up lying about one of them.
+              child: SettingsGroup(
+                rows: [
+                  _Disclosure(
+                    label: l10n.shellCommandLabel,
+                    colors: colors,
+                    value: settings.sessionCommand,
+                    onTap: () => Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) => const ShellCommandPage(),
                       ),
                     ),
                   ),

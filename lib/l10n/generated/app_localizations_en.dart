@@ -1342,4 +1342,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updateUrlCopied => 'Link copied';
+
+  @override
+  String get shellConnecting => 'Opening a terminal…';
+
+  @override
+  String get shellConnectingBody => 'Connecting over SSH and asking for a pty.';
+
+  @override
+  String get shellFailed => 'Could not open a terminal';
+
+  @override
+  String get shellEnded => 'The session ended';
+
+  @override
+  String get shellExitUnknown => 'The remote side did not report an exit code.';
+
+  @override
+  String get shellReopen => 'Open again';
+
+  @override
+  String get shellBackToLive => 'Back to live';
+
+  @override
+  String shellExitCode(int code) {
+    return 'The process exited with code $code.';
+  }
+
+  @override
+  String get shellOpen => 'Open a terminal';
+
+  @override
+  String get shellPickMachine => 'Open a terminal on which machine?';
+
+  @override
+  String get shellNoMachines =>
+      'No machines are saved yet. Add one under Machines, and once its SSH is set up you can open a terminal from here.';
+
+  @override
+  String get shellCommandTitle => 'Terminal command';
+
+  @override
+  String get shellCommandLabel => 'Run on open';
+
+  @override
+  String get shellCommandNote =>
+      'Runs directly on the remote pty, not through a login shell.';
+
+  @override
+  String get shellCommandPlaceholder => 'blank = login shell';
+
+  @override
+  String get shellCommandRestore => 'Restore the default command';
+
+  @override
+  String get shellCommandFooter =>
+      'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback. On a machine without tmux it reports command not found — leave the field blank there and you get a plain login shell.';
 }

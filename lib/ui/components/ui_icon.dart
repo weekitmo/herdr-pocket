@@ -32,7 +32,8 @@ enum UiIconName {
   machine('Server'),
   folder('Folder'),
   branch('Branch'),
-  aim('Aiming');
+  aim('Aiming'),
+  shell('Terminal');
 
   UiIconName(this.asset);
 

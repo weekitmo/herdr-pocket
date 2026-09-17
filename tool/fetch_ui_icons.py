@@ -49,6 +49,7 @@ ICONS = {
     'Folder': 'terminal menu, browse files',
     'Branch': 'terminal menu, git changes',
     'Aiming': 'terminal menu, move machine focus',
+    'Terminal': 'board, open a terminal on a machine',
 }
 
 SIZE = 48

@@ -46,6 +46,10 @@
     "Aiming": {
       "surface": "terminal menu, move machine focus",
       "sha256": "d304ecbcba040586244f7385e6cdd6905c67f5fdaeecb3680314f5373662c1ac"
+    },
+    "Terminal": {
+      "surface": "board, open a terminal on a machine",
+      "sha256": "1dd4ab0bfe83905cdccaa94aac3250efe8100f808393424f31eeb02491476210"
     }
   }
 }

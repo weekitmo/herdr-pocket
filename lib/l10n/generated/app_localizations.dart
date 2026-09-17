@@ -2467,6 +2467,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Link copied'**
   String get updateUrlCopied;
+
+  /// No description provided for @shellConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening a terminal…'**
+  String get shellConnecting;
+
+  /// No description provided for @shellConnectingBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting over SSH and asking for a pty.'**
+  String get shellConnectingBody;
+
+  /// No description provided for @shellFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open a terminal'**
+  String get shellFailed;
+
+  /// No description provided for @shellEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'The session ended'**
+  String get shellEnded;
+
+  /// No description provided for @shellExitUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The remote side did not report an exit code.'**
+  String get shellExitUnknown;
+
+  /// No description provided for @shellReopen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open again'**
+  String get shellReopen;
+
+  /// No description provided for @shellBackToLive.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to live'**
+  String get shellBackToLive;
+
+  /// Shown when a session ends, with the code the remote process reported.
+  ///
+  /// In en, this message translates to:
+  /// **'The process exited with code {code}.'**
+  String shellExitCode(int code);
+
+  /// No description provided for @shellOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a terminal'**
+  String get shellOpen;
+
+  /// No description provided for @shellPickMachine.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a terminal on which machine?'**
+  String get shellPickMachine;
+
+  /// No description provided for @shellNoMachines.
+  ///
+  /// In en, this message translates to:
+  /// **'No machines are saved yet. Add one under Machines, and once its SSH is set up you can open a terminal from here.'**
+  String get shellNoMachines;
+
+  /// No description provided for @shellCommandTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal command'**
+  String get shellCommandTitle;
+
+  /// No description provided for @shellCommandLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Run on open'**
+  String get shellCommandLabel;
+
+  /// No description provided for @shellCommandNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs directly on the remote pty, not through a login shell.'**
+  String get shellCommandNote;
+
+  /// No description provided for @shellCommandPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'blank = login shell'**
+  String get shellCommandPlaceholder;
+
+  /// No description provided for @shellCommandRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore the default command'**
+  String get shellCommandRestore;
+
+  /// No description provided for @shellCommandFooter.
+  ///
+  /// In en, this message translates to:
+  /// **'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback. On a machine without tmux it reports command not found — leave the field blank there and you get a plain login shell.'**
+  String get shellCommandFooter;
 }
 
 class _AppLocalizationsDelegate
