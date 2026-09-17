@@ -171,11 +171,27 @@ Wi-Fi ↔ 蜂窝切换、以及**虚拟内网穿透**（overlay 组网）的路�
 3. **不要把 15s 超时当"连接断了"的证据**：`replyTimeout` 是控制面往返的上限，
    会丢连接的是网络层，`lost` 才是它的信号。
 
-### 保活（keep-alive）的边界
+### 保活（keep-alive）：前台服务，且是一个开关
 
 Dart 侧的 keepalive（10s）只在进程活着时有效；**进后台被冻结后没有任何 Dart 代码在跑**，
 所以"后台也保持连接"在 Android 上只有一条路：**前台服务 + 常驻通知**。
-目前没做 —— 现状是"回前台一秒内自愈"。
+
+- **机制在 Kotlin**（`android/…/KeepAliveService.kt`）：`specialUse` 类型
+  （从 Android 14 起 `foregroundServiceType` 是强制的；`dataSync` 在 Android 15 被限到
+  每天 6 小时，`connectedDevice` 指的是蓝牙/USB 那种外设 —— 都不是这条）、
+  `START_NOT_STICKY`（进程没了 Dart 也没了，重启一个没有连接的服务只是假通知）、
+  低重要性通知（title/正文由 Dart 传，随语言走）。
+- **策略在 Dart**（`lib/data/local/keep_alive.dart`）：`ProcessKeeper` 缝 + `keepAliveWanted()`。
+  **拿住进程的时机**：`Online`、掉线恢复中（`afterLoss`，因为冻结的 App 不跑定时器，
+  慢重试根本不会发生）、以及任何**自己持有会话的页面**（SSH shell 页 —— 那正是"机器上没装 herdr"
+  时的唯一通路）。**放下**：开关关掉、不再重试的失败、断开、首次拨号。
+- **接线在 `RootShell`**（`lib/app/root_shell.dart`）：在 `CupertinoApp` 之下（要有 l10n）、
+  每次进程只存在一份。⚠️ 这里**必须 `watch`**：开关与 hold 集合都要订阅，
+  否则关掉开关只会写进磁盘、通知原地不动（真机上抓到的 bug）。
+- 名字**不能叫 `KeepAlive`** —— Flutter 自己导出了一个同名 widget，会变成 ambiguous import
+  （同 Phase 12 的 `SoftKey`）。
+- ⚠️ **`ref` 在 `dispose()` 里不可用**（Riverpod 直接抛 StateError）；需要它就在
+  `initState` 里存成字段（`shell_page.dart` 的 `_holds`）。
 
 ## 4. 代码地图
 

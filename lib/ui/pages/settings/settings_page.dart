@@ -166,6 +166,16 @@ class SettingsPage extends ConsumerWidget {
                         notifier.setNotificationsEnabled(enabled: v),
                   ),
                   SettingsSwitchRow(
+                    label: l10n.settingsKeepAlive,
+                    // The one row in this group that carries a note, and it
+                    // earns it: the cost of this switch is a persistent
+                    // notification, and a switch that spends something the
+                    // label does not name is a switch nobody can decide about.
+                    note: l10n.settingsKeepAliveNote,
+                    value: settings.keepAlive,
+                    onChanged: (v) => notifier.setKeepAlive(enabled: v),
+                  ),
+                  SettingsSwitchRow(
                     label: l10n.settingsAutoConnect,
                     value: settings.autoConnect,
                     onChanged: (v) => notifier.setAutoConnect(enabled: v),

@@ -209,6 +209,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionFailed => '连接失败';
 
   @override
+  String get settingsKeepAlive => '后台保活';
+
+  @override
+  String get settingsKeepAliveNote => '切后台也保持连接，状态栏会有一条常驻通知。';
+
+  @override
+  String keepAliveNotificationBody(String host) {
+    return '保持与 $host 的连接';
+  }
+
+  @override
+  String get keepAliveNotificationBodyNoHost => '保持连接';
+
+  @override
   String get connectionLost => '连接已断开';
 
   @override

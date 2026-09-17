@@ -82,6 +82,17 @@
     }
   },
   "connectionFailed": "连接失败",
+  "settingsKeepAlive": "后台保活",
+  "settingsKeepAliveNote": "切后台也保持连接，状态栏会有一条常驻通知。",
+  "keepAliveNotificationBody": "保持与 {host} 的连接",
+  "@keepAliveNotificationBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "keepAliveNotificationBodyNoHost": "保持连接",
   "connectionLost": "连接已断开",
   "connectionLostRetrying": "连接断了，正在重连…",
   "connectionLostBody": "会自己再试几次；也可以点「重连」立刻试一次。",

@@ -488,6 +488,30 @@ abstract class AppLocalizations {
   /// **'Connection failed'**
   String get connectionFailed;
 
+  /// No description provided for @settingsKeepAlive.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep alive in background'**
+  String get settingsKeepAlive;
+
+  /// No description provided for @settingsKeepAliveNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Stays connected when you leave the app. Shows a persistent notification.'**
+  String get settingsKeepAliveNote;
+
+  /// No description provided for @keepAliveNotificationBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Keeping the connection to {host} open'**
+  String keepAliveNotificationBody(String host);
+
+  /// No description provided for @keepAliveNotificationBodyNoHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Keeping the connection open'**
+  String get keepAliveNotificationBodyNoHost;
+
   /// No description provided for @connectionLost.
   ///
   /// In en, this message translates to:

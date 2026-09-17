@@ -43,6 +43,24 @@
          Settings was flipping a feature that could never fire. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- KEEPING THE CONNECTION ALIVE WHILE THE APP IS IN THE BACKGROUND.
+
+         Android freezes a backgrounded app's process, and a frozen process
+         writes no SSH keepalive — so the connection dies in the middle with
+         neither end told. A foreground service is the only mechanism Android
+         offers for that, and it needs these two declarations plus the service
+         below.
+
+         DECLARATIONS ARE NOT BEHAVIOUR: the service is started and stopped by
+         this app's own code (see KeepAliveService), so the switch in Settings
+         turns it on and off at runtime and the notification appears only while
+         it runs. Special use is the honest type — there is no category for "the
+         user asked this app to hold a connection to their own machine open" —
+         and its subtype below is what a reviewer (or the user, in Settings →
+         Apps) reads to find out why. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+
     <application
         android:label="Herdr Pocket"
         android:name="${applicationName}"
@@ -95,6 +113,20 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/update_paths" />
         </provider>
+
+        <!-- The keep-alive service. Not exported: only this app starts it.
+             `stopWithTask="false"` because swiping the app off the recents list
+             is exactly the moment the user expects the connection to survive —
+             the task going away is not a request to disconnect. -->
+        <service
+            android:name=".KeepAliveService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Holds an SSH connection to a machine the user added, so it survives the app going to the background and agent notifications keep arriving." />
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

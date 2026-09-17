@@ -83,6 +83,17 @@
     }
   },
   "connectionFailed": "Connection failed",
+  "settingsKeepAlive": "Keep alive in background",
+  "settingsKeepAliveNote": "Stays connected when you leave the app. Shows a persistent notification.",
+  "keepAliveNotificationBody": "Keeping the connection to {host} open",
+  "@keepAliveNotificationBody": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "keepAliveNotificationBodyNoHost": "Keeping the connection open",
   "connectionLost": "Connection lost",
   "connectionLostRetrying": "Connection lost — reconnecting…",
   "connectionLostBody": "It will keep trying on its own — or tap reconnect to try now.",

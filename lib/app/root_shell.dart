@@ -4,6 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/local/keep_alive.dart';
+import 'package:herdr_pocket/data/providers/connection.dart';
+import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/update/update_controller.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
@@ -63,10 +66,71 @@ class _RootShellState extends ConsumerState<RootShell> {
     });
   }
 
+  /// Reconciles the background keep-alive service with the connection.
+  ///
+  /// WHY IT LIVES HERE. The decision is about connection state (see
+  /// [keepAliveWanted]) and the mechanism is a Kotlin foreground service, but
+  /// the notification's sentence is USER-FACING and therefore localized — and
+  /// this widget is the one place that is both below `CupertinoApp` (so
+  /// `AppLocalizations` is available) and alive exactly once per process.
+  ///
+  /// SILENT ON FAILURE, ALWAYS. A phone that will not start a foreground
+  /// service — the notification permission denied, an OEM that blocks
+  /// background starts — leaves the app working exactly as it did before this
+  /// feature: connected in the foreground, recovered on resume. Nothing here
+  /// is worth a toast.
+  ///
+  /// ⚠️ [enabled] AND [sessionOpen] ARE PARAMETERS, NOT READS. Both of them are
+  /// watched by `build` before it calls this, and that is what makes the
+  /// switch work: a `ref.read` here would be a read with no subscription, so
+  /// flipping the setting would change nothing at all until the next reconnect.
+  /// Found on the phone — the switch went off and the notification stayed
+  /// there, which is the exact failure mode a settings row must never have.
+  void _watchKeepAlive(
+    AppLocalizations l10n, {
+    required bool enabled,
+    required bool sessionOpen,
+  }) {
+    final controller = ref.read(keepAliveControllerProvider);
+    final host = ref.read(currentHostProvider);
+
+    void sync(ConnectionStatus? status) {
+      unawaited(
+        controller.sync(
+          enabled: enabled,
+          status: status,
+          sessionOpen: sessionOpen,
+          title: l10n.appTitle,
+          text: host == null
+              ? l10n.keepAliveNotificationBodyNoHost
+              : l10n.keepAliveNotificationBody(host.label),
+        ),
+      );
+    }
+
+    ref.listen<AsyncValue<ConnectionStatus>>(connectionProvider, (_, next) {
+      sync(next.value);
+    });
+    // Once for the value that is already there: a listener only fires on
+    // CHANGE, and this widget can be built while a connection is already up
+    // (a hot restart, a theme change rebuilding the shell).
+    sync(ref.read(connectionProvider).value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final glass = ref.watch(settingsProvider.select((s) => s.glassEnabled));
+
+    // BOTH of these are WATCHED, and both have to be: the setting is what the
+    // user flips, and the holders are what a page adds when it opens its own
+    // SSH session. Either changing re-runs this build and re-reconciles the
+    // service — a read inside `_watchKeepAlive` would leave the switch dead.
+    _watchKeepAlive(
+      l10n,
+      enabled: ref.watch(settingsProvider.select((s) => s.keepAlive)),
+      sessionOpen: ref.watch(keepAliveHoldersProvider).isNotEmpty,
+    );
 
     final labels = <RootView, String>{
       RootView.board: l10n.navBoard,

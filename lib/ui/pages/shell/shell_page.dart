@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
+import 'package:herdr_pocket/data/local/keep_alive.dart';
 import 'package:herdr_pocket/data/providers/shell.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
@@ -49,6 +50,12 @@ import 'package:xterm/core.dart';
 ///  3. **The session can END.** A pane outlives every viewer; a PTY does not.
 ///     When it finishes, the exit status is the only thing that says whether it
 ///     worked, so it is shown rather than swallowed.
+/// This page's id in `keepAliveHoldersProvider`, while its session is open.
+const String _shellHoldId = 'shell';
+
+/// A terminal on a machine, over SSH, with no herdr anywhere in the path.
+///
+/// See [ShellTransport] for why this exists and what it is not.
 class ShellPage extends ConsumerStatefulWidget {
   const ShellPage({required this.profile, super.key});
 
@@ -83,6 +90,15 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   RemoteShellSession? _session;
   final _inputFocus = FocusNode();
 
+  /// The keep-alive bookkeeping, captured during `initState`.
+  ///
+  /// A FIELD RATHER THAN A `ref.read` IN `dispose`, because Riverpod refuses
+  /// the latter outright — "Using ref when a widget is about to or has been
+  /// unmounted is unsafe" — which is the same rule the `FocusScope` note in
+  /// `dispose` states, and it threw for every test in `shell_page_test.dart`
+  /// until this moved here.
+  KeepAliveHolders? _holds;
+
   KeyBarState _keys = const KeyBarState();
 
   /// The grid we have told the far side we are, in cells.
@@ -112,7 +128,18 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   Timer? _resizeTimer;
 
   @override
+  void initState() {
+    super.initState();
+    // Captured while the element is mounted: `dispose` still needs it, and
+    // `ref` is unusable by then. See [_holds].
+    _holds = ref.read(keepAliveHoldersProvider.notifier);
+  }
+
+  @override
   void dispose() {
+    // A hold left behind would keep a foreground service running for a session
+    // nobody has.
+    _holds?.release(_shellHoldId);
     _resizeTimer?.cancel();
     // NO `FocusScope.of(context)` HERE. Looking an ancestor up during dispose
     // is illegal — the element tree is already unstable — and it throws an
@@ -168,6 +195,11 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         _session = session;
         _opening = false;
       });
+      // THE TIME THIS PAGE IS THE REASON TO STAY AWAKE. Its SSH session is its
+      // own — the herdr connection the keep-alive policy otherwise watches may
+      // not even be dialled, and this page is exactly what a user opens on a
+      // machine that has no herdr. See `keepAliveHoldersProvider`.
+      _holds?.hold(_shellHoldId);
 
       // RECONCILE, because the box may have moved while we were dialling.
       //
@@ -207,9 +239,11 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       _ended = true;
       _exitCode = code;
     });
+    _holds?.release(_shellHoldId);
   }
 
   Future<void> _reopen() async {
+    _holds?.release(_shellHoldId);
     final old = _session;
     setState(() {
       _session = null;

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The status-bar icon for the keep-alive notification.
+
+  A VECTOR, hand-written, and deliberately NOT one of the generated PNGs. The
+  launcher icons under mipmap/ are rendered from assets/icon/*.svg by
+  tool/render_app_icon.sh; this one is a different drawing for a different
+  surface — a status bar paints a small icon as a monochrome stencil and tints
+  it, so it has to be white-on-transparent, one shape, and legible at ~18 px.
+  The launcher mark's prompt cut-out disappears at that size and the tile's
+  rounded square would read as a box, so this is the mark's SILHOUETTE: the
+  window going into the pocket, which is the one thing about this app that
+  survives being 18 pixels tall.
+
+  The paths are the mark's own (assets/icon/mark.svg), offset so the viewport is
+  tight to the ink: the source viewBox starts at (10, 8).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="76"
+    android:viewportHeight="78"
+    android:tint="#FFFFFF">
+    <group android:translateX="-10" android:translateY="-8">
+        <!-- The terminal window: square at the bottom, rounded on top. -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M28,8 h40 a11,11 0 0 1 11,11 v31 H17 V19 A11,11 0 0 1 28,8 z" />
+        <!-- The pocket: straight across the mouth, rounded hard at the bottom. -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M10,40 h76 v30 a16,16 0 0 1 -16,16 H26 a16,16 0 0 1 -16,-16 z" />
+    </group>
+</vector>

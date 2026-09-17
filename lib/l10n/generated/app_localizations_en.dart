@@ -219,6 +219,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionFailed => 'Connection failed';
 
   @override
+  String get settingsKeepAlive => 'Keep alive in background';
+
+  @override
+  String get settingsKeepAliveNote =>
+      'Stays connected when you leave the app. Shows a persistent notification.';
+
+  @override
+  String keepAliveNotificationBody(String host) {
+    return 'Keeping the connection to $host open';
+  }
+
+  @override
+  String get keepAliveNotificationBodyNoHost => 'Keeping the connection open';
+
+  @override
   String get connectionLost => 'Connection lost';
 
   @override

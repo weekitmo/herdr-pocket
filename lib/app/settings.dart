@@ -151,6 +151,7 @@ class SettingsState {
     this.languageCode,
     this.glassEnabled = true,
     this.notificationsEnabled = true,
+    this.keepAlive = true,
     this.autoConnect = false,
     this.textScale = 1.0,
     this.terminalTextScale = 1.0,
@@ -193,6 +194,19 @@ class SettingsState {
   /// point of the app is not having to watch the board, and permission is asked
   /// separately at startup rather than being implied by this flag.
   final bool notificationsEnabled;
+
+  /// Whether the process is held alive while the app is in the background.
+  ///
+  /// ON by default, because this is the difference between the connection
+  /// working and the connection being dead when the user comes back: Android
+  /// freezes a backgrounded app, and a frozen app writes no SSH keepalive. The
+  /// cost is stated where the switch is — a persistent notification, which is
+  /// how Android explains a foreground service — and the switch exists so a
+  /// user who would rather not see it can turn the feature off and keep the
+  /// resume-time recovery instead.
+  ///
+  /// READ AS `?? true`: an explicit `false` on disk means someone turned it off.
+  final bool keepAlive;
 
   /// Whether the app dials the machine on launch.
   ///
@@ -303,6 +317,7 @@ class SettingsState {
     bool clearLanguage = false,
     bool? glassEnabled,
     bool? notificationsEnabled,
+    bool? keepAlive,
     bool? autoConnect,
     double? textScale,
     double? terminalTextScale,
@@ -326,6 +341,7 @@ class SettingsState {
       glassEnabled: glassEnabled ?? this.glassEnabled,
       notificationsEnabled:
           notificationsEnabled ?? this.notificationsEnabled,
+      keepAlive: keepAlive ?? this.keepAlive,
       autoConnect: autoConnect ?? this.autoConnect,
       textScale: textScale ?? this.textScale,
       terminalTextScale: terminalTextScale ?? this.terminalTextScale,
@@ -358,6 +374,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kLanguage = 'settings.languageCode';
   static const _kGlass = 'settings.glassEnabled';
   static const _kNotifications = 'settings.notificationsEnabled';
+  static const _kKeepAlive = 'settings.keepAlive';
   static const _kAutoConnect = 'settings.autoConnect';
   static const _kTextScale = 'settings.textScale';
   static const _kTerminalTextScale = 'settings.terminalTextScale';
@@ -395,6 +412,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       languageCode: prefs.getString(_kLanguage),
       glassEnabled: prefs.getBool(_kGlass) ?? true,
       notificationsEnabled: prefs.getBool(_kNotifications) ?? true,
+      keepAlive: prefs.getBool(_kKeepAlive) ?? true,
       autoConnect: prefs.getBool(_kAutoConnect) ?? false,
       textScale: prefs.getDouble(_kTextScale) ?? 1.0,
       terminalTextScale: prefs.getDouble(_kTerminalTextScale) ?? 1.0,
@@ -466,6 +484,12 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(notificationsEnabled: enabled);
     final prefs = _prefs;
     await prefs.setBool(_kNotifications, enabled);
+  }
+
+  Future<void> setKeepAlive({required bool enabled}) async {
+    state = state.copyWith(keepAlive: enabled);
+    final prefs = _prefs;
+    await prefs.setBool(_kKeepAlive, enabled);
   }
 
   Future<void> setAutoConnect({required bool enabled}) async {

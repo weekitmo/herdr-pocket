@@ -111,6 +111,45 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL)
             .setMethodCallHandler { call, result -> handleUpdate(call, result) }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KeepAliveService.CHANNEL)
+            .setMethodCallHandler { call, result -> handleKeepAlive(call, result) }
+    }
+
+    // ---------------------------------------------------------- keep alive ---
+    //
+    // Tiny on purpose: whether the service SHOULD be running is a decision about
+    // connection state, and that state lives in Dart (`keep_alive.dart` is the
+    // policy). This half only does the two things Dart cannot do — start and
+    // stop a foreground service.
+
+    private fun handleKeepAlive(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            when (call.method) {
+                "start" -> {
+                    val title = call.argument<String>("title") ?: return result.error(
+                        "bad_args",
+                        "start needs a title",
+                        null,
+                    )
+                    val text = call.argument<String>("text") ?: ""
+                    KeepAliveService.start(this, title, text)
+                    result.success(null)
+                }
+                "stop" -> {
+                    KeepAliveService.stop(this)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        } catch (t: Throwable) {
+            // Reported rather than swallowed: the two ways this fails are
+            // "the user turned the notification permission off" and "the OEM
+            // forbids background starts", and both leave the app working — just
+            // without the keep-alive — which the settings row should be able to
+            // admit instead of showing a switch that lies.
+            result.error("keep_alive", t.message ?: t.javaClass.simpleName, null)
+        }
     }
 
     // --------------------------------------------------------- file download ---
