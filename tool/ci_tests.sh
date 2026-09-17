@@ -112,17 +112,25 @@ fi
 # non-zero count here means a test looked around, found nothing to do, and said
 # so — which is the one outcome this whole script exists to prevent.
 #
-# ONE EXCEPTION, AND IT IS THE OPT-IN ONE. Without HP_LIVE_WRITES the three
-# tests in `live_writes_test.dart` skip themselves, because they create a
-# workspace on a daemon that on a laptop is somebody's working session. That
-# number is allowed here and nowhere else: `~3` off, `~1` or `~4` is a
-# different test that has quietly stopped running, and it fails.
+# ONE EXCEPTION, AND IT IS THE OPT-IN ONE. Without HP_LIVE_WRITES the tests that
+# WRITE to a daemon skip themselves: three in `live_writes_test.dart` (a
+# workspace and an upload) and four in `scroll_probe_test.dart` (it creates its
+# own workspace, because measuring what scrolling does to a pane means owning
+# one) — on a laptop that daemon is somebody's working session. That number is
+# allowed here and nowhere else: `~7` off, `~6` or `~8` is a different test that
+# has quietly stopped running, and it fails.
+#
+# IT IS A COUNT OF TESTS, so it goes stale the moment somebody adds an opt-in
+# test — which is exactly what happened: it stayed at 3 when the scroll probe
+# arrived, and every laptop run of this script failed until it was corrected.
+# Adding a test behind HP_LIVE_WRITES means editing this number in the same
+# commit.
 
 say "nothing was skipped"
 SUMMARY="$(tail -1 "$LOG")"
 echo "  $SUMMARY"
 
-EXPECTED_SKIPS=3
+EXPECTED_SKIPS=7
 if [ "${HP_LIVE_WRITES:-0}" = "1" ]; then
   EXPECTED_SKIPS=0
 fi
@@ -130,14 +138,14 @@ fi
 case "$SUMMARY" in
   *"~0:"*)
     if [ "$EXPECTED_SKIPS" -ne 0 ]; then
-      echo "  (the three live-write tests ran as well — that is more than expected)"
+      echo "  (the opt-in tests ran as well — that is more than expected)"
     fi
     ;;
   *"~"*)
     SKIPPED="$(printf '%s' "$SUMMARY" | sed -n 's/.*~\([0-9][0-9]*\):.*/\1/p')"
     if [ "$SKIPPED" = "$EXPECTED_SKIPS" ]; then
       if [ "$EXPECTED_SKIPS" -ne 0 ]; then
-        echo "  the $EXPECTED_SKIPS live-write tests are off; HP_LIVE_WRITES=1 runs them."
+        echo "  the $EXPECTED_SKIPS opt-in tests are off; HP_LIVE_WRITES=1 runs them."
         echo "  (CI sets it — its daemon was started a minute ago and dies with the runner.)"
       fi
     else
