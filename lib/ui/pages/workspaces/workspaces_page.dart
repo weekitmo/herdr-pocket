@@ -17,6 +17,7 @@ import 'package:herdr_pocket/ui/components/refresh/herdr_refresh.dart';
 import 'package:herdr_pocket/ui/components/toast.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
+import 'package:herdr_pocket/ui/design/workspace_palette.dart';
 import 'package:herdr_pocket/ui/pages/files/file_tree_page.dart';
 import 'package:herdr_pocket/ui/pages/git/git_page.dart';
 import 'package:herdr_pocket/ui/pages/launch/launch_page.dart';
@@ -381,6 +382,16 @@ class WorkspacesPage extends ConsumerWidget {
 ///
 /// Rebuilt verbatim after an over-eager edit deleted it; every value here is
 /// taken from the widget it replaced rather than re-invented.
+///
+/// THE FILL IS AN IDENTITY, NOT A STATUS — see [WorkspacePalette] for what that
+/// costs and what it is allowed to be used for. It replaced a flat
+/// `surfaceRaised` chip with a hairline border, which was legible and told the
+/// reader nothing: ten identical squares down a page, each one requiring the
+/// digits to be read before the group could be identified.
+///
+/// The border is gone WITH the fill rather than kept: a chip that already has an
+/// edge does not need to be outlined, and a hairline over a saturated fill reads
+/// as a rendering artefact.
 class _NumberBadge extends StatelessWidget {
   const _NumberBadge({required this.number, required this.colors});
 
@@ -394,13 +405,24 @@ class _NumberBadge extends StatelessWidget {
       height: 26,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: colors.surfaceRaised,
+        color: WorkspacePalette.backgroundFor(
+          number: number,
+          brightness: colors.brightness,
+        ),
         borderRadius: BorderRadius.circular(Radii.uniform),
-        border: Border.all(color: colors.hairlineQuiet),
       ),
       child: Text(
         '$number',
-        style: TextStyle(color: colors.textDim, fontSize: TextSize.note),
+        style: const TextStyle(
+          color: WorkspacePalette.foreground,
+          fontSize: TextSize.note,
+          // WHITE ON A MID-TONE IS THINNER THAN INK ON A PALE CHIP, and this is
+          // the one glyph on the page that has to survive being glanced at
+          // rather than read.
+          fontWeight: FontWeight.w600,
+          // So a two-digit number does not shift the digits it sits beside.
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
