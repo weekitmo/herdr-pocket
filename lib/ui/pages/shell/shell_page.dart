@@ -141,7 +141,12 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       // the model and the far end must agree from the first frame, or the
       // first full-screen draw lands in the wrong cells.
       _terminal.resize(_cols, _rows);
-      final session = await runner.open(cols: _cols, rows: _rows);
+      // What we are ASKING FOR, kept so it can be compared with what the box
+      // is by the time the dial comes back. A dial takes seconds and the soft
+      // keyboard opens on its own during it.
+      final askedCols = _cols;
+      final askedRows = _rows;
+      final session = await runner.open(cols: askedCols, rows: askedRows);
       if (!mounted) {
         await session.close();
         return;
@@ -163,6 +168,22 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         _session = session;
         _opening = false;
       });
+
+      // RECONCILE, because the box may have moved while we were dialling.
+      //
+      // This was a real bug on a real phone: the keyboard opens by itself when
+      // the page appears, so the box shrank from 66 rows to 44 while the SSH
+      // handshake was still running. That shrink scheduled a debounced resize,
+      // the debounce fired while `_session` was still null, and the guard below
+      // DROPPED it — after which nothing ever told the far end the real size.
+      // Measured on the device: `tmux list-clients` reported the pty at 81x66
+      // while only 44 rows were visible, so tmux drew a status bar on a row
+      // nobody could see. A resize that is dropped because there is no session
+      // YET is not a resize that is no longer needed.
+      if (askedCols != _cols || askedRows != _rows) {
+        _terminal.resize(_cols, _rows);
+        session.resize(_cols, _rows);
+      }
     } on Object catch (e) {
       if (mounted) {
         setState(() {

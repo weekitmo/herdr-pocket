@@ -231,6 +231,51 @@ void main() {
     ]);
   });
 
+  testWidgets('a box that moves while the dial is in flight is not lost', (
+    tester,
+  ) async {
+    // THE BUG THIS PINS WAS A REAL ONE, and it needed a phone to show itself.
+    // The keyboard opens by itself when the page appears, so the box shrinks
+    // while the SSH handshake is still running. That shrink scheduled a
+    // debounced resize; the debounce fired while there was no session yet; and
+    // the guard that exists to keep a dying session from being poked threw the
+    // resize away. Nothing ever told the far end the real size, and tmux drew
+    // its status bar on a row below the visible area — measured on the device
+    // as `tmux list-clients: 81x66` while 44 rows were on screen.
+    final runner = _FakeRunner()..hold = Completer<void>();
+    await pumpShell(tester, runner);
+    expect(runner.opened, hasLength(1));
+    final asked = runner.opened.single;
+    expect(runner.sessions, isEmpty, reason: 'still dialling');
+
+    // The box shrinks mid-dial.
+    tester.view.physicalSize = const Size(360 * 3, 420 * 3);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      runner.sessions,
+      isEmpty,
+      reason: 'the debounce must not be reached by a session that is not there',
+    );
+
+    runner.hold!.complete();
+    await flush(tester);
+
+    final session = runner.sessions.single;
+    expect(
+      session.resizes,
+      isNotEmpty,
+      reason: 'a resize dropped because there was no session YET is not a '
+          'resize that is no longer needed',
+    );
+    expect(session.resizes.last.rows, lessThan(asked.rows));
+    expect(
+      painterOf(tester).terminal.buffer.height,
+      session.resizes.last.rows,
+      reason: 'and the model follows the pty, as everywhere else',
+    );
+  });
+
   testWidgets('a session that ends says so, and offers a way back', (
     tester,
   ) async {
@@ -353,6 +398,9 @@ class _FakeRunner implements RemoteShellRunner {
   /// When set, [open] throws it instead of returning a session.
   Exception? failWith;
 
+  /// When set, [open] waits on it before returning — a dial in flight.
+  Completer<void>? hold;
+
   @override
   Future<RemoteShellSession> open({
     required int cols,
@@ -361,6 +409,9 @@ class _FakeRunner implements RemoteShellRunner {
     opened.add((cols: cols, rows: rows));
     final failure = failWith;
     if (failure != null) throw failure;
+
+    final hold = this.hold;
+    if (hold != null) await hold.future;
 
     final session = _FakeSession()
       ..exitCode = exitCodes.isEmpty ? null : exitCodes.removeAt(0);
