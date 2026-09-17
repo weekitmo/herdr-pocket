@@ -8,14 +8,14 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
-| [0.2.1](#v021) | 未发布 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
+| [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
 
 ---
 
 <a id="v021"></a>
-## [0.2.1] — 未发布 · Unreleased
+## [0.2.1] — 2026-09-17
 
 ### 中文
 
@@ -41,6 +41,11 @@
 - 中文/日文等**组合输入不再泄进终端**：IME 组词期间一个字节都不发，提交时才发出去。
 - **硬件键盘**（蓝牙键盘，或 `adb` 注入的按键）也能打字、退格、回车 —— 这条路不经过 IME，
   自写的输入客户端必须自己接。
+
+**其他**
+
+- 新增 `CHANGELOG.md`（就是这份），并且 release 的正文改为**取自它**：条目缺失时发布任务
+  直接失败，而不是发一个什么都不说的 release。
 
 ### English
 
@@ -73,6 +78,11 @@
 - **Hardware keyboards** (Bluetooth, or anything driving the phone through `adb`) can type,
   backspace and press Enter — that path never touches the IME, so a hand-written input client
   has to handle it itself.
+
+**Chores**
+
+- Added `CHANGELOG.md` (this file), and a release body is now **taken from it**: a tag with no
+  entry fails the release job instead of publishing a body that says nothing.
 
 ---
 
