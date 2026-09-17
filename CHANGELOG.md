@@ -8,10 +8,77 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
 | [0.3.0](#v030) | 2026-09-17 | 没有 herdr 的机器也能开终端；终端里可以整段说话，而且 `/` 和 `@` 菜单还在 |
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v031"></a>
+## [0.3.1] — 2026-09-17
+
+### 中文
+
+**新增**
+
+- **后台保活**（设置 → 行为 → 后台保活，默认开）：切到后台时用前台服务拿住进程，
+  连接不再被系统冻结掐断，状态栏会有一条常驻通知。**可以随时关掉**，关掉立即停服务、
+  通知消失。走 SSH shell 页（自己那条连接）时同样生效。
+- **断线即自愈**：连接一断就自己重拨（先三次，然后每 30 秒一轮、最多四轮），
+  期间状态栏文案是「连接断了，正在重连…」；回到前台会先做一次往返校验
+  （进程被冻结时 socket 看起来还是开着的）。终端页给了一条回得来的路：
+  失败/结束的浮层上有「重试」或「重新打开」，连接恢复后自动重挂。
+
+**修复**
+
+- **断线之后再也没接上，只能跑去机器上重连**：死掉的 SSH 会话被永久当成活的
+  （只检查了「有过一个 client」），拨号器也永远没人通知，于是状态停在「已连接」、看板还是旧数据。
+  现在传输层自己报告死亡（`ConnectionLiveness`），死掉的连接不会被交出去，也不会懒重拨。
+- **断线被误报成「这台机器上没有找到 herdr」**：判断用的是「消息里含哨兵字符串」，
+  而哨兵字面量就写在我们自己生成的命令里、报错消息又把整条命令拼了进去 —— 必然命中。
+  现在按**整行相等**判断，错误消息也不再带命令原文（会截断并带上真正的原因）。
+- **聊天窗在真机上弹安全输入法、打不了中文**：字段设了 `enableSuggestions: false`，
+  而 Android 引擎拿它来实现「不外传学习」的方式是给输入框加上
+  `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD` —— 输入法据此当成密码框。现在保留联想、
+  仍然关掉自动更正与标点改写（那两个会悄悄改命令）。真机实测输入类型为
+  `0x20001`（普通多行文本）。
+- **`/` 菜单报错时把 8KB 的命令原文甩到屏幕上**：现在只给一句人话和失败原因。
+- **重连期间看板不再清空**：空白等于说「agent 都没了」，而真相是「连接没了」。
+
+### English
+
+**Added**
+
+- **Keep-alive in the background** (Settings → Behaviour, on by default): a foreground service
+  holds the process while the app is away, so the connection is not frozen to death, with a
+  persistent notification. **It can be turned off at any time** — the service stops and the
+  notification goes with it. The SSH shell page keeps its own connection alive the same way.
+- **A dropped connection heals itself**: the app re-dials on its own (three quick tries, then up
+  to four rounds thirty seconds apart) and says so — "Connection lost — reconnecting…". Coming
+  back to the foreground gets a round-trip check first, because a frozen process is not a closed
+  socket. The terminal offers a way back from a dead session and re-attaches when the connection
+  returns.
+
+**Fixed**
+
+- **After a drop it never reconnected; the only way back was walking to the machine.** A dead SSH
+  session was handed out forever (the only test was "a client exists"), nothing told the dialler,
+  and the status stayed "connected" with a stale board underneath it. The transport now reports
+  its own end and a dead one is never reused.
+- **A dropped link was reported as "herdr is not installed on this machine"**: the check was a
+  substring match on a sentinel that this app writes into its own commands, so any message
+  quoting a command matched. It is a line-exact match now, and error messages carry the reason
+  instead of the command.
+- **The chat field brought up a secure keyboard on the phone, with no Chinese input**:
+  `enableSuggestions: false` makes Android's engine add
+  `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD`, which keyboards read as a password box. Suggestions
+  stay on; autocorrect and the punctuation rewrites stay off, because those corrupt a command.
+  Measured on the device: the field's input type is `0x20001`, plain multiline text.
+- **8 KB of shell command on the screen when a menu failed**: one sentence and the reason now.
+- **The board no longer blanks itself while reconnecting**: blank says "the agents are gone"
+  when what is gone is the connection.
 
 ---
 
