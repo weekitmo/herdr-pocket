@@ -1,20 +1,26 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/local/file_pick.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/nav_tree.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
+import 'package:herdr_pocket/data/remote_capabilities.dart';
+import 'package:herdr_pocket/data/remote_files.dart';
 import 'package:herdr_pocket/data/remote_upload.dart';
 import 'package:herdr_pocket/data/terminal/terminal_control.dart';
 import 'package:herdr_pocket/data/terminal/terminal_selection.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/domain/agent/attachment.dart';
 import 'package:herdr_pocket/domain/terminal/key_bar.dart';
+import 'package:herdr_pocket/domain/terminal/menu.dart';
 import 'package:herdr_pocket/domain/terminal/pinch.dart';
+import 'package:herdr_pocket/domain/terminal/submission.dart';
 import 'package:herdr_pocket/domain/terminal/swipe.dart';
 import 'package:herdr_pocket/domain/terminal/window.dart';
 import 'package:herdr_pocket/domain/workspace/jump_target.dart';
@@ -30,7 +36,10 @@ import 'package:herdr_pocket/ui/design/glass.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/files/file_tree_page.dart';
 import 'package:herdr_pocket/ui/pages/git/git_page.dart';
+import 'package:herdr_pocket/ui/pages/terminal/chat_composer.dart';
+import 'package:herdr_pocket/ui/pages/terminal/composer_menu.dart';
 import 'package:herdr_pocket/ui/pages/terminal/layout_page.dart';
+import 'package:herdr_pocket/ui/pages/terminal/menu_panel.dart';
 import 'package:herdr_pocket/ui/pages/terminal/pane_switcher.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_composer.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
@@ -188,6 +197,43 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   late String _paneId = widget.paneId;
   late String _title = widget.title;
 
+  /// Whether the chat window is open under the key bar.
+  ///
+  /// ONE OF THE TWO INPUT SURFACES IS LIVE AT A TIME. With it closed, every
+  /// keystroke goes straight to the pane as a `terminal.input` — the direct mode
+  /// this screen has always had. Open, the keyboard types into a local buffer and
+  /// ONE write leaves when the user presses send, which is the whole point of the
+  /// thing on a link that drops characters.
+  bool _composerOpen = false;
+
+  /// What has been written but not sent.
+  final TextEditingController _draft = TextEditingController();
+
+  /// The chat field's own focus node. Separate from [_inputFocus] because they
+  /// are two different keyboards: one is a pane's stdin, the other is a message
+  /// being written.
+  final FocusNode _composerFocus = FocusNode();
+
+  /// Owns the paste-then-Enter rhythm of a sent message. See [Submitter].
+  final Submitter _submitter = Submitter();
+
+  /// The `/` and `@` menus, rebuilt for whatever pane is open.
+  ComposerMenuController? _menu;
+
+  /// Files attached to the message being written, already uploaded to the host.
+  List<UploadedAttachment> _composerFiles = const [];
+
+  /// True while an attachment is being picked or pushed.
+  bool _composerUploading = false;
+
+  /// Drafts by pane id: memory of what was written, not a queue.
+  ///
+  /// Switching panes replaces the session, and a message written for one agent
+  /// that silently reappears in another agent's composer is worse than losing it.
+  /// So the text waits here, per pane, and comes back when its pane does.
+  final Map<String, ({String text, List<UploadedAttachment> files})>
+  _drafts = {};
+
   /// The hidden field that owns the soft keyboard.
   ///
   /// Held explicitly rather than left to `autofocus` alone, because "put the
@@ -201,6 +247,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   void initState() {
     super.initState();
     unawaited(_open());
+    // The menus read the caret as well as the text, so every change to either
+    // has to reach them: tapping elsewhere in the line moves the query.
+    _draft.addListener(_onDraftChanged);
     // Start the workspace tree loading, without subscribing to it.
     //
     // The tree is a READY dependency of this screen — the overflow sheet needs
@@ -286,6 +335,14 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     if (!_sizeReady.isCompleted) _sizeReady.complete();
     _seedDeadline?.cancel();
     _inputFocus.dispose();
+    // The pending Enter is DROPPED rather than flushed: the session is closing
+    // under it, and a return sent into a pane nobody is watching submits
+    // whatever the desktop has since typed.
+    _submitter.dispose();
+    _draft.removeListener(_onDraftChanged);
+    _draft.dispose();
+    _composerFocus.dispose();
+    _menu?.dispose();
     _resizeDebounce?.cancel();
     _repaint.dispose();
     unawaited(_session?.close());
@@ -305,6 +362,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     // to a different agent's terminal, which is the most consequential thing a
     // tap does in this app.
     unawaited(HapticFeedback.mediumImpact());
+
+    // What was written belongs to the pane it was written for, and so does the
+    // list of that pane's skills: both are put away before anything moves.
+    _stashDraft();
+    _menu?.reset();
 
     // Read the field into a local BEFORE clearing it. `await _session?.close()`
     // after nulling `_session` reads the field again, sees null, and closes
@@ -334,6 +396,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       _paneRows = null;
       _topRow = 0;
     });
+    // The new pane brings back its own draft, and the menus are re-pointed at
+    // its directory: a list of the previous project's skills is the kind of
+    // wrong that looks right.
+    _restoreDraft();
+    _ensureComposerMenu();
     // The new pane has its own height and its own scroll position.
     _paneSized = false;
     unawaited(_seedFromTree());
@@ -354,7 +421,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// terminal is the one moment where "the keyboard follows you" stops being
   /// right.
   void _push(Widget page) {
+    // BOTH fields: whichever surface is live owns the keyboard, and a keyboard
+    // left up over the Git page is the bug this line has always been for.
     _inputFocus.unfocus();
+    _composerFocus.unfocus();
     Navigator.of(context).push(
       CupertinoPageRoute<void>(builder: (_) => page),
     );
@@ -508,6 +578,249 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     session.sendBytes(List<int>.filled(count, 0x7F));
   }
 
+  // ------------------------------------------------------- the chat window ---
+
+  /// The draft changed, or the caret moved — both are the menus' business.
+  ///
+  /// NOTHING IS SKIPPED WHEN NO MENU IS OPEN, and that is the whole subtlety: a
+  /// slash is what opens the menu, so a listener that only ran while one was
+  /// already open would never see the character that starts it. [sync] itself
+  /// does nothing when the token has not changed, which is the common case.
+  void _onDraftChanged() {
+    final menu = _menu;
+    if (menu == null) return;
+    final caret = _draft.selection.baseOffset;
+    menu.sync(
+      text: _draft.text,
+      caret: caret < 0 || caret > _draft.text.length ? _draft.text.length : caret,
+    );
+  }
+
+  /// Opens or closes the chat window.
+  void _toggleComposer() {
+    unawaited(HapticFeedback.selectionClick());
+    if (_composerOpen) {
+      _closeComposer();
+    } else {
+      _openComposer();
+    }
+  }
+
+  void _openComposer() {
+    _ensureComposerMenu();
+    // The direct surface gives the keyboard up: two live text-input clients on
+    // one screen is a keyboard with no way to say where a letter goes.
+    _inputFocus.unfocus();
+    setState(() => _composerOpen = true);
+    // After the frame, because the field does not exist until it is built — and
+    // through the same door the grid tap uses, because a field that already
+    // holds focus does NOT raise the keyboard when focus is asked for again:
+    // asking the text-input channel to show is the only thing that brings it
+    // back, and it is safe when it is already up.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _raiseKeyboard();
+    });
+  }
+
+  void _closeComposer() {
+    _stashDraft();
+    _menu?.close();
+    _composerFocus.unfocus();
+    setState(() => _composerOpen = false);
+  }
+
+  /// Remembers what is written under the pane it was written for.
+  void _stashDraft() {
+    _drafts[_paneId] = (text: _draft.text, files: _composerFiles);
+  }
+
+  /// Brings back the draft that belongs to the pane now on screen.
+  void _restoreDraft() {
+    final saved = _drafts[_paneId];
+    _draft.value = TextEditingValue(
+      text: saved?.text ?? '',
+      selection: TextSelection.collapsed(offset: saved?.text.length ?? 0),
+    );
+    _composerFiles = saved?.files ?? const [];
+  }
+
+  /// Builds the menus' controller around the pane that is open.
+  ///
+  /// The pane's directory and agent are what decide which skills, which MCP
+  /// servers and which files the menus are ABOUT, so they are read here rather
+  /// than deep inside: a menu that is about the previous pane's directory is the
+  /// kind of wrong that looks right.
+  void _ensureComposerMenu() {
+    final l10n = AppLocalizations.of(context);
+    final pane = ref.read(navTreeProvider).value?.paneById(_paneId);
+    _menu?.dispose();
+    _menu = ComposerMenuController(
+      l10n: l10n,
+      capabilities: ref.read(capabilityProvider),
+      fileIndex: ref.read(fileIndexProvider),
+      cwd: pane?.cwd,
+      agent: pane?.agent,
+    );
+
+    if (pane != null) return;
+    // The tree is usually already in memory (the page reads it to size the
+    // pane), and a first read after the fact would otherwise leave the menus
+    // permanently blind to a directory they could have had.
+    unawaited(
+      ref.read(navTreeProvider.future).then((tree) {
+        if (!mounted) return;
+        final late = tree.paneById(_paneId);
+        if (late == null) return;
+        _menu?.updateContext(cwd: late.cwd, agent: late.agent);
+      }).catchError((Object _) {
+        // A tree that cannot be read is not an error here: the menus fall back
+        // to the user-scoped entries, which is a real list.
+      }),
+    );
+  }
+
+  /// Puts a picked row into the field.
+  void _pickMenuRow(ComposerMenuRow row) {
+    final token = _menu?.token;
+    if (token == null) return;
+    final result = applyPick(text: _draft.text, token: token, pick: row.insert);
+    // A single assignment: the field's own listener sees the new text, finds no
+    // token (the pick ends it), and closes the menu through the ordinary path.
+    _draft.value = TextEditingValue(
+      text: result.text,
+      selection: TextSelection.collapsed(offset: result.caret),
+    );
+    _menu?.close();
+    _composerFocus.requestFocus();
+  }
+
+  /// The `…` button: opens the menu for whatever this pane can actually do.
+  ///
+  /// It types the trigger and lets the ordinary rules open the menu, rather than
+  /// opening a menu with no token behind it — one notion of "open", so the
+  /// query, the caret and the pick cannot disagree with each other.
+  ///
+  /// WHICH TRIGGER DEPENDS ON THE PANE, and that is the whole point of the
+  /// button being one button: an agent understands `/skill` and `@file`, so it
+  /// gets the skills; a plain shell understands neither, and its `/` is a path
+  /// separator — all it has use for is a path from the workspace.
+  void _openCommands() {
+    final menu = _menu;
+    if (menu == null) return;
+    final trigger = menu.hasAgent ? MenuTrigger.slash : MenuTrigger.at;
+    if (menu.token?.trigger == trigger) {
+      menu.close();
+      return;
+    }
+
+    final text = _draft.text;
+    final caret = _draft.selection.baseOffset;
+    final at = caret < 0 || caret > text.length ? text.length : caret;
+    // A trigger glued to a word is not a trigger (`hello/`), so it gets a space
+    // when it needs one — the same rule the field itself follows.
+    final separator = at == 0 || text[at - 1].trim().isEmpty ? '' : ' ';
+    final next = '${text.substring(0, at)}$separator'
+        '${trigger.char}${text.substring(at)}';
+    _draft.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: at + separator.length + 1),
+    );
+    _composerFocus.requestFocus();
+  }
+
+  /// Sends what has been written: one paste, then one Enter.
+  void _sendDraft() {
+    final session = _session;
+    if (session == null) return;
+    final submission = Submission(
+      text: _draft.text,
+      attachmentPaths: [for (final file in _composerFiles) file.remotePath],
+    );
+    if (submission.isEmpty) return;
+
+    _jumpToBottom();
+    unawaited(HapticFeedback.lightImpact());
+    _submitter.send(
+      submission,
+      // Read at send time, not when the composer opened: a TUI turning
+      // bracketed paste on is exactly the event that decides how it wants a
+      // multi-line message delivered.
+      bracketed: _terminal.bracketedPasteMode,
+      write: session.sendText,
+    );
+    setState(() {
+      _draft.clear();
+      _composerFiles = const [];
+      _menu?.close();
+      _drafts[_paneId] = (text: '', files: const []);
+    });
+  }
+
+  /// True when there is something to send and somewhere to send it.
+  bool get _canSend =>
+      _session != null && (_draft.text.trim().isNotEmpty || _composerFiles.isNotEmpty);
+
+  /// Puts a file on the machine for the message being written.
+  ///
+  /// The upload is the same one the paperclip in the toolbar does; what differs
+  /// is where the result goes. In the composer it becomes an ATTACHMENT of the
+  /// message rather than a typed sentence, so the user can still write the
+  /// sentence around it — which is the entire reason the composer exists.
+  Future<void> _attachToComposer(
+    RemoteUploader uploader,
+    _AttachSource source,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _composerUploading = true);
+    try {
+      final uploaded = switch (source) {
+        _AttachSource.clipboard => await _uploadClipboard(uploader),
+        _AttachSource.gallery ||
+        _AttachSource.camera => await _uploadPhoto(uploader, source),
+        _AttachSource.file => await _uploadPickedFile(uploader),
+      };
+      if (uploaded == null || !mounted) return; // cancelled
+      setState(() => _composerFiles = [..._composerFiles, uploaded]);
+    } on UploadException catch (e) {
+      if (mounted) showHerdrToast(context, _uploadMessage(e, l10n), isError: true);
+    } on PickException catch (e) {
+      if (mounted) showHerdrToast(context, _pickMessage(e, l10n), isError: true);
+    } on Object catch (e) {
+      if (mounted) showHerdrToast(context, '${l10n.attachFailed}: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _composerUploading = false);
+    }
+  }
+
+  /// A file out of this phone's own storage.
+  ///
+  /// THE ONLY ATTACHMENT THAT IS NOT ALREADY AN IMAGE OR TEXT. The system picker
+  /// hands back a copy in the app's cache (see `data/local/file_pick.dart`), and
+  /// from there it is an ordinary upload.
+  Future<UploadedAttachment?> _uploadPickedFile(RemoteUploader uploader) async {
+    final picked = await ref.read(phoneFilePickerProvider).pick(
+      // The cap is enforced while the picker's copy is being read, so a 4 GB
+      // video is refused without ever being materialised.
+      maxBytes: AttachmentLimits.other,
+    );
+    if (picked == null) return null;
+    final bytes = await File(picked.path).readAsBytes();
+    return await uploader.upload(
+      bytes: bytes,
+      kind: AttachmentKind.other,
+      originalName: picked.name,
+    );
+  }
+
+
+  String _pickMessage(PickException e, AppLocalizations l10n) => switch (e.reason) {
+    PickFailure.tooLarge => l10n.attachTooLarge,
+    PickFailure.unsupported => l10n.attachUnavailable,
+    PickFailure.busy || PickFailure.unreadable || PickFailure.unknown =>
+      '${l10n.attachFailed}: ${e.detail ?? e.reason.name}',
+  };
+
   /// Moves to the tab [delta] places away, wrapping at the ends.
   ///
   /// The decision of WHERE lives in the domain ([siblingTab]) so it can be
@@ -553,9 +866,12 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       builder: (context) => CupertinoActionSheet(
         title: Text(l10n.attachTitle),
         actions: [
+          // The phone's own storage first: it is the one source the remote file
+          // browser cannot offer, and the one people reach for when an agent is
+          // waiting for a document.
           CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, _AttachSource.clipboard),
-            child: actionSheetLabel(l10n.attachClipboard),
+            onPressed: () => Navigator.pop(context, _AttachSource.file),
+            child: actionSheetLabel(l10n.attachFile),
           ),
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(context, _AttachSource.gallery),
@@ -564,6 +880,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
           CupertinoActionSheetAction(
             onPressed: () => Navigator.pop(context, _AttachSource.camera),
             child: actionSheetLabel(l10n.attachCamera),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, _AttachSource.clipboard),
+            child: actionSheetLabel(l10n.attachClipboard),
           ),
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -574,12 +894,23 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     );
     if (source == null || !mounted) return;
 
+    // WHERE THE FILE GOES DEPENDS ON WHICH SURFACE IS LIVE, and that is a
+    // decision rather than a shortcut: with the chat window open the paperclip
+    // is attached to a message being written, and typing a sentence into the
+    // pane behind that message would put the path somewhere the user cannot see
+    // it — and cannot edit before sending.
+    if (_composerOpen) {
+      await _attachToComposer(uploader, source);
+      return;
+    }
+
     setState(() => _attaching = true);
     try {
       final uploaded = switch (source) {
         _AttachSource.clipboard => await _uploadClipboard(uploader),
         _AttachSource.gallery ||
         _AttachSource.camera => await _uploadPhoto(uploader, source),
+        _AttachSource.file => await _uploadPickedFile(uploader),
       };
       if (uploaded == null) return; // cancelled or nothing to send
       if (!mounted) return;
@@ -593,6 +924,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     } on UploadException catch (e) {
       if (!mounted) return;
       showHerdrToast(context, _uploadMessage(e, l10n), isError: true);
+    } on PickException catch (e) {
+      if (!mounted) return;
+      showHerdrToast(context, _pickMessage(e, l10n), isError: true);
     } on Object catch (e) {
       if (!mounted) return;
       showHerdrToast(context, '${l10n.attachFailed}: $e', isError: true);
@@ -891,6 +1225,12 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     final glass = ref.watch(settingsProvider.select((s) => s.glassEnabled));
     final iconSet = ref.watch(settingsProvider.select((s) => s.iconSet));
+    // The chat window can be turned off in Settings. Read here as well as in
+    // the key bar, because the two answers must agree: a strip that is on
+    // screen while its button is gone is a strip with no way to close it.
+    final composerEnabled = ref.watch(
+      settingsProvider.select((s) => s.composerEnabled),
+    );
 
     // Read HERE rather than inside `_buildSurface`: that one runs from a
     // `LayoutBuilder`, i.e. during layout, and a provider read outside the build
@@ -1024,19 +1364,60 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                   )
                 else
                   _keyBar(palette),
-                // The real input surface: invisible, one point tall, and the
-                // only thing that reliably raises the soft keyboard on both
-                // platforms. See [TerminalComposer] — it owns the input
-                // connection, and the sentinel that makes the delete key work
-                // even when nothing has been typed into this field.
-                TerminalComposer(
-                  focusNode: _inputFocus,
-                  onInsert: _onTyped,
-                  onDelete: _onBackspace,
-                  // Reuses the key bar's own Enter, so an armed Ctrl applies to
-                  // the keyboard's return exactly as it does to the bar's.
-                  onEnter: () => _onKeyTap(SoftKey.enter),
-                ),
+                // The candidates for whatever `/` or `@` token the caret is in.
+                // It takes LAYOUT space rather than covering the terminal, and
+                // that is affordable because the terminal is bottom-aligned:
+                // the rows it loses are the least interesting ones, and nothing
+                // the user typed is ever hidden behind a list.
+                // THE PANEL'S EXISTENCE IS THE CONTROLLER'S TO DECIDE, and it
+                // has to be this way round: `_menu.isOpen` changes when the
+                // caret moves, which does not rebuild the page. A plain `if`
+                // here meant the slash that SHOULD open the menu was the one
+                // thing that never did — the state changed, the screen did not.
+                if (_menu != null)
+                  ListenableBuilder(
+                    listenable: _menu!,
+                    builder: (context, _) => !_menu!.isOpen
+                        ? const SizedBox.shrink()
+                        : ComposerMenu(
+                          rows: _menu!.rows,
+                          // A read in flight has no message of its own: the
+                          // panel says what it is doing rather than reporting an
+                          // answer that has not arrived.
+                          message: _menu!.isLoading
+                              ? l10n.composerReading
+                              : _menu!.message,
+                          messageIsError: _menu!.isError,
+                          colors: colors,
+                          onPick: _pickMenuRow,
+                        ),
+                  ),
+                if (_composerOpen && composerEnabled)
+                  // The field owns the rebuild: every keystroke changes whether
+                  // there is anything to send, and rebuilding the whole terminal
+                  // page for that would repaint the grid on each character.
+                  ListenableBuilder(
+                    listenable: _draft,
+                    builder: (context, _) => _buildChatComposer(
+                      palette,
+                      colors,
+                      l10n,
+                    ),
+                  )
+                else
+                  // The real input surface for DIRECT mode: invisible, one point
+                  // tall, and the only thing that reliably raises the soft
+                  // keyboard on both platforms. See [TerminalComposer] — it owns
+                  // the input connection, and the sentinel that makes the delete
+                  // key work even when nothing has been typed into this field.
+                  TerminalComposer(
+                    focusNode: _inputFocus,
+                    onInsert: _onTyped,
+                    onDelete: _onBackspace,
+                    // Reuses the key bar's own Enter, so an armed Ctrl applies to
+                    // the keyboard's return exactly as it does to the bar's.
+                    onEnter: () => _onKeyTap(SoftKey.enter),
+                  ),
               ],
             ),
             // Everything the expanded key panel needs, drawn OVER the terminal
@@ -1105,6 +1486,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     unawaited(HapticFeedback.selectionClick());
     if (_keyboardVisible) {
       _inputFocus.unfocus();
+      _composerFocus.unfocus();
     } else {
       _raiseKeyboard();
     }
@@ -1129,7 +1511,12 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// then reads as broken. Asking the text-input channel to show is the only
   /// thing that brings it back, and it is safe when it is already up.
   void _raiseKeyboard() {
-    _inputFocus.requestFocus();
+    // WHICHEVER SURFACE IS LIVE OWNS THE KEYBOARD. A tap on the grid with the
+    // composer open means "let me keep writing", not "type into the pane behind
+    // the thing I am writing on" — and asking the invisible field for focus
+    // while the chat field holds it would put the IME on neither.
+    final node = _composerOpen ? _composerFocus : _inputFocus;
+    node.requestFocus();
     unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
   }
 
@@ -1255,9 +1642,51 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     }
   }
 
+  /// The chat window, wired to this page's draft and its machine.
+  Widget _buildChatComposer(
+    TerminalColors palette,
+    HerdrColors colors,
+    AppLocalizations l10n,
+  ) {
+    return ChatComposer(
+      controller: _draft,
+      focusNode: _composerFocus,
+      l10n: l10n,
+      palette: palette,
+      colors: colors,
+      canSend: _canSend,
+      uploading: _composerUploading,
+      // A composer with a dead send button and no explanation is the one state
+      // this screen must not have: the reason goes on the panel.
+      hint: _session == null ? l10n.composerNoSession : null,
+      attachments: [
+        for (final file in _composerFiles)
+          ComposerAttachment(name: file.fileName, path: file.remotePath),
+      ],
+      onRemoveAttachment: (index) => setState(() {
+        _composerFiles = [..._composerFiles]..removeAt(index);
+      }),
+      onSend: _sendDraft,
+      onAttach: () => unawaited(_attach()),
+      onCommands: _openCommands,
+      // One button, two names: it opens the agent's skills on a pane that has
+      // an agent, and the workspace's files on a pane that does not.
+      commandsLabel: (_menu?.hasAgent ?? false)
+          ? l10n.composerCommands
+          : l10n.composerSectionFiles,
+      onChanged: _onDraftChanged,
+    );
+  }
+
   Widget _keyBar(TerminalColors palette) {
     return _KeyBar(
       keys: ref.watch(settingsProvider.select((s) => s.keyBarKeys)),
+      // Read here rather than inside the bar: the bar is a view of the user's
+      // layout, and "is this feature on" is a different question from "which
+      // keys does this user want".
+      composerEnabled: ref.watch(
+        settingsProvider.select((s) => s.composerEnabled),
+      ),
       state: _keys,
       enabled: _session != null,
       palette: palette,
@@ -1273,6 +1702,8 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         setState(() => _fanOpen = !_fanOpen);
       },
       expanded: _fanOpen,
+      onComposer: _toggleComposer,
+      composerOpen: _composerOpen,
     );
   }
 
@@ -1711,6 +2142,9 @@ class _KeyBar extends StatelessWidget {
     required this.keyboardUp,
     required this.onExpand,
     required this.expanded,
+    required this.onComposer,
+    required this.composerOpen,
+    required this.composerEnabled,
   });
 
   /// Which keys to offer, in order. Comes from Settings.
@@ -1727,6 +2161,14 @@ class _KeyBar extends StatelessWidget {
   /// Opens the panel holding the rest of the catalogue.
   final VoidCallback onExpand;
   final bool expanded;
+
+  /// Opens and closes the chat window.
+  final VoidCallback onComposer;
+  final bool composerOpen;
+
+  /// Whether the chat window is offered at all. Off means the button is gone
+  /// rather than dead: see `SettingsState.composerEnabled`.
+  final bool composerEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1760,6 +2202,14 @@ class _KeyBar extends StatelessWidget {
               },
             ),
           ),
+          if (composerEnabled)
+            _BarButton(
+              palette: palette,
+              selected: composerOpen,
+              onTap: onComposer,
+              semanticsLabel: AppLocalizations.of(context).composerOpen,
+              icon: CupertinoIcons.chat_bubble,
+            ),
           _BarButton(
             palette: palette,
             selected: keyboardUp,
@@ -2242,4 +2692,4 @@ class _Overlay extends StatelessWidget {
 }
 
 /// Which door the attachment came in through.
-enum _AttachSource { clipboard, gallery, camera }
+enum _AttachSource { file, clipboard, gallery, camera }

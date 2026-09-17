@@ -1,24 +1,11 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:herdr_pocket/data/herdr_client.dart';
-import 'package:herdr_pocket/data/providers/connection.dart';
-import 'package:herdr_pocket/data/providers/hosts.dart';
-import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/domain/terminal/composer.dart';
-import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
-import 'package:herdr_pocket/ui/design/tokens.dart';
-import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
-import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The pane the page attaches to, as `pane.list` reports it.
-const String _paneId = 'w1:p1';
+import 'terminal_harness.dart';
 
 /// The terminal page against a scripted daemon.
 ///
@@ -47,50 +34,14 @@ void main() {
     prefs = await SharedPreferences.getInstance();
   });
 
-  Future<_FakeDaemon> pumpTerminal(
+  Future<FakeTerminalDaemon> pumpTerminal(
     WidgetTester tester, {
     int paneRows = 46,
-  }) async {
-    final daemon = _FakeDaemon(paneRows: paneRows);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sharedPreferencesProvider.overrideWithValue(prefs),
-          connectionProvider.overrideWith(
-            () => _FixedConnection(
-              Online(
-                client: HerdrClient(daemon),
-                hello: const HerdrHello(version: '0.9.0', protocol: 22),
-                socketPath: '/tmp/herdr.sock',
-              ),
-            ),
-          ),
-        ],
-        child: const HerdrTheme(
-          colors: HerdrColors.dark,
-          child: CupertinoApp(
-            localizationsDelegates: [
-              AppLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-            ],
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: Locale('en'),
-            home: TerminalPage(paneId: _paneId, title: 'agent'),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    return daemon;
-  }
+  }) => pumpTerminalPage(tester, prefs: prefs, paneRows: paneRows);
 
   /// Everything the app has sent on the terminal channel, decoded.
-  List<Map<String, Object?>> inputCommands(_FakeDaemon daemon) => daemon
-      .sentOnTerminal()
-      .map((line) => (jsonDecode(line) as Map).cast<String, Object?>())
-      .where((m) => m['type'] == 'terminal.input')
-      .toList();
+  List<Map<String, Object?>> inputCommands(FakeTerminalDaemon daemon) =>
+      daemon.inputCommands();
 
   /// Types on the phone's keyboard, the way the IME reports it.
   ///
@@ -224,16 +175,16 @@ void main() {
     // pane's last rows — the prompt, the composer — are under the key bar.
     await pumpTerminal(tester, paneRows: 46);
 
-    final painter = _surfacePainter(tester);
-    final boxRows = _boxRows(tester, painter);
+    final painter = surfacePainter(tester);
+    final visibleRows = boxRows(tester, painter);
     expect(
-      boxRows,
+      visibleRows,
       lessThan(46),
       reason: 'the test needs a box shorter than the pane',
     );
     expect(
       painter.topRow,
-      46 - boxRows,
+      46 - visibleRows,
       reason: "the frame's last row has to land on the box's last row",
     );
   });
@@ -263,7 +214,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    final painter = _surfacePainter(tester);
+    final painter = surfacePainter(tester);
     expect(
       painter.terminal.viewWidth,
       cols,
@@ -283,14 +234,14 @@ void main() {
     // keyboard must move the SLICE of the frame that is shown, and cost no
     // round trip to the machine.
     final daemon = await pumpTerminal(tester, paneRows: 46);
-    final before = _surfacePainter(tester).topRow;
+    final before = surfacePainter(tester).topRow;
 
     tester.view.viewInsets = const FakeViewPadding(bottom: 900);
     addTearDown(tester.view.reset);
     await tester.pumpAndSettle();
 
-    final painter = _surfacePainter(tester);
-    final boxRows = _boxRows(tester, painter);
+    final painter = surfacePainter(tester);
+    final visibleRows = boxRows(tester, painter);
 
     expect(
       painter.topRow,
@@ -298,7 +249,7 @@ void main() {
       reason: 'the visible window has to move down the pane',
     );
     expect(
-      painter.topRow + boxRows,
+      painter.topRow + visibleRows,
       46,
       reason: "the pane's last row stays on the box's last row, above the bar",
     );
@@ -308,122 +259,4 @@ void main() {
       reason: "the grid is the pane's, so a keyboard cannot resize it",
     );
   });
-}
-
-/// The painter of the terminal surface, and nothing else's.
-TerminalPainter _surfacePainter(WidgetTester tester) {
-  final surface = find.byWidgetPredicate(
-    (widget) => widget is CustomPaint && widget.painter is TerminalPainter,
-  );
-  return tester.widget<CustomPaint>(surface).painter! as TerminalPainter;
-}
-
-/// How many rows the surface can show at its current size.
-int _boxRows(WidgetTester tester, TerminalPainter painter) {
-  final surface = find.byWidgetPredicate(
-    (widget) => widget is CustomPaint && widget.painter is TerminalPainter,
-  );
-  return (tester.getSize(surface).height / painter.cellHeight).floor();
-}
-
-/// A daemon that answers the tree and holds one terminal channel open.
-class _FakeDaemon implements HerdrTransport, RemoteStreamRunner {
-  _FakeDaemon({required this.paneRows});
-
-  final int paneRows;
-
-  /// Every command a terminal session was opened with.
-  final List<String> openCommands = [];
-
-  final List<String> _written = [];
-  final _lines = StreamController<String>.broadcast();
-
-  /// Everything the app has written on the terminal channel.
-  List<String> sentOnTerminal() => List.unmodifiable(_written);
-
-  @override
-  Future<HerdrDuplex> openCommandDuplex(String command) async {
-    openCommands.add(command);
-    return _FakeDuplex(command, _lines.stream, _written);
-  }
-
-  /// Sends one rendered frame, the way the daemon does.
-  void emitFrame({
-    required String data,
-    int width = 65,
-    int height = 46,
-    bool full = true,
-  }) {
-    _lines.add(jsonEncode({
-      'type': 'terminal.frame',
-      'seq': ++_seq,
-      'encoding': 'ansi',
-      'full': full,
-      'width': width,
-      'height': height,
-      'bytes': base64.encode(utf8.encode(data)),
-    }));
-  }
-
-  int _seq = 0;
-
-  @override
-  Future<String> roundTrip(String requestLine) async {
-    final request = (jsonDecode(requestLine) as Map).cast<String, Object?>();
-    return switch (request['method']) {
-      'workspace.list' =>
-        '{"id":"x","result":{"type":"workspace_list","workspaces":['
-            '{"workspace_id":"w1","number":1,"label":"dev","focused":true,'
-            '"tab_count":1,"pane_count":1}]}}',
-      'tab.list' =>
-        '{"id":"x","result":{"type":"tab_list","tabs":['
-            '{"tab_id":"w1:t1","workspace_id":"w1","number":1,"label":"1",'
-            '"focused":true,"pane_count":1}]}}',
-      'pane.list' =>
-        '{"id":"x","result":{"type":"pane_list","panes":[{"pane_id":"$_paneId",'
-            '"workspace_id":"w1","tab_id":"w1:t1","focused":true,'
-            '"revision":1,"scroll":{"offset_from_bottom":0,'
-            '"max_offset_from_bottom":0,"viewport_rows":$paneRows}}]}}',
-      // Anything else is answered "unknown method" the way the daemon does,
-      // rather than by hanging: a page that waits forever in a test is a test
-      // that times out with no explanation.
-      _ => '{"id":"","error":{"code":"unknown_method","message":"n/a"}}',
-    };
-  }
-
-  @override
-  Future<HerdrDuplex> openDuplex(String openLine) =>
-      throw UnimplementedError();
-
-  @override
-  Future<void> close() async {}
-}
-
-class _FakeDuplex implements HerdrDuplex {
-  _FakeDuplex(this.command, this._incoming, this._outgoing);
-
-  final String command;
-  final Stream<String> _incoming;
-  final List<String> _outgoing;
-
-  @override
-  Stream<String> get lines => _incoming;
-
-  @override
-  void send(String line) => _outgoing.add(line);
-
-  @override
-  Future<void> get done => Completer<void>().future;
-
-  @override
-  Future<void> close() async {}
-}
-
-class _FixedConnection extends ConnectionNotifier {
-  _FixedConnection(this._status);
-
-  final ConnectionStatus _status;
-
-  @override
-  Future<ConnectionStatus> build() async => _status;
 }

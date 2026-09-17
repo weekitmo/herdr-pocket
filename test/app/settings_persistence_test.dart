@@ -100,5 +100,17 @@ void main() {
     // And this one is OFF on purpose: opening an app is not a request to make a
     // network connection.
     expect(settings.autoUpdateCheck, isFalse);
+    // The chat window is ON by default: it is the answer to the thing this app
+    // is for, and a feature nobody can find is a feature nobody has.
+    expect(settings.composerEnabled, isTrue);
+  });
+
+  test('turning the chat window off survives a relaunch', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final first = launch(await SharedPreferences.getInstance());
+    await first.read(settingsProvider.notifier).setComposerEnabled(enabled: false);
+
+    final second = launch(await SharedPreferences.getInstance()).read(settingsProvider);
+    expect(second.composerEnabled, isFalse);
   });
 }

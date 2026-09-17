@@ -103,6 +103,7 @@ class SettingsState {
     this.iconSet = AppIconSet.themed,
     this.safetyInset = SafetyInsetMode.auto,
     this.fileTransferEnabled = false,
+    this.composerEnabled = true,
     this.downloadDirUri,
     this.downloadDirLabel,
     this.autoUpdateCheck = false,
@@ -197,6 +198,16 @@ class SettingsState {
   /// preference turning into a crash or a silently missing button.
   final List<SoftKey> keyBarKeys;
 
+  /// Whether the terminal offers its chat window.
+  ///
+  /// ON by default, because it is the answer to the thing this app is for: a
+  /// message typed on a phone over a link that drops characters. Off is for
+  /// someone who wants the key bar and nothing else above it — the composer
+  /// takes a strip of a small screen, and that is a real cost on a 2018 phone.
+  /// Switching it off HIDES the button rather than disabling it: an affordance
+  /// that is permanently unavailable is a worse answer than one that is absent.
+  final bool composerEnabled;
+
   SettingsState copyWith({
     AppThemeMode? themeMode,
     String? languageCode,
@@ -216,6 +227,7 @@ class SettingsState {
     String? downloadDirLabel,
     bool clearDownloadDir = false,
     bool? autoUpdateCheck,
+    bool? composerEnabled,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -231,6 +243,7 @@ class SettingsState {
       iconSet: iconSet ?? this.iconSet,
       safetyInset: safetyInset ?? this.safetyInset,
       fileTransferEnabled: fileTransferEnabled ?? this.fileTransferEnabled,
+      composerEnabled: composerEnabled ?? this.composerEnabled,
       // Both or neither: a label without a URI names a folder the app cannot
       // write to, and a URI without a label is a row full of percent-escapes.
       downloadDirUri:
@@ -260,6 +273,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kIconSet = 'settings.iconSet';
   static const _kSafetyInset = 'settings.safetyInset';
   static const _kFileTransfer = 'settings.fileTransferEnabled';
+  static const _kComposer = 'settings.composerEnabled';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
   static const _kDownloadDirLabel = 'settings.downloadDirLabel';
   static const _kAutoUpdate = 'settings.autoUpdateCheck';
@@ -294,6 +308,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       iconSet: _iconSetFrom(prefs.getString(_kIconSet)),
       safetyInset: _safetyInsetFrom(prefs.getString(_kSafetyInset)),
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
+      composerEnabled: prefs.getBool(_kComposer) ?? true,
       downloadDirUri: prefs.getString(_kDownloadDirUri),
       downloadDirLabel: prefs.getString(_kDownloadDirLabel),
       autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? false,
@@ -362,6 +377,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
     state = state.copyWith(fileTransferEnabled: enabled);
     final prefs = _prefs;
     await prefs.setBool(_kFileTransfer, enabled);
+  }
+
+  Future<void> setComposerEnabled({required bool enabled}) async {
+    state = state.copyWith(composerEnabled: enabled);
+    await _prefs.setBool(_kComposer, enabled);
   }
 
   Future<void> setAutoUpdateCheck({required bool enabled}) async {

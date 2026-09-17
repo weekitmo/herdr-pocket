@@ -9,6 +9,7 @@ import android.net.ConnectivityManager
 import android.net.ProxyInfo
 import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -45,9 +46,16 @@ class MainActivity : FlutterActivity() {
         const val PROXY_CHANNEL = "dev.maddax.herdrpocket/system_proxy"
         const val UPDATE_CHANNEL = "dev.maddax.herdrpocket/app_update"
         const val PICK_DIRECTORY_REQUEST = 0x4844 // 'HD'
+        const val PICK_FILE_REQUEST = 0x4846 // 'HF'
 
         /** Log tag for everything this activity says. */
         const val TAG = "HerdrPocket"
+
+        /** Where a file picked from this phone waits to be uploaded. */
+        const val PICKED_DIR = "picked"
+
+        /** Read size for the picked-file copy. */
+        const val COPY_CHUNK = 64 * 1024
 
         /** Where downloaded APKs wait. Mirrors `res/xml/update_paths.xml`. */
         const val UPDATE_DIR = "updates"
@@ -58,6 +66,10 @@ class MainActivity : FlutterActivity() {
 
     /** The in-flight `pickDirectory` call, held until the picker returns. */
     private var pendingPick: MethodChannel.Result? = null
+
+    /** The in-flight `pickFile` call, and the size cap Dart asked for. */
+    private var pendingFilePick: MethodChannel.Result? = null
+    private var pendingFileMax: Int = 0
 
     /**
      * Open output streams, keyed by the session id handed to Dart.
@@ -132,6 +144,7 @@ class MainActivity : FlutterActivity() {
         try {
             when (call.method) {
                 "pickDirectory" -> pickDirectory(result)
+                "pickFile" -> pickFile(call.argument<Int>("maxBytes") ?: 0, result)
                 "checkAccess" -> result.success(hasAccess(call.argument<String>("uri")))
                 "openWrite" -> result.success(openWrite(call, result))
                 "writeChunk" -> writeChunk(call, result)
@@ -172,6 +185,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_FILE_REQUEST) {
+            finishPickFile(resultCode, data)
+            return
+        }
         if (requestCode != PICK_DIRECTORY_REQUEST) return
 
         val result = pendingPick ?: return
@@ -201,8 +218,131 @@ class MainActivity : FlutterActivity() {
         result.success(mapOf("uri" to uri.toString(), "label" to labelOf(uri)))
     }
 
-    /** Whether a previously granted tree is still writable by this app. */
-    private fun hasAccess(uriString: String?): Boolean {
+    // ------------------------------------------------------- picking a file ---
+    //
+    // The composer's `+` needs a file from THIS PHONE, which is a different
+    // question from the download directory: nothing is persisted, and the answer
+    // is bytes rather than a grant. So this one copies the picked document into
+    // the app's cache and hands back a real path, which keeps the whole read
+    // protocol out of the MethodChannel — no openRead/readChunk/closeRead to get
+    // wrong, and Dart can use `File` like it would for any other local file.
+    //
+    // The copy is BOUNDED and it happens OFF the main thread: a document picker
+    // will happily return a 4 GB video, and a phone that freezes while copying
+    // one into its own cache is a worse outcome than a refusal.
+
+    private fun pickFile(maxBytes: Int, result: MethodChannel.Result) {
+        if (pendingFilePick != null) {
+            result.error("busy", "a file picker is already open", null)
+            return
+        }
+        pendingFilePick = result
+        pendingFileMax = maxBytes
+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            // Everything, and the size limit is enforced while reading rather
+            // than by narrowing the picker: a picker that greys out the file the
+            // user means is a worse explanation than "that one is too big".
+            type = "*/*"
+        }
+        startActivityForResult(intent, PICK_FILE_REQUEST)
+    }
+
+    private fun finishPickFile(resultCode: Int, data: Intent?) {
+        val result = pendingFilePick ?: return
+        pendingFilePick = null
+
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+            // A cancellation is an answer, not a failure: the composer stays as
+            // it was and puts up no error.
+            result.success(null)
+            return
+        }
+
+        val max = pendingFileMax
+        Thread {
+            val answer = runCatching { copyPickedFile(uri, max) }
+            // `Result` must be answered on the thread the channel was created on.
+            runOnUiThread {
+                answer.fold(
+                    onSuccess = { result.success(it) },
+                    onFailure = { failure ->
+                        val code = if (failure is PickedFileTooLarge) "too_large" else "pick"
+                        result.error(code, failure.message ?: "", null)
+                    },
+                )
+            }
+        }.start()
+    }
+
+    /** Raised when the picked document is past the cap Dart asked for. */
+    private class PickedFileTooLarge : Exception("the file is larger than the limit")
+
+    /**
+     * Copies the picked document into the cache and reports where it landed.
+     *
+     * The cache rather than `filesDir`, because the file is a one-shot: it is
+     * uploaded and then worthless, and the system is welcome to reclaim it. The
+     * name is derived from the document id, so picking the same file twice
+     * REPLACES it instead of growing the cache by a screenshot each time.
+     */
+    private fun copyPickedFile(uri: Uri, maxBytes: Int): Map<String, Any?> {
+        val displayName = displayNameOf(uri)
+        val directory = File(cacheDir, PICKED_DIR).apply { mkdirs() }
+        val target = File(directory, "${uri.toString().hashCode().toUInt()}-${safeName(displayName)}")
+
+        val input = contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("the picker returned an unreadable file")
+        var total = 0L
+        input.use { source ->
+            target.outputStream().use { sink ->
+                val buffer = ByteArray(COPY_CHUNK)
+                while (true) {
+                    val read = source.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                    if (maxBytes > 0 && total > maxBytes) throw PickedFileTooLarge()
+                    sink.write(buffer, 0, read)
+                }
+            }
+        }
+
+        return mapOf(
+            "path" to target.absolutePath,
+            "name" to displayName,
+            "size" to total,
+        )
+    }
+
+    /** The file's own name, or the URI's tail when the provider will not say. */
+    private fun displayNameOf(uri: Uri): String {
+        val cursor = runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        }.getOrNull()
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val name = it.getString(0)
+                if (!name.isNullOrBlank()) return name
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+    }
+
+    /**
+     * A name the filesystem will accept.
+     *
+     * A display name is whatever the provider says it is — it can carry a slash,
+     * a newline or a NUL — and it is about to become a path component.
+     */
+    private fun safeName(name: String): String {
+        val cleaned = name.replace(Regex("[^A-Za-z0-9._-]"), "_").trim('.')
+        if (cleaned.isEmpty()) return "file"
+        return if (cleaned.length <= 80) cleaned else cleaned.takeLast(80)
+    }
+
+    /** Whether a previously granted tree is still writable by this app. */    private fun hasAccess(uriString: String?): Boolean {
         if (uriString == null) return false
         val uri = Uri.parse(uriString)
         return contentResolver.persistedUriPermissions.any {

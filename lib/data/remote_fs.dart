@@ -554,6 +554,50 @@ String quoteRemotePath(String path) {
   return "'${path.replaceAll("'", r"'\''")}'";
 }
 
+/// Single-quotes a whole SCRIPT for the shell sshd hands it to.
+///
+/// WHY THIS IS NOT [quoteRemotePath]. That one refuses newlines, because the
+/// commands it quotes are read back out of a framed record and a newline can be
+/// mistaken for the end of one. A multi-line script is not read that way — it is
+/// WRITTEN in newlines — and single-quoting is exact for every byte a script can
+/// contain, so the only thing refused here is the one byte a shell cannot carry
+/// at all.
+String quoteRemoteScript(String script) {
+  if (script.isEmpty) {
+    throw ArgumentError.value(script, 'must not be empty');
+  }
+  if (script.contains('\u0000')) {
+    throw ArgumentError.value(script, 'must not contain a NUL byte');
+  }
+  return "'${script.replaceAll("'", r"'\''")}'";
+}
+
+/// Wraps [script] so it runs under a POSIX shell, whatever the login shell is.
+///
+/// ## The bug this exists for (found on a real phone, 2026-09-17)
+///
+/// An SSH `exec` request is not run by `sh` — it is run by the user's LOGIN
+/// SHELL. On this project's own machine that is **zsh**, and zsh's default
+/// `nomatch` option turns an unmatched glob into a fatal error that **aborts
+/// the rest of the command**:
+///
+/// ```text
+/// % zsh -c 'echo start; for f in /nope/*/SKILL.md; do :; done; echo end'
+/// start
+/// zsh:1: no matches found: /nope/*/SKILL.md        ← `end` never runs
+/// ```
+///
+/// Every command in this app until now was glob-free, so nothing noticed. The
+/// skills probe is not: it globs two dozen directories that mostly do not
+/// exist, and under zsh it died on the first one — taking the trailing sentinel
+/// with it, so the app could only report "the remote shell did not finish".
+///
+/// Handing the script to `/bin/sh` explicitly removes the question. `/bin/sh`
+/// is the one path POSIX requires, so it does not depend on the login shell's
+/// PATH either.
+String posixShellCommand(String script) =>
+    '/bin/sh -c ${quoteRemoteScript(script)}';
+
 /// Whether a byte sample is not text.
 ///
 /// Two signals, either sufficient.

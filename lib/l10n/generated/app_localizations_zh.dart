@@ -522,6 +522,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsKeys => '快捷按键';
 
   @override
+  String get settingsComposer => '终端聊天窗';
+
+  @override
+  String get settingsComposerNote => '在终端底部显示聊天窗。';
+
+  @override
   String settingsKeysCount(int count) {
     return '$count 个按键';
   }
@@ -725,6 +731,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachClipboard => '把剪贴板文字存成文件';
 
   @override
+  String get attachFile => '从手机选文件';
+
+  @override
   String get attachGallery => '从相册选图';
 
   @override
@@ -816,6 +825,56 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get terminalAllKeys => '全部按键';
+
+  @override
+  String get composerOpen => '聊天窗';
+
+  @override
+  String get composerPlaceholder => '请输入';
+
+  @override
+  String get composerSend => '发送';
+
+  @override
+  String get composerAttach => '上传手机上的图片或文件';
+
+  @override
+  String get composerCommands => '技能与 MCP';
+
+  @override
+  String get composerSectionSkills => '技能';
+
+  @override
+  String get composerSectionMcp => 'MCP';
+
+  @override
+  String get composerSectionFiles => '文件';
+
+  @override
+  String get composerReading => '正在读取远端…';
+
+  @override
+  String get composerNothingFound => '这台机器上没有找到 skills 或 MCP。';
+
+  @override
+  String get composerEmptyDir => '这个目录里没有可引用的文件。';
+
+  @override
+  String get composerNoMatch => '没有匹配的项。';
+
+  @override
+  String get composerNoSession => '终端未连接，先重连再发。';
+
+  @override
+  String composerRemoveAttachment(String name) {
+    return '移除附件 $name';
+  }
+
+  @override
+  String get composerUnreadable => '读取失败：';
+
+  @override
+  String get composerUnavailable => '这条连接读不了远端文件。';
 
   @override
   String get morePaneUnknown => '还没读到这个窗格的信息。';

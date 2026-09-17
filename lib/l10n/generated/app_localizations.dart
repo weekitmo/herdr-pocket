@@ -1076,6 +1076,18 @@ abstract class AppLocalizations {
   /// **'Key bar'**
   String get settingsKeys;
 
+  /// No description provided for @settingsComposer.
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal composer'**
+  String get settingsComposer;
+
+  /// No description provided for @settingsComposerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the composer at the bottom of the terminal.'**
+  String get settingsComposerNote;
+
   /// No description provided for @settingsKeysCount.
   ///
   /// In en, this message translates to:
@@ -1466,6 +1478,12 @@ abstract class AppLocalizations {
   /// **'Clipboard text as a file'**
   String get attachClipboard;
 
+  /// No description provided for @attachFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a file on this phone'**
+  String get attachFile;
+
   /// No description provided for @attachGallery.
   ///
   /// In en, this message translates to:
@@ -1645,6 +1663,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All keys'**
   String get terminalAllKeys;
+
+  /// No description provided for @composerOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Composer'**
+  String get composerOpen;
+
+  /// No description provided for @composerPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Type here'**
+  String get composerPlaceholder;
+
+  /// No description provided for @composerSend.
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get composerSend;
+
+  /// No description provided for @composerAttach.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload a picture or file from this phone'**
+  String get composerAttach;
+
+  /// No description provided for @composerCommands.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills and MCP'**
+  String get composerCommands;
+
+  /// No description provided for @composerSectionSkills.
+  ///
+  /// In en, this message translates to:
+  /// **'skills'**
+  String get composerSectionSkills;
+
+  /// No description provided for @composerSectionMcp.
+  ///
+  /// In en, this message translates to:
+  /// **'MCP'**
+  String get composerSectionMcp;
+
+  /// No description provided for @composerSectionFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'files'**
+  String get composerSectionFiles;
+
+  /// No description provided for @composerReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the machine…'**
+  String get composerReading;
+
+  /// No description provided for @composerNothingFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No skills or MCP servers found on this machine.'**
+  String get composerNothingFound;
+
+  /// No description provided for @composerEmptyDir.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in this directory to reference.'**
+  String get composerEmptyDir;
+
+  /// No description provided for @composerNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matches.'**
+  String get composerNoMatch;
+
+  /// No description provided for @composerNoSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected — send once the terminal is back.'**
+  String get composerNoSession;
+
+  /// No description provided for @composerRemoveAttachment.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove attachment {name}'**
+  String composerRemoveAttachment(String name);
+
+  /// No description provided for @composerUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read it:'**
+  String get composerUnreadable;
+
+  /// No description provided for @composerUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This connection cannot read the remote machine.'**
+  String get composerUnavailable;
 
   /// No description provided for @morePaneUnknown.
   ///

@@ -245,6 +245,17 @@ class SettingsPage extends ConsumerWidget {
                 // against (it is the same mistake the first version of this
                 // screen made with "Text size" over "Text size").
                 rows: [
+                  // The chat window belongs with the key bar rather than in a
+                  // group of its own: they are the two halves of one question —
+                  // what the strip above the keyboard is made of — and a turn
+                  // that arrives here is a turn about typing.
+                  SettingsSwitchRow(
+                    label: l10n.settingsComposer,
+                    note: l10n.settingsComposerNote,
+                    value: settings.composerEnabled,
+                    onChanged: (v) =>
+                        notifier.setComposerEnabled(enabled: v),
+                  ),
                   _Disclosure(
                     label: l10n.settingsKeys,
                     colors: colors,

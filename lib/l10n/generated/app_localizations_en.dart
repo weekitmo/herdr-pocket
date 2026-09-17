@@ -539,6 +539,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsKeys => 'Key bar';
 
   @override
+  String get settingsComposer => 'Terminal composer';
+
+  @override
+  String get settingsComposerNote =>
+      'Show the composer at the bottom of the terminal.';
+
+  @override
   String settingsKeysCount(int count) {
     return '$count keys';
   }
@@ -760,6 +767,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachClipboard => 'Clipboard text as a file';
 
   @override
+  String get attachFile => 'Pick a file on this phone';
+
+  @override
   String get attachGallery => 'Pick a photo';
 
   @override
@@ -855,6 +865,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get terminalAllKeys => 'All keys';
+
+  @override
+  String get composerOpen => 'Composer';
+
+  @override
+  String get composerPlaceholder => 'Type here';
+
+  @override
+  String get composerSend => 'Send';
+
+  @override
+  String get composerAttach => 'Upload a picture or file from this phone';
+
+  @override
+  String get composerCommands => 'Skills and MCP';
+
+  @override
+  String get composerSectionSkills => 'skills';
+
+  @override
+  String get composerSectionMcp => 'MCP';
+
+  @override
+  String get composerSectionFiles => 'files';
+
+  @override
+  String get composerReading => 'Reading the machine…';
+
+  @override
+  String get composerNothingFound =>
+      'No skills or MCP servers found on this machine.';
+
+  @override
+  String get composerEmptyDir => 'Nothing in this directory to reference.';
+
+  @override
+  String get composerNoMatch => 'Nothing matches.';
+
+  @override
+  String get composerNoSession =>
+      'Not connected — send once the terminal is back.';
+
+  @override
+  String composerRemoveAttachment(String name) {
+    return 'Remove attachment $name';
+  }
+
+  @override
+  String get composerUnreadable => 'Could not read it:';
+
+  @override
+  String get composerUnavailable =>
+      'This connection cannot read the remote machine.';
 
   @override
   String get morePaneUnknown => 'This pane\'s details have not arrived yet.';
