@@ -1397,5 +1397,5 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellCommandFooter =>
-      'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback. On a machine without tmux it reports command not found — leave the field blank there and you get a plain login shell.';
+      'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback.\n\n⚠️ This command runs in a NON-LOGIN shell, whose PATH is narrower than the one you use interactively — /opt/homebrew/bin on macOS and ~/.local/bin on Linux are usually missing, so tmux exits with code 127 (command not found). Give the full path for anything installed outside the default location. Leave the field blank for a login shell, which has the PATH you expect.';
 }

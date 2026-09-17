@@ -166,9 +166,17 @@ class SshShellTransport implements RemoteShellRunner {
       );
     } on Object catch (e) {
       await client.close();
+      // THE REASON GOES IN THE MESSAGE. This catch is the channel-opening step
+      // only (the dial is outside the try, so its tagged failures pass through
+      // untouched), and wrapping it as "could not open a shell" without saying
+      // WHY leaves the user with no next step: "the server refused a pty" and
+      // "the command could not be started" are different problems with
+      // different fixes, and a real device proved it — the first version of
+      // this sentence was all the phone showed, and it was not enough to tell
+      // any of them apart.
       throw HerdrTransportException(
         TransportFailure.unknown,
-        'could not open a shell on ${credentials.host}',
+        'the server refused a shell on ${credentials.host}: $e',
         cause: e,
       );
     }
@@ -195,6 +203,22 @@ class PtySession implements RemoteShellSession {
     required this.dispose,
   }) : _waitForExit = exitStatus {
     _sub = stream
+        // `cast` IS NOT DECORATION, AND REMOVING IT BREAKS THE APP ON A REAL
+        // DEVICE while every test stays green.
+        //
+        // `Stream.transform` checks its transformer against the stream's
+        // REIFIED type argument. dartssh2 hands us a `Stream<Uint8List>`, so the
+        // transformer must be a `StreamTransformer<Uint8List, _>` — and
+        // `Utf8Decoder` is a `StreamTransformer<List<int>, String>`, which is
+        // not one. Declaring the parameter as `Stream<List<int>>` only silences
+        // the analyser: at runtime the receiver is still `Stream<Uint8List>` and
+        // `transform` throws
+        // `type 'Utf8Decoder' is not a subtype of type 'StreamTransformer<Uint8List, String>'`.
+        //
+        // `cast<List<int>>()` re-labels the receiver, so the transformer
+        // matches. The regression test feeds a `StreamController<Uint8List>`,
+        // because a fake that widens the type is a fake that hides this.
+        .cast<List<int>>()
         // A STREAMING decode, and the whole reason [output] is text.
         //
         // `utf8.decoder` is a `StreamTransformer`: it holds the tail of an

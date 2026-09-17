@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/data/transport/shell_transport.dart';
@@ -35,6 +36,34 @@ void main() {
       await pumpEventQueue();
       expect(seen.join(), '汉');
       expect(seen.join(), isNot(contains('\uFFFD')));
+    });
+
+    test('a Uint8List stream is decoded, not rejected', () async {
+      // THE SHAPE dartssh2 ACTUALLY HANDS US, and the one that shipped a broken
+      // app: the transport passes `SSHSession.stdout`, which is a
+      // `Stream<Uint8List>`. A fake that widens it to `Stream<List<int>>` hides
+      // the failure, because `Stream.transform` checks its transformer against
+      // the reified type argument — so `Utf8Decoder`, a
+      // `StreamTransformer<List<int>, String>`, is rejected at runtime with
+      // "not a subtype of StreamTransformer<Uint8List, String>" while the
+      // analyser and every other test stay green.
+      final bytes = StreamController<Uint8List>();
+      final seen = <String>[];
+      final session = PtySession(
+        stream: bytes.stream,
+        write: (_) {},
+        resizePty: (_, _) {},
+        exitStatus: () async => null,
+        dispose: () {},
+      );
+      session.output.listen(seen.add);
+
+      bytes.add(Uint8List.fromList(utf8.encode('hello 汉')));
+      await pumpEventQueue();
+
+      expect(seen.join(), 'hello 汉');
+      await bytes.close();
+      await session.close();
     });
 
     test('an emoji split across chunks survives too', () async {

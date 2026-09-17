@@ -11,6 +11,7 @@ import 'package:herdr_pocket/data/transport/shell_transport.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/shell/shell_page.dart';
+import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The SSH terminal page, driven through a scripted session.
@@ -228,6 +229,30 @@ void main() {
     expect(runner.opened, hasLength(2), reason: 'the button opens a new one');
   });
 
+  testWidgets('a session that ends leaves its output on screen', (tester) async {
+    final runner = _FakeRunner();
+    await pumpShell(tester, runner);
+    final session = runner.sessions.single;
+
+    session.emit('zsh: command not found: tmux\r\n');
+    await flush(tester);
+    await session.end();
+    await flush(tester);
+
+    expect(find.text('The session ended'), findsOneWidget);
+
+    // THE OUTPUT IS STILL THERE. The first version replaced the whole surface
+    // with a panel on exit, which threw away the only line that says what went
+    // wrong — a real device showed "exited with code 127" over a blank screen
+    // and the sentence the user needed was `command not found: tmux`.
+    final painter = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .map((w) => w.painter)
+        .whereType<TerminalPainter>()
+        .first;
+    expect(painter.terminal.buffer.getText(), contains('command not found'));
+  });
+
   testWidgets('a session that exits without a code says that instead of zero', (
     tester,
   ) async {
@@ -284,6 +309,9 @@ class _FakeSession implements RemoteShellSession {
     closed = true;
     if (!_output.isClosed) await _output.close();
   }
+
+  /// Something the remote process printed.
+  void emit(String text) => _output.add(text);
 
   /// The remote process finished.
   Future<void> end() async {

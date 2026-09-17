@@ -273,16 +273,19 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   }
 
   Future<void> _copySelection() async {
-    // Nothing to select from yet: the shell page has no selection gesture in
-    // this version, so copy takes the live screen's text. Honest and useful —
-    // and the alternative (a copy button that does nothing) is worse.
-    final buffer = _terminal.buffer;
-    final lines = <String>[];
-    final from = math.max(0, buffer.lines.length - _rows);
-    for (var i = from; i < buffer.lines.length; i++) {
-      lines.add(buffer.lines[i].toString());
-    }
-    await Clipboard.setData(ClipboardData(text: lines.join('\n').trimRight()));
+    // NOT a selection yet: this page has no selection gesture in this version,
+    // so Copy takes the visible screen — which is what `Buffer.getText()` does
+    // with no argument, its default range being `(0,0)` to
+    // `(viewWidth-1, height-1)`.
+    //
+    // THE FIRST VERSION OF THIS BUILT THE TEXT BY HAND, one
+    // `buffer.lines[i].toString()` per row, and copied the literal string
+    // "Instance of 'BufferLine'" once per line of the screen: `BufferLine`
+    // overrides no `toString`. Nothing about it looks wrong in review — the
+    // loop reads exactly like the one in the painter, which walks cells.
+    final text = _terminal.buffer.getText().trimRight();
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
   }
 
   Future<void> _paste() async {
@@ -350,7 +353,19 @@ class _ShellPageState extends ConsumerState<ShellPage> {
               // keyboard's return exactly as it does to the bar's.
               onEnter: () => _onKeyTap(SoftKey.enter),
             ),
-          if (!_ended) _keyBar(palette),
+          // The strip goes away with the session — typing into a dead pty is
+          // worse than no keyboard — and the banner takes its place, so the
+          // layout does not jump and the exit status sits where the eye already
+          // is.
+          if (_ended)
+            _EndBanner(
+              palette: palette,
+              l10n: l10n,
+              exitCode: _exitCode,
+              onReopen: () => unawaited(_reopen()),
+            )
+          else
+            _keyBar(palette),
         ],
       ),
     );
@@ -420,14 +435,18 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       if (mounted) _applySize(cols, rows);
     });
 
-    if (_opening || _error != null || _ended) {
+    // ONLY when there is nothing to show. A session that ENDED still has a
+    // screenful of output, and that output is usually the entire explanation —
+    // `command not found: tmux` is the line that says what went wrong. Covering
+    // it with a full-screen panel is how a terminal throws away the one thing
+    // the user needed to read. The ended case gets a banner instead, over the
+    // live screen.
+    if (_opening || _error != null) {
       return _ShellOverlay(
         palette: palette,
         l10n: l10n,
         opening: _opening,
         error: _error,
-        ended: _ended,
-        exitCode: _exitCode,
         onReopen: () => unawaited(_reopen()),
       );
     }
@@ -535,8 +554,6 @@ class _ShellOverlay extends StatelessWidget {
     required this.l10n,
     required this.opening,
     required this.error,
-    required this.ended,
-    required this.exitCode,
     required this.onReopen,
   });
 
@@ -544,8 +561,6 @@ class _ShellOverlay extends StatelessWidget {
   final AppLocalizations l10n;
   final bool opening;
   final Object? error;
-  final bool ended;
-  final int? exitCode;
   final VoidCallback onReopen;
 
   @override
@@ -608,13 +623,6 @@ class _ShellOverlay extends StatelessWidget {
 
   (String, String) _describe() {
     if (opening) return (l10n.shellConnecting, l10n.shellConnectingBody);
-    if (ended) {
-      final code = exitCode;
-      return (
-        l10n.shellEnded,
-        code == null ? l10n.shellExitUnknown : l10n.shellExitCode(code),
-      );
-    }
     // The message, not the exception's toString: a remote "command not found"
     // is the single most likely failure here (a configured `tmux` on a machine
     // without it), and the sentence the user needs is the one the far side
@@ -622,6 +630,96 @@ class _ShellOverlay extends StatelessWidget {
     final e = error;
     final detail = e is HerdrTransportException ? e.message : '$e';
     return (l10n.shellFailed, detail);
+  }
+}
+
+
+/// The strip that appears where the key bar was when the session ends.
+///
+/// A BANNER RATHER THAN A SCREEN: the terminal above it is the explanation, and
+/// the exit status is the headline. It sits in the key bar's place so the
+/// layout does not jump at the exact moment the user is reading the last lines
+/// of output.
+class _EndBanner extends StatelessWidget {
+  const _EndBanner({
+    required this.palette,
+    required this.l10n,
+    required this.exitCode,
+    required this.onReopen,
+  });
+
+  final TerminalColors palette;
+  final AppLocalizations l10n;
+  final int? exitCode;
+  final VoidCallback onReopen;
+
+  @override
+  Widget build(BuildContext context) {
+    final code = exitCode;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.background,
+        border: Border(
+          top: BorderSide(color: palette.foreground.withValues(alpha: 0.18)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Space.lg,
+            Space.sm,
+            Space.sm,
+            Space.sm,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.shellEnded,
+                      style: TextStyle(
+                        color: palette.foreground,
+                        fontSize: TextSize.note,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      code == null
+                          ? l10n.shellExitUnknown
+                          : l10n.shellExitCode(code),
+                      style: TextStyle(
+                        color: palette.foreground.withValues(alpha: 0.7),
+                        fontSize: TextSize.meta,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Space.md,
+                  vertical: Space.xs,
+                ),
+                color: palette.foreground.withValues(alpha: 0.12),
+                onPressed: onReopen,
+                child: Text(
+                  l10n.shellReopen,
+                  style: TextStyle(
+                    color: palette.foreground,
+                    fontSize: TextSize.strong,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
