@@ -8,9 +8,140 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.3.0](#v030) | 2026-09-17 | 没有 herdr 的机器也能开终端；终端里可以整段说话，而且 `/` 和 `@` 菜单还在 |
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v030"></a>
+## [0.3.0] — 2026-09-17
+
+### 中文
+
+**新增**
+
+- **一条不走 herdr 的终端**：看板右下角的按钮 → 选一台机器 → 一个真正的 PTY。
+  默认命令是 `tmux new -A -s herdr-pocket`（有 tmux 就接上去、没有就退化成登录 shell），
+  命令自带 PATH 前缀，因为 `ssh host <cmd>` 跑的是非登录 shell。
+  会话结束时退出码显示在横幅上，而不是盖掉整屏输出；回滚缓冲在本地，断线了也能往回读。
+  跑什么命令、留多少行回滚，都是设置项。
+- **聊天窗**：在手机上敲一整条消息，一次写出去 —— 一次 bracketed paste，隔 120 ms 再单独发一个
+  Enter（好几个 TUI 会把紧跟粘贴尾巴的 CR 当成粘贴的一部分，于是消息躺在输入框里不发出）。
+  `/` 菜单列这台机器的 skills 与 MCP，`@` 菜单列窗格目录下的文件：这两个菜单必须自带，
+  因为 TUI 是靠**逐键**弹菜单的，一整段粘贴它一个按键都看不到。`+` 走手机自己的文件选择器。
+- **工作区分组的身份色**：编号徽章的颜色是 workspace number 的纯函数，等相对亮度，
+  相邻 ΔE ≥ 14.7，且离四种状态色足够远 —— `test/ui/workspace_palette_test.dart`
+  从常量重算这三个数，改错颜色是构建失败，而不是等用户发现。
+- **`tool/probe_release.dart`**：拿 GitHub 上**真的** payload 跑一遍发布挑选逻辑
+  （`parseReleases` / `pickAppRelease` / `pickApkAsset` / `parseChecksums`）；`--download`
+  还会沿手机走的那条 302 路径把资源抓下来，对着 release 自己的 `checksums.txt` 校验。
+
+**改动**
+
+- **液态玻璃与自动检查更新改为默认打开**（用户决策）。磁盘上存着的 `false` 依然优先 ——
+  默认值的改动不该推翻有人专门关过的东西，2018 年的机器仍然可以在设置里关掉。
+
+**修复**
+
+- **删光机器之后还在「正在重试 2/3」**：被取代的那一轮拨号会继续写 `state`。现在每轮开工前
+  重读「我要连的机器还在不在」，并且每一次写都过 generation 检查 —— 包括最后那次失败。
+- **终端回滚条谎报历史**：本地计数器加的是「我请求了多少」，而 daemon 会拒绝、或在 max 处夹紧，
+  且被夹紧的那一次不发事件。现在以 daemon 为准（`pane.scroll_changed` 按 pane 订阅），
+  本地镜像只负责跟手，没有历史的 pane 不发请求，到顶了就说「已经到最旧」。
+- **shell 页在真机上打不开 pty**：`Stream<List<int>>` 和 dartssh2 实际给的
+  `Stream<Uint8List>` 在运行时对不上 —— 单元测试喂的是宽的那个，所以全绿。
+- **退出码把终端内容盖掉了**：改成横幅，占按键条的位置，输出留在屏幕上；
+  那句 `command not found: tmux` 才是用户真正需要的解释。
+- **复制出来的是 `Instance of 'BufferLine'`**：改用 `Buffer.getText()`。
+- **键盘弹出时那次 resize 被静默丢掉**：会话还没建立就去抖到期，守卫把它扔了，远端于是永远
+  停在 66 行 —— tmux 把状态栏画在可见区之外，而且只重画变化过的行，所以永不出现。
+  现在拨号返回后会对一次账。
+- **设置页被长文本撑爆 547 像素**，以及值贴着标签（`expandTrailing` 用错了地方）。
+  值现在是一个短语，真正的命令在它后面那一页。
+- **聊天窗的三个静默失败**：监听器在菜单没开时短路（于是打开菜单的那个 `/` 恰恰是它唯一
+  没看见的键）；回复的分隔符只在「还没打开任何文件」时检查（于是第二个配置文件被并进第一个，
+  每台机器的 MCP 都是空的）；zsh 在 glob 不匹配时中止整个探测脚本（现在跑在 `/bin/sh -c` 里）。
+
+**其他**
+
+- 设置页每个页面只留一行脚注。
+- 按键条抽成 `key_strip.dart`，两个终端页面共用；终端基准字号挪到渲染层。
+- README 缩短，架构与实现细节移进 `docs/TECHNICAL.md`。
+- `sh tool/ci_tests.sh` 的跳过计数补上了滚动探针那 4 个：它一直只认 `live_writes_test.dart`
+  的 3 个，于是加了探针之后，本地跑这道门槛会直接判失败。
+
+### English
+
+**Added**
+
+- **A terminal that does not go through herdr**: the button on the board → pick a machine → a
+  real PTY. The default command is `tmux new -A -s herdr-pocket` (attach if it exists, a login
+  shell if it does not), with the usual PATH prefix, because `ssh host <cmd>` runs a non-login
+  shell. When the session ends the exit status is shown in a banner rather than replacing the
+  screen, and the scrollback is local, so reading back keeps working when the link does not.
+  Which command to run, and how many lines to keep, are both settings.
+- **A composer**: type a whole message on the phone and put it on the wire in one write — one
+  bracketed paste, then a separate Enter 120 ms later (several TUIs treat a carriage return that
+  arrives in the same read as the paste as part of the paste, and leave the message unsent).
+  A `/` menu of the machine's skills and MCP servers, an `@` menu of the files under the pane's
+  directory: both have to be drawn here, because a TUI opens its menus by seeing each keystroke
+  and a paste gives it none. The `+` button uses the phone's own document picker.
+- **Identity colours for workspace groups**: the number badge's colour is a pure function of the
+  workspace number, at a constant relative luminance, with adjacent entries ΔE ≥ 14.7 and every
+  entry far from the four status hues. `test/ui/workspace_palette_test.dart` re-derives all three
+  from the constants, so a careless colour edit fails the build instead of a user's eyes.
+- **`tool/probe_release.dart`**: runs the release-picking logic against the **real** GitHub
+  payload (`parseReleases`, `pickAppRelease`, `pickApkAsset`, `parseChecksums`); `--download`
+  goes further and fetches the picked asset along the 302 path the phone takes, checking it
+  against the release's own `checksums.txt`.
+
+**Changed**
+
+- **Liquid glass and the automatic update check now default to on** (the user's decision). A
+  stored `false` still wins — a default change may not overrule somebody who turned a thing off
+  on purpose — and the 2018 phone can still turn both off in Settings.
+
+**Fixed**
+
+- **The board kept saying "retrying 2 of 3" for a machine that had been deleted**: a superseded
+  dial keeps writing to `state`. Each round now re-reads whether the machine still exists, and
+  every write is guarded by a generation check — including the final failure.
+- **The terminal's scroll bar announced a scrollback that was not there**: the local counter
+  advanced by what was *asked* for, while the daemon refuses, or clamps at the maximum, and a
+  clamped request emits no event. The daemon is the source of truth now
+  (`pane.scroll_changed`, subscribed per pane), the mirror is optimistic only so the bar follows
+  the finger, a pane with no history is never asked, and the bar says "at the oldest" at the top.
+- **The shell page could not open a pty on a real device**: `Stream<List<int>>` does not match
+  the `Stream<Uint8List>` dartssh2 actually hands over — the unit test fed it the wide one, so
+  every test was green.
+- **The exit code replaced the terminal's contents**: it is a banner now, in the key strip's
+  place, with the output still on screen — `command not found: tmux` was the explanation the
+  user needed.
+- **Copy produced `Instance of 'BufferLine'`**: `Buffer.getText()` now does what the loop tried to.
+- **A resize was silently dropped when the keyboard opened**: the debounce fired before the
+  session existed, the guard threw the resize away, and the far end stayed at 66 rows — so tmux
+  drew its status bar below the visible area and never repainted a row that had not changed.
+  The page now reconciles the size it asked for once the dial comes back.
+- **A long value overflowed a settings row by 547 pixels** and then sat against its label
+  (`expandTrailing` used in the wrong place). The value is a phrase now, and the full command
+  lives on the page behind it.
+- **Three silent failures in the composer**: a listener that short-circuited while no menu was
+  open never saw the `/` that opens one; the reply's file marker was checked only while no file
+  was open, so every config after the first was appended to the first and every machine's MCP
+  list was empty; and zsh aborts a script at the first unmatched glob, which killed the probe
+  (it runs inside `/bin/sh -c` now).
+
+**Chores**
+
+- One line of footnote per settings page.
+- The key strip moves to `key_strip.dart`, shared by both terminal screens; the base font size
+  moves to the render layer.
+- A shorter README, with the architecture and the implementation details in `docs/TECHNICAL.md`.
+- `sh tool/ci_tests.sh` now counts the scroll probe's four tests among the opt-in skips: it only
+  ever knew about `live_writes_test.dart`'s three, so adding the probe made the gate fail on
+  every laptop.
 
 ---
 
