@@ -238,19 +238,25 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
     runs-on: ubuntu-latest
     steps:
+      # CHECKOUT FIRST, BEFORE THE ARTIFACTS LAND. `actions/checkout` cleans the
+      # workspace on the way in — `git clean -ffdx`, which deletes untracked
+      # files and directories — and `dist/` is exactly that. With the download
+      # first, the artifacts are deleted one step later and the failure surfaces
+      # at the checksums step as `sha256sum: '*.apk': No such file or directory`.
+      # Measured on the v0.2.1 tag: that is this comment's whole reason to exist.
+      - uses: actions/checkout@v4
+        with:
+          # Only CHANGELOG.md and the script that reads it are wanted, and a
+          # shallow checkout is enough: what is being published is the file AT
+          # THIS TAG, which is exactly the version in the body below.
+          fetch-depth: 1
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
           # One flat directory, so the checksums file can name every asset with
           # no directory prefixes — which is what `sha256sum -c` expects.
           merge-multiple: true
-
-      - uses: actions/checkout@v4
-        with:
-          # Only CHANGELOG.md and the script that reads it are used here, and a
-          # shallow checkout is enough: what is being published is the file AT
-          # THIS TAG, which is exactly the version in the body below.
-          fetch-depth: 1
 
       - name: take this version's entry out of the changelog
         # THE BODY IS WRITTEN BY A HUMAN, IN CHANGELOG.md, BEFORE THE TAG. It is
