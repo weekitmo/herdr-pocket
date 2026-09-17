@@ -8,7 +8,7 @@ import 'package:herdr_pocket/data/host_store.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
-import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The dial's retry loop, exercised against the real provider.

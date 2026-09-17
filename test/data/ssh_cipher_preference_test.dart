@@ -1,6 +1,6 @@
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 
 /// Tests for the SSH **cipher preference order**.
 ///

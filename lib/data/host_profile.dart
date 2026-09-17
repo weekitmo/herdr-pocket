@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
 import 'package:herdr_pocket/data/transport/unix_socket_transport.dart';
 

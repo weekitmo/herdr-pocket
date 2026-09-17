@@ -5,6 +5,7 @@ import 'package:herdr_pocket/data/host_profile.dart';
 import 'package:herdr_pocket/data/host_store.dart';
 import 'package:herdr_pocket/data/phone_identity.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
 import 'package:herdr_pocket/domain/pairing/pairing_ticket.dart';
 

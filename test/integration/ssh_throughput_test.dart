@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
 
 /// Regression test for the cipher preference order, measured through the REAL

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 
 /// Regression tests for the host-key fingerprint shown to the user.
 ///
@@ -25,7 +25,7 @@ void main() {
       const real = 'SHA256:WD3sN28RskMmEa+RcEgnPs1n66gRTS9MiXOuZ871qco';
       final bytes = Uint8List.fromList(utf8.encode(real));
 
-      expect(SshSocketTransport.formatFingerprint(bytes), real);
+      expect(formatSshFingerprint(bytes), real);
     });
 
     test('a raw digest is still encoded, so an API change degrades visibly',
@@ -34,7 +34,7 @@ void main() {
       // hands over raw bytes again, this branch produces the right string
       // rather than a mangled one.
       final raw = Uint8List.fromList(List<int>.generate(32, (i) => i));
-      final formatted = SshSocketTransport.formatFingerprint(raw);
+      final formatted = formatSshFingerprint(raw);
 
       expect(formatted, startsWith('SHA256:'));
       expect(formatted, isNot(contains('=')));
@@ -48,7 +48,7 @@ void main() {
       // yields something twice as long, which is what made the wrong value look
       // plausible rather than obviously broken.
       const real = 'SHA256:WD3sN28RskMmEa+RcEgnPs1n66gRTS9MiXOuZ871qco';
-      final right = SshSocketTransport.formatFingerprint(
+      final right = formatSshFingerprint(
         Uint8List.fromList(utf8.encode(real)),
       );
       final wrong = 'SHA256:'
@@ -61,7 +61,7 @@ void main() {
     test('an MD5 fingerprint is not re-encoded either', () {
       const legacy = 'MD5:aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99';
       final bytes = Uint8List.fromList(utf8.encode(legacy));
-      expect(SshSocketTransport.formatFingerprint(bytes), legacy);
+      expect(formatSshFingerprint(bytes), legacy);
     });
   });
 }

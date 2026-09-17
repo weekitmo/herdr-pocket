@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/data/herdr_client.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
 
 /// End-to-end verification of the transport architecture against a REAL SSH

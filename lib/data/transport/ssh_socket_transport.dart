@@ -5,122 +5,7 @@ import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:herdr_pocket/data/protocol/line_framer.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
-
-/// Credentials for one machine. Never logged; never serialised to disk whole.
-class SshCredentials {
-  const SshCredentials({
-    required this.host,
-    required this.username,
-    this.port = 22,
-    this.privateKeyPem,
-    this.privateKeyPassphrase,
-    this.password,
-  });
-
-  final String host;
-  final String username;
-  final int port;
-
-  /// OpenSSH-format private key. Preferred over [password].
-  final String? privateKeyPem;
-  final String? privateKeyPassphrase;
-
-  /// Only used when no key is supplied.
-  final String? password;
-
-  @override
-  String toString() => 'SshCredentials($username@$host:$port)';
-}
-
-/// The cipher preference list this client connects with.
-///
-/// WHY THIS IS NOT `const SSHAlgorithms()`. dartssh2's defaults put
-/// `aes256-gcm@openssh.com` first, and AES-GCM's GHASH — a carry-less multiply
-/// over GF(2^128) — is catastrophically slow in pure Dart. Measured over
-/// loopback against OpenSSH 10.2, moving one 48 MiB file:
-///
-///     aes256-gcm@openssh.com             41.0 s     1.17 MiB/s  (39.1 s of CPU)
-///     aes256-ctr                          1.57 s    30.6 MiB/s
-///     chacha20-poly1305@openssh.com       1.11 s    43.4 MiB/s
-///
-/// …while a plain `ssh` binary on the same loopback and the same server moves
-/// the same file in 0.41 s. So the default list costs a factor of thirty-seven,
-/// and it costs it on EVERY byte this app moves: the terminal stream,
-/// `events.subscribe`, and every one-shot request channel all ride this one
-/// client. The CPU is the bottleneck, not the link — 39 of those 41 seconds
-/// were one core pinned at 100%.
-///
-/// The fix is a REORDERING, never a removal: every cipher in dartssh2's default
-/// list is still here, so no server loses anything it could negotiate before.
-/// The order is not a security property — all five are AEAD or encrypt-then-MAC
-/// and none of them is the weak one — it decides only how fast the CLIENT's own
-/// CPU can decrypt what the server sends.
-///
-/// The two CTR entries are ahead of the GCM entries for the same reason as
-/// chacha20: CTR needs no GHASH, and it measured 26x faster. Legacy CBC modes
-/// are deliberately absent, exactly as they are from the default list.
-///
-/// Reproduce the numbers with `dart run tool/probe_sftp.dart` (and `HP_CIPHERS=`
-/// to compare lists without editing this file); the write-up is
-/// `docs/research/11-file-transfer-and-pairing.md`.
-const List<SSHCipherType> dartsshFastCiphers = [
-  SSHCipherType.chacha20poly1305,
-  SSHCipherType.aes256ctr,
-  SSHCipherType.aes128ctr,
-  SSHCipherType.aes256gcm,
-  SSHCipherType.aes128gcm,
-];
-
-/// The algorithm set handed to every [SSHClient] this transport opens.
-///
-/// Only [SSHAlgorithms.cipher] is overridden; kex, host key and MAC keep
-/// dartssh2's defaults, which follow modern OpenSSH and omit the legacy
-/// algorithms that need an explicit opt-in.
-const SSHAlgorithms herdrSshAlgorithms = SSHAlgorithms(
-  cipher: dartsshFastCiphers,
-);
-
-/// Decides whether to trust a host key.
-///
-/// A callback rather than a hard-coded TOFU policy so the policy is testable
-/// and so a future "show me the fingerprint and ask" sheet can slot in without
-/// touching the transport.
-///
-/// Returning false for an *unknown* key is a hard refusal; returning false for
-/// a *changed* key is a security event, and the transport reports the two
-/// differently.
-typedef HostKeyVerifier = Future<HostKeyVerdict> Function(HostKeyPrompt prompt);
-
-class HostKeyPrompt {
-  const HostKeyPrompt({
-    required this.host,
-    required this.port,
-    required this.keyType,
-    required this.fingerprint,
-    required this.isNewHost,
-  });
-
-  final String host;
-  final int port;
-
-  /// e.g. `ssh-ed25519`.
-  final String keyType;
-
-  /// SHA-256 fingerprint in the usual `SHA256:...` form.
-  final String fingerprint;
-
-  /// True when this host has never been approved. False means the key differs
-  /// from the stored one — which is a different, louder situation.
-  final bool isNewHost;
-}
-
-enum HostKeyVerdict {
-  /// Store it and continue.
-  trust,
-
-  /// Refuse this connection.
-  reject,
-}
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 
 /// Reaches the daemon's Unix socket through an SSH `direct-streamlocal`
 /// channel.
@@ -205,84 +90,17 @@ class SshSocketTransport
     }
   }
 
-  Future<SSHClient> _connect() async {
-    final socket = await SSHSocket.connect(
-      credentials.host,
-      credentials.port,
-      timeout: connectTimeout,
-    ).onError<Object>((e, _) {
-      throw HerdrTransportException(
-        TransportFailure.connectFailed,
-        'could not reach ${credentials.host}:${credentials.port}',
-        cause: e,
+  Future<SSHClient> _connect() => _dialer.dial();
+
+  /// The dial itself lives in `ssh_dial.dart`, because the shell transport
+  /// opens the same connection for a completely different purpose. Each
+  /// caller gets its OWN client from it: sharing one would tie a terminal's
+  /// lifetime to the board's.
+  SshDialer get _dialer => SshDialer(
+        credentials: credentials,
+        verifyHostKey: verifyHostKey,
+        connectTimeout: connectTimeout,
       );
-    });
-
-    final identities = _identities();
-    final password = credentials.password;
-
-    final client = SSHClient(
-      socket,
-      username: credentials.username,
-      identities: identities,
-      onPasswordRequest: password == null ? null : () => password,
-      // The one line that decides whether this connection runs at 43 MiB/s or
-      // at 1.2. See [dartsshFastCiphers] — this is not a preference, it is the
-      // difference between usable and not.
-      algorithms: herdrSshAlgorithms,
-      onVerifyHostKey: (keyType, fingerprint) async {
-        final verdict = await verifyHostKey(
-          HostKeyPrompt(
-            host: credentials.host,
-            port: credentials.port,
-            keyType: keyType,
-            fingerprint: formatFingerprint(fingerprint),
-            isNewHost: false,
-          ),
-        );
-        return verdict == HostKeyVerdict.trust;
-      },
-      // Keepalive uses dartssh2's 10 s default deliberately: an idle session
-      // must survive a long agent turn without the NAT dropping it, and 10 s
-      // is short enough to notice a dead link quickly without being chatty.
-      handshakeTimeout: connectTimeout,
-      authTimeout: connectTimeout,
-    );
-
-    try {
-      await client.authenticated;
-    } on SSHAuthFailError catch (e) {
-      await client.close();
-      throw HerdrTransportException(
-        TransportFailure.authenticationFailed,
-        'authentication failed for ${credentials.username}@${credentials.host}',
-        cause: e,
-      );
-    } catch (e) {
-      await client.close();
-      throw HerdrTransportException(
-        TransportFailure.connectFailed,
-        'SSH handshake failed: $e',
-        cause: e,
-      );
-    }
-
-    return client;
-  }
-
-  List<SSHKeyPair>? _identities() {
-    final pem = credentials.privateKeyPem;
-    if (pem == null || pem.trim().isEmpty) return null;
-    try {
-      return SSHKeyPair.fromPem(pem, credentials.privateKeyPassphrase);
-    } on Object catch (e) {
-      throw HerdrTransportException(
-        TransportFailure.authenticationFailed,
-        'the private key could not be parsed',
-        cause: e,
-      );
-    }
-  }
 
   @override
   Future<String> roundTrip(String requestLine) async {
@@ -691,27 +509,6 @@ class SshSocketTransport
     final client = _client;
     _client = null;
     await client?.close();
-  }
-
-  /// The fingerprint, in the form every other SSH tool prints.
-  ///
-  /// dartssh2 already hands this over as the ASCII bytes of `SHA256:<base64>`,
-  /// NOT as a raw digest. Base64-encoding it again produces a string that looks
-  /// plausible and is silently wrong — and the one thing a user does with a
-  /// fingerprint is compare it against `ssh-keygen -lf` output. A mismatch there
-  /// reads as "this key is not what I approved", which is the exact alarm
-  /// pinning exists to raise. A check that reports a wrong value is worse than
-  /// no check.
-  ///
-  /// The raw-digest case is still handled, because the callback's contract has
-  /// changed across versions and a defensive branch is cheaper than another
-  /// silent mis-display.
-  static String formatFingerprint(Uint8List raw) {
-    final asText = String.fromCharCodes(raw);
-    if (asText.startsWith('SHA256:') || asText.startsWith('MD5:')) {
-      return asText;
-    }
-    return 'SHA256:${base64.encode(raw).replaceAll('=', '')}';
   }
 }
 

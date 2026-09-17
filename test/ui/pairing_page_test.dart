@@ -11,6 +11,7 @@ import 'package:herdr_pocket/data/pairing.dart';
 import 'package:herdr_pocket/data/phone_identity.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/pairing.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
 import 'package:herdr_pocket/domain/pairing/pairing_ticket.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';

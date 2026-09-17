@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
 import 'package:herdr_pocket/data/host_store.dart';
-import 'package:herdr_pocket/data/transport/ssh_socket_transport.dart';
+import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Loaded once during bootstrap and overridden in `main`.
