@@ -283,12 +283,16 @@ class SettingsPage extends ConsumerWidget {
                   _Disclosure(
                     label: l10n.shellCommandLabel,
                     colors: colors,
-                    // The default is a shell snippet, and a snippet in a
-                    // settings row reads as a bug. The row says what it DOES;
-                    // the page behind it shows the command in full.
+                    // A PHRASE, NEVER THE COMMAND. The default is a shell
+                    // snippet and a custom one can be any length at all; a
+                    // settings row is built on the assumption that a value is
+                    // short, and bending that assumption cost every other row on
+                    // this page its alignment. The row says what the setting
+                    // DOES; the page behind it shows the command, which is also
+                    // the only place anyone would change it.
                     value: settings.sessionCommand == defaultSessionCommand
                         ? l10n.shellCommandDefaultValue
-                        : settings.sessionCommand,
+                        : l10n.shellCommandCustom,
                     onTap: () => Navigator.of(context).push(
                       CupertinoPageRoute<void>(
                         builder: (_) => const ShellCommandPage(),
@@ -644,32 +648,14 @@ class _Disclosure extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: SettingsRow(
         label: label,
-        // THE VALUE MUST BE ALLOWED TO GIVE WAY. A trailing widget is handed its
-        // INTRINSIC width by default, so a long one does not shrink — it
-        // overflows the row. Measured: the terminal command grew from `tmux …`
-        // to a PATH-prefixed snippet and blew the row out by 547 pixels, which
-        // the settings test caught and a screenshot on the phone would not have.
-        // `expandTrailing` bounds the trailing to the space that is left;
-        // `Flexible` is what lets the text use less of it.
-        expandTrailing: true,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              child: Text(
-                value,
-                // RIGHT-ALIGNED, because `expandTrailing` gives this row the
-                // whole remaining width and a left-aligned value then sits
-                // immediately after the label with a wasteland of space before
-                // the chevron. Measured on a phone ("还没检查过" next to
-                // "检查更新"), because no test asserts on where text sits.
-                textAlign: TextAlign.end,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: valueTint ?? colors.textFaint,
-                  fontSize: TextSize.note,
-                ),
+            Text(
+              value,
+              style: TextStyle(
+                color: valueTint ?? colors.textFaint,
+                fontSize: TextSize.note,
               ),
             ),
             const SizedBox(width: Space.xs),

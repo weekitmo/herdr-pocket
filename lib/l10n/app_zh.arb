@@ -595,5 +595,6 @@
   "shellCommandDefaultValue": "tmux（没有则登录 shell）",
   "@shellCommandDefaultValue": {
     "description": "设置行里代替那条默认命令显示的短语——默认值是一段 shell，直接显示会撑爆行。"
-  }
+  },
+  "shellCommandCustom": "自定义"
 }

@@ -1405,4 +1405,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellCommandDefaultValue => 'tmux, or a login shell';
+
+  @override
+  String get shellCommandCustom => 'Custom';
 }

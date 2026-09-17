@@ -2581,6 +2581,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'tmux, or a login shell'**
   String get shellCommandDefaultValue;
+
+  /// No description provided for @shellCommandCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get shellCommandCustom;
 }
 
 class _AppLocalizationsDelegate

@@ -1321,4 +1321,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shellCommandDefaultValue => 'tmux（没有则登录 shell）';
+
+  @override
+  String get shellCommandCustom => '自定义';
 }

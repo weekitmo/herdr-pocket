@@ -596,5 +596,6 @@
   "shellCommandDefaultValue": "tmux, or a login shell",
   "@shellCommandDefaultValue": {
     "description": "Shown in the settings row in place of the default command, which is a shell snippet."
-  }
+  },
+  "shellCommandCustom": "Custom"
 }
