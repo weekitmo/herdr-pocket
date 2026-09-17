@@ -7,11 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
-import 'package:herdr_pocket/data/providers/hosts.dart';
+import 'package:herdr_pocket/data/providers/shell.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/data/transport/shell_transport.dart';
-import 'package:herdr_pocket/data/transport/ssh_dial.dart';
 import 'package:herdr_pocket/domain/terminal/key_bar.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
@@ -106,7 +105,11 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   @override
   void dispose() {
     _resizeTimer?.cancel();
-    FocusScope.of(context);
+    // NO `FocusScope.of(context)` HERE. Looking an ancestor up during dispose
+    // is illegal — the element tree is already unstable — and it throws an
+    // assertion in debug while being a silent no-op in release, which is the
+    // worst pair of behaviours to ship. Disposing the node is what releases the
+    // keyboard; the scope has already forgotten it.
     _inputFocus.dispose();
     unawaited(_session?.close());
     _repaint.dispose();
@@ -118,35 +121,12 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   Future<void> _open() async {
     final profile = widget.profile;
     try {
-      final secrets =
-          await ref.read(hostSecretsStoreProvider).read(profile.id);
+      // Credentials, the host-key policy and the command all come from
+      // `shellRunnerProvider`: how a machine is dialled is not this page's
+      // business, and keeping it out is what lets a test hand the page a
+      // scripted session.
+      final runner = await ref.read(shellRunnerProvider)(profile);
       if (!mounted) return;
-      if (secrets == null) {
-        setState(() {
-          _opening = false;
-          _error = HerdrTransportException(
-            TransportFailure.authenticationFailed,
-            'no stored credential for ${profile.label}',
-          );
-        });
-        return;
-      }
-
-      final runner = SshShellTransport(
-        credentials: SshCredentials(
-          host: profile.host,
-          port: profile.port,
-          username: profile.username,
-          privateKeyPem: secrets.privateKeyPem,
-          privateKeyPassphrase: secrets.privateKeyPassphrase,
-          password: secrets.password,
-        ),
-        // The same verifier the board dials through, so a machine approved once
-        // is never asked about again — and a machine whose key CHANGED raises
-        // the same alarm here as there.
-        verifyHostKey: ref.read(hostKeyVerifierProvider),
-        command: ref.read(settingsProvider).sessionCommand,
-      );
 
       final session = await runner.open(cols: _cols, rows: _rows);
       if (!mounted) {

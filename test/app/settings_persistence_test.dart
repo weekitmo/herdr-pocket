@@ -38,6 +38,7 @@ void main() {
       'flutter.settings.keyBarKeys': <String>['esc', 'ctrl'],
       'flutter.settings.iconSet': 'system',
       'flutter.settings.autoUpdateCheck': false,
+      'flutter.settings.sessionCommand': 'zsh -l',
     });
     final prefs = await SharedPreferences.getInstance();
     final settings = launch(prefs).read(settingsProvider);
@@ -56,6 +57,7 @@ void main() {
     expect(settings.keyBarKeys, [SoftKey.esc, SoftKey.ctrl]);
     expect(settings.iconSet, AppIconSet.system);
     expect(settings.autoUpdateCheck, isFalse);
+    expect(settings.sessionCommand, 'zsh -l');
   });
 
   test('what one launch writes is what the next launch reads', () async {
@@ -70,6 +72,7 @@ void main() {
     await first.read(settingsProvider.notifier).setKeyBarKeys([SoftKey.esc]);
     await first.read(settingsProvider.notifier).setIconSet(AppIconSet.system);
     await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: false);
+    await first.read(settingsProvider.notifier).setSessionCommand('fish -l');
 
     // A second launch against the same store — which is what closing and
     // reopening the app does.
@@ -79,6 +82,7 @@ void main() {
     expect(second.keyBarKeys, [SoftKey.esc]);
     expect(second.iconSet, AppIconSet.system);
     expect(second.autoUpdateCheck, isFalse);
+    expect(second.sessionCommand, 'fish -l');
 
     // And clearing goes all the way back to the built-in palette rather than
     // leaving a stale id that no longer exists.
@@ -110,6 +114,10 @@ void main() {
     // The chat window is ON by default: it is the answer to the thing this app
     // is for, and a feature nobody can find is a feature nobody has.
     expect(settings.composerEnabled, isTrue);
+    // And the shell command defaults to attach-or-create: a phone terminal
+    // that loses its session every time you close the app is one you stop
+    // reaching for.
+    expect(settings.sessionCommand, defaultSessionCommand);
   });
 
   test('turning the chat window off survives a relaunch', () async {
