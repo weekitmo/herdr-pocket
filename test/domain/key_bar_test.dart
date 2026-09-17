@@ -42,6 +42,28 @@ void main() {
       expect(SoftKey.enter.plain, '\r');
       expect(SoftKey.backspace.plain, '\x7f');
     });
+
+    test('a key labelled in shorthand spells out which keys it stands for', () {
+      // `C-c` is the notation every man page uses and it is unreadable if you
+      // have not met it, so the Settings row shows the keyboard's own spelling
+      // underneath. THE TWO ARE WRITTEN SEPARATELY — one is what fits on a bar
+      // that scrolls sideways, the other is what is printed on a keyboard — and
+      // a pair like that drifts the first time one of them is edited alone.
+      final shorthand = [
+        for (final k in SoftKey.values)
+          if (RegExp(r'^C-(.)$').hasMatch(k.label)) k,
+      ];
+      expect(shorthand, isNotEmpty, reason: 'or this test proves nothing');
+
+      for (final key in SoftKey.values) {
+        final letter = RegExp(r'^C-(.)$').firstMatch(key.label);
+        expect(
+          key.combination,
+          letter == null ? isNull : 'Ctrl+${letter.group(1)!.toUpperCase()}',
+          reason: '${key.id} is labelled "${key.label}"',
+        );
+      }
+    });
   });
 
   group('modifiers are sticky', () {

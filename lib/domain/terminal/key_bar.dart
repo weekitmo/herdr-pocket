@@ -129,6 +129,30 @@ enum SoftKey {
         SoftKey.paste => 'Paste',
       };
 
+  /// The keys this stands for, spelled the way a keyboard is labelled, or null
+  /// for the keys whose bar label is already a word.
+  ///
+  /// WHY THIS IS NOT JUST THE LABEL. `C-c` is the notation every man page has
+  /// used since Emacs, and it is not readable unless you already know it: a
+  /// label reading `C-c` is a key called C, followed by a hyphen, followed by a
+  /// key called c. The bar keeps the compact spelling — it is a horizontal
+  /// scroller on a phone and `Ctrl+C` costs more than twice the width of `C-c`
+  /// — so the long spelling goes on the Settings screen, which has a second line
+  /// to put it on and is where somebody who cannot read the label will go.
+  ///
+  /// Explicit rather than derived from [label] by parsing `C-`, for the same
+  /// reason [plain] is: the next control code added here should have to say out
+  /// loud what it is. [key_bar_test] asserts the two agree, which is what makes
+  /// the explicitness safe.
+  String? get combination => switch (this) {
+        SoftKey.interrupt => 'Ctrl+C',
+        SoftKey.eof => 'Ctrl+D',
+        SoftKey.suspend => 'Ctrl+Z',
+        SoftKey.clear => 'Ctrl+L',
+        SoftKey.reverseSearch => 'Ctrl+R',
+        _ => null,
+      };
+
   /// The bytes this key sends with no modifier armed, or null for modifiers and
   /// actions, which produce bytes only in combination or not at all.
   String? get plain => switch (this) {

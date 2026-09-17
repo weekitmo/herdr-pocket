@@ -94,6 +94,24 @@ class KeyBarPage extends ConsumerWidget {
   }
 }
 
+/// The line under a key's own label.
+///
+/// TWO LINES, ONE JOB. The first line is what the button on the bar will say, so
+/// that the row and the button can be matched up; the second is what it means,
+/// because `pgup` is not a word anybody says out loud and `C-c` is not a word at
+/// all. For the five ready-made control codes the second line LEADS with the
+/// keys spelled the way a keyboard is labelled — `Ctrl+C` — because the bar's
+/// compact `C-c` is only readable to somebody who already knows the notation,
+/// and the label is not going to change: it is the standard spelling, and it is
+/// half the width on a bar that scrolls sideways on a phone.
+String _noteFor(SoftKey key, AppLocalizations l10n) => switch (key.kind) {
+  KeyKind.modifier => '${key.description} · ${l10n.keysModifier}',
+  KeyKind.action => '${key.description} · ${l10n.keysCopyHint}',
+  KeyKind.literal => key.combination == null
+      ? key.description
+      : '${key.combination} · ${key.description}',
+};
+
 /// One key, with a tick when the bar shows it.
 class _KeyChoice extends StatelessWidget {
   const _KeyChoice({
@@ -120,11 +138,7 @@ class _KeyChoice extends StatelessWidget {
         // and matching them is the whole point of this screen. The full name is
         // the note because `pgup` is not a word anybody says out loud.
         label: key.label,
-        note: switch (key.kind) {
-          KeyKind.modifier => '${key.description} · ${l10n.keysModifier}',
-          KeyKind.action => '${key.description} · ${l10n.keysCopyHint}',
-          KeyKind.literal => key.description,
-        },
+        note: _noteFor(key, l10n),
         labelColor: selected ? colors.text : colors.textDim,
         trailing: Icon(
           selected ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.circle,
