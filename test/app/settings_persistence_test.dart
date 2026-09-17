@@ -30,14 +30,14 @@ void main() {
       'flutter.settings.themeId': 'nord',
       'flutter.settings.themeMode': 'light',
       'flutter.settings.languageCode': 'en',
-      'flutter.settings.glassEnabled': true,
+      'flutter.settings.glassEnabled': false,
       'flutter.settings.notificationsEnabled': false,
       'flutter.settings.autoConnect': true,
       'flutter.settings.textScale': 1.2,
       'flutter.settings.terminalTextScale': 1.4,
       'flutter.settings.keyBarKeys': <String>['esc', 'ctrl'],
       'flutter.settings.iconSet': 'system',
-      'flutter.settings.autoUpdateCheck': true,
+      'flutter.settings.autoUpdateCheck': false,
     });
     final prefs = await SharedPreferences.getInstance();
     final settings = launch(prefs).read(settingsProvider);
@@ -45,14 +45,17 @@ void main() {
     expect(settings.themeId, 'nord');
     expect(settings.themeMode, AppThemeMode.light);
     expect(settings.languageCode, 'en');
-    expect(settings.glassEnabled, isTrue);
+    // BOTH OF THESE ARE `false` ON DISK AND `true` BY DEFAULT, which is the
+    // only shape that tests the thing that actually matters here: a default is
+    // not a value that overwrites a choice. See `SettingsState.glassEnabled`.
+    expect(settings.glassEnabled, isFalse);
     expect(settings.notificationsEnabled, isFalse);
     expect(settings.autoConnect, isTrue);
     expect(settings.textScale, 1.2);
     expect(settings.terminalTextScale, 1.4);
     expect(settings.keyBarKeys, [SoftKey.esc, SoftKey.ctrl]);
     expect(settings.iconSet, AppIconSet.system);
-    expect(settings.autoUpdateCheck, isTrue);
+    expect(settings.autoUpdateCheck, isFalse);
   });
 
   test('what one launch writes is what the next launch reads', () async {
@@ -61,19 +64,21 @@ void main() {
 
     final first = launch(prefs);
     await first.read(settingsProvider.notifier).setThemeId('gruvbox');
-    await first.read(settingsProvider.notifier).setGlassEnabled(enabled: true);
+    // Written as `false` — the opposite of the default — so this test proves a
+    // stored choice wins over the default rather than agreeing with it.
+    await first.read(settingsProvider.notifier).setGlassEnabled(enabled: false);
     await first.read(settingsProvider.notifier).setKeyBarKeys([SoftKey.esc]);
     await first.read(settingsProvider.notifier).setIconSet(AppIconSet.system);
-    await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: true);
+    await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: false);
 
     // A second launch against the same store — which is what closing and
     // reopening the app does.
     final second = launch(prefs).read(settingsProvider);
     expect(second.themeId, 'gruvbox');
-    expect(second.glassEnabled, isTrue);
+    expect(second.glassEnabled, isFalse);
     expect(second.keyBarKeys, [SoftKey.esc]);
     expect(second.iconSet, AppIconSet.system);
-    expect(second.autoUpdateCheck, isTrue);
+    expect(second.autoUpdateCheck, isFalse);
 
     // And clearing goes all the way back to the built-in palette rather than
     // leaving a stale id that no longer exists.
@@ -89,7 +94,9 @@ void main() {
     // the one nobody picked. See `defaultThemeId`.
     expect(settings.themeId, defaultThemeId);
     expect(settings.themeMode, AppThemeMode.system);
-    expect(settings.glassEnabled, isFalse);
+    // Glass is ON by default: a design nobody sees until they find a switch is
+    // not the design, and this app's material is the point of it.
+    expect(settings.glassEnabled, isTrue);
     expect(settings.autoConnect, isFalse);
     expect(settings.textScale, 1.0);
     expect(settings.keyBarKeys, defaultKeyBar);
@@ -97,9 +104,9 @@ void main() {
     // monochrome alternative rendered beside it — so an empty store opening on
     // it is correct rather than a fallback nobody thought about.
     expect(settings.iconSet, AppIconSet.themed);
-    // And this one is OFF on purpose: opening an app is not a request to make a
-    // network connection.
-    expect(settings.autoUpdateCheck, isFalse);
+    // And this one is ON by default: one bounded request per launch, silent on
+    // failure, so the app cannot sit three releases behind.
+    expect(settings.autoUpdateCheck, isTrue);
     // The chat window is ON by default: it is the answer to the thing this app
     // is for, and a feature nobody can find is a feature nobody has.
     expect(settings.composerEnabled, isTrue);

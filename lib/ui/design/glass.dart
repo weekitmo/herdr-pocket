@@ -23,10 +23,18 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 /// `ImageFilter.compose` runs the saturation matrix and the blur in ONE pass
 /// rather than needing a second layer.
 ///
-/// WHY IT DEFAULTS OFF: whip measured native blur on Android and turned it off
-/// — four BlurViews recaptured the full screen on every tab change and stalled
-/// the release transition. Our primary target is a 2018 mid-ranger. Glass is an
-/// upgrade users opt into, not a baseline they pay for (ADR-006).
+/// WHY THE SETTING BEHIND IT CAN GO EITHER WAY: whip measured native blur on
+/// Android and turned it off — four BlurViews recaptured the full screen on
+/// every tab change and stalled the release transition — and our primary target
+/// is a 2018 mid-ranger, so this shipped behind a switch that was OFF. The user
+/// then decided the switch should be ON: the material is the design, and a design
+/// nobody sees until they find a setting is not the design. The switch stays, and
+/// on the phone that cannot afford it is where the two taps go.
+///
+/// ONE BLUR PER SURFACE IS STILL A RULE, not an implementation detail: the cost
+/// whip paid was not "blur is slow", it was N full-screen recaptures per frame.
+/// Callers that would put glass on every row should put it on the one panel the
+/// rows sit on — see the dock, which is a single glass panel over many icons.
 class HerdrGlass extends StatelessWidget {
   const HerdrGlass({
     required this.colors,

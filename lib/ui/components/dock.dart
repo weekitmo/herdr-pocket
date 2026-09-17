@@ -28,9 +28,9 @@ enum RootView {
 ///
 /// The glass is the same [HerdrGlass] the rest of the chrome uses, so the dock
 /// is a material the app already has rather than a second one. It follows the
-/// same switch as every other chrome surface: on where the user turned glass
-/// on, a plain raised panel where they did not (ADR-006 — the target device is
-/// a 2018 mid-ranger and a second BackdropFilter is a real cost).
+/// same switch as every other chrome surface, which is ON unless the user turned
+/// it off — and the cost that switch exists for is not the blur itself but the
+/// number of surfaces paying for it, so there is exactly one here.
 class HerdrDock extends ConsumerWidget {
   const HerdrDock({
     required this.views,

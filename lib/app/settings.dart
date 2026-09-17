@@ -93,7 +93,7 @@ class SettingsState {
   const SettingsState({
     this.themeMode = AppThemeMode.system,
     this.languageCode,
-    this.glassEnabled = false,
+    this.glassEnabled = true,
     this.notificationsEnabled = true,
     this.autoConnect = false,
     this.textScale = 1.0,
@@ -106,7 +106,7 @@ class SettingsState {
     this.composerEnabled = true,
     this.downloadDirUri,
     this.downloadDirLabel,
-    this.autoUpdateCheck = false,
+    this.autoUpdateCheck = true,
   });
 
   final AppThemeMode themeMode;
@@ -114,9 +114,21 @@ class SettingsState {
   /// null means "follow the system locale".
   final String? languageCode;
 
-  /// Liquid Glass on chrome. Defaults OFF: the target device is a 2018
-  /// mid-ranger, and whip measured native blur causing tab-switch stalls on
-  /// Android. Glass is an upgrade, not the baseline (ADR-006).
+  /// Liquid Glass on chrome. ON by default, by the user's decision — see
+  /// [HerdrGlass] for the measurement trail that once argued the other way.
+  ///
+  /// WHAT THE FLIP COSTS AND WHY IT IS STILL RIGHT. whip measured native blur on
+  /// Android and turned it off because four BlurViews recaptured the screen on
+  /// every tab change; our first target is a 2018 mid-ranger, so this shipped OFF
+  /// and written down as a deliberate default rather than an oversight. The user
+  /// then asked for it on: the material is what this app is supposed to look
+  /// like, and a user who has to find a switch to see the design has not seen the
+  /// design. It stays a switch, so the device that cannot afford it can turn it
+  /// off in two taps.
+  ///
+  /// THE STORED VALUE STILL WINS. `false` on disk means somebody turned it off on
+  /// purpose, and no default change may overrule that — which is why this is
+  /// `?? true` and not a forced migration.
   final bool glassEnabled;
 
   /// Whether a waiting agent raises a notification. On by default: the whole
@@ -182,13 +194,20 @@ class SettingsState {
 
   /// Whether the app asks GitHub for a newer version on launch.
   ///
-  /// OFF, and the reason is the same one [autoConnect] carries: opening an app
-  /// is not a request to make a network connection. It is also the difference
-  /// between an app that is quiet on a phone in a pocket and one that lights up
-  /// a radio every time it is tapped. The manual「检查更新」row is right there.
+  /// ON by default, by the user's decision. The counter-argument is written down
+  /// because it is a real one: opening an app is not a request to make a network
+  /// connection, and this is the difference between an app that is quiet on a
+  /// phone in a pocket and one that lights up a radio every time it is tapped.
   ///
-  /// When it IS on, the check is one request per launch, silent on failure, and
-  /// a single toast when there is something new — never a dialog.
+  /// It is on anyway because the alternative was measured and it is worse: an app
+  /// that never checks is an app whose users run a build from three releases ago
+  /// and report bugs fixed months earlier. The cost is BOUNDED rather than
+  /// open-ended — one request per launch, silent on failure, one expiring line
+  /// when there is something new, never a dialog — and one release check per
+  /// launch is the smallest honest price for a client that talks to a daemon
+  /// which updates itself.
+  ///
+  /// Stored `false` still wins: see [glassEnabled].
   final bool autoUpdateCheck;
 
   /// Which keys the terminal's key bar offers, in the order it offers them.
@@ -298,7 +317,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
     return SettingsState(
       themeMode: _themeFrom(prefs.getString(_kTheme)),
       languageCode: prefs.getString(_kLanguage),
-      glassEnabled: prefs.getBool(_kGlass) ?? false,
+      glassEnabled: prefs.getBool(_kGlass) ?? true,
       notificationsEnabled: prefs.getBool(_kNotifications) ?? true,
       autoConnect: prefs.getBool(_kAutoConnect) ?? false,
       textScale: prefs.getDouble(_kTextScale) ?? 1.0,
@@ -311,7 +330,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       composerEnabled: prefs.getBool(_kComposer) ?? true,
       downloadDirUri: prefs.getString(_kDownloadDirUri),
       downloadDirLabel: prefs.getString(_kDownloadDirLabel),
-      autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? false,
+      autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? true,
     );
   }
 
