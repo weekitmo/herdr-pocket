@@ -404,13 +404,22 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         await session.close();
         return;
       }
+      // The model is resized BEFORE the first frame is written, and not from
+      // the frame itself: xterm starts at its own 80×24, and `viewHeight` is
+      // what the painter limits the window to. A buffer left at 24 rows while
+      // the daemon rendered 46 drew the LAST THREE lines of the frame and
+      // nothing else — which is exactly what the screen looked like: two lines
+      // of conversation, the status bar, and a screenful of nothing.
+      _matchTerminalTo(_cols, _rows);
       session.frames.listen(
         (frame) {
           if (!mounted) return;
-          // The daemon renders at the size we asked for, so the model must be
-          // told the same size or the grid lands in the wrong columns.
+          // The daemon renders at the size it is asked for, so the model must
+          // be told the size the frame DECLARES — that is the geometry the
+          // escape sequences inside it were computed against, and anything else
+          // puts the grid in the wrong columns.
+          _matchTerminalTo(frame.width, frame.height);
           if (frame.width != _cols || frame.height != _rows) {
-            _terminal.resize(frame.width, frame.height);
             _cols = frame.width;
             _rows = frame.height;
           }
@@ -446,6 +455,20 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         });
       }
     }
+  }
+
+  /// Makes the buffer the size the daemon rendered, and only when it differs.
+  ///
+  /// WHY THIS IS NOT A `resize` CALL ON EVERY FRAME: xterm's resize REFLOWS the
+  /// buffer — it rewraps lines and moves them between the screen and the
+  /// scrollback — and this buffer is a stream of absolutely-positioned frames
+  /// from the far end, not a log. A reflow of that content scrambles it, so the
+  /// rule is to resize exactly when the geometry has actually changed, which in
+  /// practice is once per session open and never again.
+  void _matchTerminalTo(int cols, int rows) {
+    if (cols <= 0 || rows <= 0) return;
+    if (_terminal.viewWidth == cols && _terminal.viewHeight == rows) return;
+    _terminal.resize(cols, rows);
   }
 
   /// Sends text the user typed on the phone's own keyboard.

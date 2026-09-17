@@ -238,6 +238,44 @@ void main() {
     );
   });
 
+  testWidgets("the buffer is the size the daemon rendered at, not xterm's default",
+      (tester) async {
+    // THE BUG THIS PINS. The model was resized only when a frame's declared
+    // size differed from the size that had been ASKED for — and they are the
+    // same by construction, so the resize never happened and the buffer stayed
+    // at xterm's default 80x24. `viewHeight` is what the painter limits its
+    // window to, so a 46-row frame on a 24-row buffer drew its last three lines
+    // and nothing else: two lines of conversation, the status bar, and a
+    // screenful of blank — exactly what the phone showed.
+    final daemon = await pumpTerminal(tester, paneRows: 46);
+
+    // The frame the daemon would send is the one it was asked for, so the test
+    // has to ask the session what that was.
+    final asked = RegExp(r'--cols (\d+) --rows (\d+)')
+        .firstMatch(daemon.openCommands.single)!;
+    final cols = int.parse(asked.group(1)!);
+    final rows = int.parse(asked.group(2)!);
+    daemon.emitFrame(
+      data: '\x1b[2J\x1b[$rows;1Hthe last row',
+      width: cols,
+      height: rows,
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final painter = _surfacePainter(tester);
+    expect(
+      painter.terminal.viewWidth,
+      cols,
+      reason: 'the model has to be the width the escape sequences were built for',
+    );
+    expect(
+      painter.terminal.viewHeight,
+      rows,
+      reason: 'and its height, or the window is taken from the wrong end',
+    );
+  });
+
   testWidgets('the keyboard moves the window, not the grid', (tester) async {
     // THE SYMPTOM THIS PINS. Opening the keyboard takes a third of the screen.
     // If that shrinks the geometry the daemon is asked for, the pane is cropped
@@ -308,6 +346,26 @@ class _FakeDaemon implements HerdrTransport, RemoteStreamRunner {
     openCommands.add(command);
     return _FakeDuplex(command, _lines.stream, _written);
   }
+
+  /// Sends one rendered frame, the way the daemon does.
+  void emitFrame({
+    required String data,
+    int width = 65,
+    int height = 46,
+    bool full = true,
+  }) {
+    _lines.add(jsonEncode({
+      'type': 'terminal.frame',
+      'seq': ++_seq,
+      'encoding': 'ansi',
+      'full': full,
+      'width': width,
+      'height': height,
+      'bytes': base64.encode(utf8.encode(data)),
+    }));
+  }
+
+  int _seq = 0;
 
   @override
   Future<String> roundTrip(String requestLine) async {

@@ -142,13 +142,18 @@ class _TerminalComposerState extends State<TerminalComposer>
       const TextInputConfiguration(
         // Enter has no other meaning in a terminal, and the label says so.
         inputAction: TextInputAction.send,
-        // THE FOUR THAT KEEP THE USER'S COMMAND INTACT. Autocorrect, predictive
-        // suggestions and personalised learning all rewrite words in place, and
-        // the rewrite arrives here as an edit that is neither typing nor a
-        // backspace — which the sentinel reader discards. That is a silent loss
-        // of a keystroke, so the features are turned off at the source instead.
-        autocorrect: false,
-        enableSuggestions: false,
+        // THE ONE THAT KEEPS THE USER'S COMMAND INTACT. Autocorrect rewrites
+        // words in place, and the rewrite arrives here as an edit that is
+        // neither typing nor a backspace — which the sentinel reader discards.
+        // That is a silent loss of a keystroke, so it is turned off at the
+        // source. Suggestions are NOT turned off with it: on Android the engine
+        // implements `enableSuggestions: false` by also ORing
+        // `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD` into the editor info (read out
+        // of `TextInputPlugin`: `sipush 144`, which is
+        // TYPE_TEXT_VARIATION_VISIBLE_PASSWORD), and a terminal is not a
+        // password box — some keyboards answer that by dropping their word
+        // tools, and none of it buys anything here. A suggestion the user taps
+        // is text they meant to type, which the reader already handles.
         enableIMEPersonalizedLearning: false,
       ),
     );
