@@ -152,7 +152,8 @@ void main() {
         ConnectionFailed(
           HerdrTransportException(
             TransportFailure.connectFailed,
-            'herdr not found: $herdrNotInstalledSentinel',
+            // The sentinel alone on its line — what the shell prelude prints.
+            'sh: herdr: command not found\n$herdrNotInstalledSentinel\n',
           ),
         ),
       );

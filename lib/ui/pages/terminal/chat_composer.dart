@@ -32,12 +32,16 @@ const Key composerCommandsKey = ValueKey('terminal.composer.commands');
 /// text field with three buttons, and the reason it is worth a file of its own is
 /// everything that had to be decided about the FIELD:
 ///
-///  * **The keyboard's own "helpful" rewrites are off.** Autocorrect, suggestions
-///    and the dash/quote substitutions are all disabled, for the same reason the
+///  * **The keyboard's own REWRITES are off; its suggestions are not.** Autocorrect
+///    and the dash/quote substitutions are disabled, for the same reason the
 ///    credential fields disable them: what leaves here goes to a shell and to an
 ///    agent that will act on it, and a smart quote is not a typo — it is a
 ///    different command. (The punctuation pair matters most: `--flag` becoming an
 ///    en dash is a silent, plausible-looking corruption.)
+///    Suggestions are a different thing and are left alone — turning them off
+///    makes Android hand the field a `VISIBLE_PASSWORD` input type, which some
+///    Chinese keyboards answer with a secure keyboard that cannot type Chinese.
+///    See [_entryField], where the engine's own bytecode is quoted.
 ///  * **Return inserts a newline.** There is a send button, and it is the only
 ///    thing that sends. A field whose return key submits is a field that cannot
 ///    hold a paragraph, which is the entire point of the thing.
@@ -289,8 +293,24 @@ class ChatComposer extends StatelessWidget {
         // Return is a newline, not a send: see the class comment.
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
+        // The keyboard's own REWRITES are off; its SUGGESTIONS are not.
+        //
+        // The difference is not a preference, it is the difference between a
+        // field that takes Chinese and one that does not. On Android the engine
+        // implements `enableSuggestions: false` by ORing
+        // `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD` (144) into the editor's input
+        // type — read out of `TextInputPlugin.inputTypeFromTextInputType` in
+        // this machine's own `flutter.jar` — and a field that looks like a
+        // password box gets the password treatment: MIUI answers it with its
+        // secure keyboard, which cannot produce Chinese at all. The user hit
+        // exactly that, on this field.
+        //
+        // What actually had to be disabled stays disabled: autocorrect (which
+        // rewrites words in place), and the punctuation substitutions (which
+        // turn `--flag` into an en dash — a silent corruption of a command).
+        // A suggestion the user taps is text they meant to type, which is also
+        // why the terminal's own composer keeps them on.
         autocorrect: false,
-        enableSuggestions: false,
         smartDashesType: SmartDashesType.disabled,
         smartQuotesType: SmartQuotesType.disabled,
         onChanged: (_) => onChanged(),

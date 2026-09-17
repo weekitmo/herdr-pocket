@@ -219,6 +219,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionFailed => 'Connection failed';
 
   @override
+  String get connectionLost => 'Connection lost';
+
+  @override
+  String get connectionLostRetrying => 'Connection lost — reconnecting…';
+
+  @override
+  String get connectionLostBody =>
+      'It will keep trying on its own — or tap reconnect to try now.';
+
+  @override
+  String get connectionLostGaveUpBody =>
+      'The connection to this machine dropped and would not come back.';
+
+  @override
   String connectionFailedAfterRetries(int count) {
     return 'Tried $count times';
   }

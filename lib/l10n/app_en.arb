@@ -83,6 +83,10 @@
     }
   },
   "connectionFailed": "Connection failed",
+  "connectionLost": "Connection lost",
+  "connectionLostRetrying": "Connection lost — reconnecting…",
+  "connectionLostBody": "It will keep trying on its own — or tap reconnect to try now.",
+  "connectionLostGaveUpBody": "The connection to this machine dropped and would not come back.",
   "connectionFailedAfterRetries": "Tried {count} times",
   "@connectionFailedAfterRetries": {
     "placeholders": {

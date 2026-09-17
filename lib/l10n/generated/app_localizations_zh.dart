@@ -209,6 +209,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionFailed => '连接失败';
 
   @override
+  String get connectionLost => '连接已断开';
+
+  @override
+  String get connectionLostRetrying => '连接断了，正在重连…';
+
+  @override
+  String get connectionLostBody => '会自己再试几次；也可以点「重连」立刻试一次。';
+
+  @override
+  String get connectionLostGaveUpBody => '和这台机器的连接断了，重试也没成功。';
+
+  @override
   String connectionFailedAfterRetries(int count) {
     return '试了 $count 次都没连上';
   }

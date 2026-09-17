@@ -106,7 +106,11 @@ void main() {
     final run = await _Run.start([
       HerdrTransportException(
         TransportFailure.connectFailed,
-        'herdr not found: $herdrNotInstalledSentinel',
+        // The shape the shell actually produces: the sentinel alone on its own
+        // line. Matching it as a LINE — never as a substring — is what keeps a
+        // command that merely embeds the constant (every terminal command does)
+        // from reading as a missing binary.
+        'sh: herdr: command not found\n$herdrNotInstalledSentinel\n',
       ),
     ]);
 

@@ -488,6 +488,30 @@ abstract class AppLocalizations {
   /// **'Connection failed'**
   String get connectionFailed;
 
+  /// No description provided for @connectionLost.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost'**
+  String get connectionLost;
+
+  /// No description provided for @connectionLostRetrying.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection lost — reconnecting…'**
+  String get connectionLostRetrying;
+
+  /// No description provided for @connectionLostBody.
+  ///
+  /// In en, this message translates to:
+  /// **'It will keep trying on its own — or tap reconnect to try now.'**
+  String get connectionLostBody;
+
+  /// No description provided for @connectionLostGaveUpBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to this machine dropped and would not come back.'**
+  String get connectionLostGaveUpBody;
+
   /// No description provided for @connectionFailedAfterRetries.
   ///
   /// In en, this message translates to:

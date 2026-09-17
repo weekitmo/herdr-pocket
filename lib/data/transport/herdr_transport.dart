@@ -141,6 +141,71 @@ const herdrCommandPrefix =
 /// The sentinel the prelude prints when herdr is absent.
 const herdrNotInstalledSentinel = '__HERDR_NOT_INSTALLED__';
 
+/// Whether [message] really is the shell saying "no herdr here".
+///
+/// THE SENTINEL IS A LINE, NOT A WORD, and that distinction is a bug fix rather
+/// than a style choice. It is safe to match on because the far side prints it
+/// alone on a line:
+///
+/// ```text
+/// HERDR=$(command -v herdr || echo "$HOME/.local/bin/herdr"); \
+///   [ -x "$HERDR" ] || { echo __HERDR_NOT_INSTALLED__ >&2; exit 127; }; …
+/// ```
+///
+/// …and unsafe to match as a SUBSTRING, because that command is itself built
+/// from the constant and an error message may quote it back. It did: a dead SSH
+/// connection made the command fail to start, the failure message carried the
+/// whole command, and three screens — the terminal, the machines list and the
+/// dial's own classifier — confidently told the user "herdr is not installed on
+/// this machine" about a machine that had it installed and a link that was
+/// simply gone. Matching a line makes the two shapes distinguishable, because a
+/// marker that can arrive inside a sentence about something else is not a
+/// marker.
+bool reportsHerdrMissing(String message) => message
+    .split('\n')
+    .any((line) => line.trim() == herdrNotInstalledSentinel);
+
+/// A command, shortened to something a person can read.
+///
+/// For error messages, which end up on a phone screen: the generated capability
+/// probe is 8 KB of shell and the terminal command opens with a PATH prelude,
+/// so quoting either one whole produced a wall of text where a sentence belongs
+/// — and, worse, made [reportsHerdrMissing]'s sentinel appear in messages that
+/// had nothing to do with a missing herdr.
+String shortCommand(String command, {int maxLength = 60}) {
+  final singleLine = command.replaceAll('\n', ' ').trim();
+  if (singleLine.length <= maxLength) return singleLine;
+  return '${singleLine.substring(0, maxLength)}…';
+}
+
+/// A transport whose connection OUTLIVES a single request, and that can say
+/// when it is gone.
+///
+/// Kept separate from [HerdrTransport] for the same reason [RemoteCommandRunner]
+/// is: not every transport can answer the question. `SshSocketTransport` holds
+/// one session for as long as the app is connected, so it can; the local socket
+/// transport opens a socket per request and has nothing to watch — its failures
+/// land in front of the caller, which is where it finds out.
+///
+/// THIS IS WHAT MAKES A DROPPED LINK NOTICEABLE AT ALL. A phone loses its SSH
+/// connection constantly — a sleeping radio, a handover between Wi-Fi and
+/// cellular, and above all an app that went to the background, where the OS
+/// freezes the process and the keepalive stops. Without this seam the app kept
+/// saying "connected" for as long as the user cared to look, and every request
+/// on the corpse failed one at a time.
+abstract interface class ConnectionLiveness {
+  /// False as soon as the connection behind this transport has ended.
+  bool get isAlive;
+
+  /// Completes when the connection ends ON ITS OWN.
+  ///
+  /// A deliberate [HerdrTransport.close] never completes this: "the user
+  /// disconnected" and "the link died" have opposite responses — one is left
+  /// alone and one is re-dialled — so the two must not arrive on the same
+  /// signal.
+  Future<void> get lost;
+}
+
 /// Moves bytes ONTO the machine the daemon lives on.
 ///
 /// herdr's socket API has no filesystem surface at all — verified by

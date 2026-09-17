@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/app_lifecycle.dart';
 import 'package:herdr_pocket/data/board_sync.dart';
 import 'package:herdr_pocket/data/herdr_client.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
@@ -46,10 +47,25 @@ enum ConnectStage {
 /// will be. The UI narrates from this rather than from a separate progress
 /// channel, so what the user reads and what the dialler is doing cannot drift.
 class Connecting extends ConnectionStatus {
-  const Connecting({this.attempt = 1, this.stage = ConnectStage.dialling});
+  const Connecting({
+    this.attempt = 1,
+    this.stage = ConnectStage.dialling,
+    this.afterLoss = false,
+  });
 
   final int attempt;
   final ConnectStage stage;
+
+  /// True when this dial is a RECOVERY: the connection was up and then died,
+  /// and nobody asked for this attempt.
+  ///
+  /// It exists for the wording and nothing else, but the wording matters here.
+  /// "Connecting" is the right sentence for a machine that never answered a
+  /// first dial, and the wrong one for a link that dropped while the user was
+  /// in another app: that case has to say the connection is GONE, because the
+  /// user is looking at a screen that was working a minute ago and the app is
+  /// the only thing that knows what changed.
+  final bool afterLoss;
 
   /// True for every try after the first — what the user would call "retrying".
   bool get isRetry => attempt > 1;
@@ -71,13 +87,35 @@ class Online extends ConnectionStatus {
 }
 
 class ConnectionFailed extends ConnectionStatus {
-  const ConnectionFailed(this.error, {this.attempts = 1});
+  const ConnectionFailed(
+    this.error, {
+    this.attempts = 1,
+    this.afterLoss = false,
+    this.willRetry = false,
+  });
 
   final Object error;
 
   /// How many dials were spent before giving up. One means "this was never
   /// worth retrying"; more means time was spent trying.
   final int attempts;
+
+  /// True when this failure is the end of a connection that HAD been working.
+  ///
+  /// The distinction the status line needs: "cannot reach this machine" is
+  /// about the first dial, and "the connection dropped and would not come back"
+  /// is about a link the user was using — which is worth saying, because it
+  /// explains the stale board underneath it.
+  final bool afterLoss;
+
+  /// True when another attempt is already scheduled.
+  ///
+  /// Carried on the state rather than derived from [attempts], because the two
+  /// are different facts: `attempts` is what this run spent, and this is
+  /// whether the app has not given up yet. The user is owed the difference —
+  /// "it is still trying" and "it is not coming back on its own" are opposite
+  /// instructions about whether to wait.
+  final bool willRetry;
 
   /// True when we reached the machine but found no daemon on it.
   ///
@@ -86,11 +124,17 @@ class ConnectionFailed extends ConnectionStatus {
   /// reports a socket that is not there. Both mean "herdr is not running here",
   /// which is the one failure the user can actually act on — so it deserves
   /// real guidance rather than a generic apology.
+  ///
+  /// The sentinel is matched as a LINE and never as a substring: it is a
+  /// constant this app builds its own commands out of, so a failure message
+  /// that quotes one of those commands contains it. That is exactly how a
+  /// dropped SSH link reported "herdr is not installed" — see
+  /// [reportsHerdrMissing].
   bool get isHerdrMissing {
     final e = error;
     if (e is! HerdrTransportException) return false;
     if (e.failure != TransportFailure.connectFailed) return false;
-    return e.message.contains(herdrNotInstalledSentinel) ||
+    return reportsHerdrMissing(e.message) ||
         e.message.contains('no herdr socket');
   }
 
@@ -128,6 +172,35 @@ final connectionRetryDelayProvider = Provider<Duration>(
   (ref) => connectionRetryDelay,
 );
 
+/// How many extra rounds a connection that WAS up gets after it dies.
+///
+/// The first round is immediate — a link that dropped because the radio blinked
+/// is back by the time the user notices. These are the slow ones, for the case
+/// that actually prompted them: the machine is asleep, or the overlay network
+/// that carries the connection is re-establishing a path, and neither is fixed
+/// in fifteen seconds. Four rounds at half a minute is two minutes of the app
+/// quietly getting itself back, which is roughly as long as anyone waits before
+/// they decide it is broken — and then the retry is one tap away and the status
+/// line already says the connection is gone.
+const int connectionSlowRounds = 4;
+
+/// How long between those rounds.
+const Duration connectionSlowRetryDelay = Duration(seconds: 30);
+
+/// The slow-round delay, as a provider so tests need not wait in real time.
+final connectionSlowRetryDelayProvider = Provider<Duration>(
+  (ref) => connectionSlowRetryDelay,
+);
+
+/// How long a resume-time health check may take before the link is presumed
+/// gone.
+///
+/// Short on purpose. This one runs when the user has just looked at the screen
+/// and wants the board: a check that takes as long as a dial is worse than
+/// dialling again, because the answer is only useful if it arrives before the
+/// user's next tap.
+const Duration resumeHealthCheckTimeout = Duration(seconds: 4);
+
 /// Builds the connector a dial uses.
 ///
 /// A provider rather than a literal inside [ConnectionNotifier.build], so the
@@ -161,7 +234,7 @@ bool isWorthRetrying(Object error) {
   // Reaching the machine and finding no herdr is the most specific failure
   // this app has, and the one where a retry is provably pointless: the
   // command already ran on the other side and reported its answer.
-  if (error.message.contains(herdrNotInstalledSentinel)) return false;
+  if (reportsHerdrMissing(error.message)) return false;
 
   return switch (error.failure) {
     // The case this exists for: no route, refused, radio asleep.
@@ -218,6 +291,23 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
   /// for: a run may only publish while it is still the current one.
   int _generation = 0;
 
+  /// True when the run of [build] that is dialling now is RECOVERING a link
+  /// that died, rather than answering a request.
+  ///
+  /// Set by the loss watcher just before it asks for another dial, consumed at
+  /// the top of the next run, and used for the status wording alone. It has to
+  /// live here rather than on the request counter, because the counter is a
+  /// number the user and the network both bump and there is no version of it
+  /// that says why.
+  bool _afterLoss = false;
+
+  /// Rounds of slow retries already spent on the current outage.
+  int _slowRounds = 0;
+
+  Timer? _slowRetry;
+
+  AppResumeWatcher? _resumeWatcher;
+
   @override
   Future<ConnectionStatus> build() async {
     final generation = ++_generation;
@@ -236,9 +326,87 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       final client = _live;
       _live = null;
       if (client != null) unawaited(client.close());
+      // A pending slow round belongs to the run that scheduled it. Without
+      // this, deleting a machine and re-adding it would be racing a timer that
+      // still wants to dial the old one.
+      _slowRetry?.cancel();
+      _slowRetry = null;
+      _resumeWatcher?.stop();
+      _resumeWatcher = null;
     });
 
-    return await _dialUntilAnswered(host, generation);
+    // The app coming back to the foreground is the one moment the OS may have
+    // silently taken the link away — see [AppResumeWatcher]. Installed for the
+    // life of this run, and only for a run that is dialling something.
+    _resumeWatcher?.stop();
+    _resumeWatcher = AppResumeWatcher(() => _healthCheck(host, generation))..start();
+
+    final status = await _dialUntilAnswered(host, generation);
+    if (status is Online) {
+      // The link is up: bank the round counter and start watching it for its
+      // own end.
+      _slowRounds = 0;
+      _watchForLoss(status.client, host, generation);
+    }
+    return status;
+  }
+
+  /// Watches a live session for its own end, and recovers from it.
+  ///
+  /// THIS IS THE BUG THE USER REPORTED. The app used to find out that a link
+  /// had died only when a request on it failed one at a time, and each failure
+  /// was narrated by whatever code happened to be awaiting it — so a dead
+  /// connection looked like a missing binary, a missing file, or an 8 KB shell
+  /// script on the screen. Nothing re-dialled, and the status stayed `Online`
+  /// with a green dot, because nothing had told it otherwise.
+  void _watchForLoss(HerdrClient client, HostProfile host, int generation) {
+    // Widened to `Object` on purpose: Dart does not promote across two
+    // unrelated interfaces, and this is the same two-step the command runner
+    // uses — see `_runnerOf` in `remote_fs.dart`.
+    final Object transport = client.transport;
+    // Not every transport can answer: the local socket opens one connection per
+    // request and finds out at the call. See [ConnectionLiveness].
+    if (transport is! ConnectionLiveness) return;
+    unawaited(
+      transport.lost.then((_) => _recover(host, generation)),
+    );
+  }
+
+  /// Re-dials after a loss, if this run is still the one that owns the screen.
+  void _recover(HostProfile host, int generation) {
+    if (!ref.mounted || generation != _generation) return;
+    if (!_stillWanted(host)) return;
+    _afterLoss = true;
+    ref.read(connectRequestProvider.notifier).request();
+  }
+
+  /// Checks that a connection the OS may have frozen is still usable.
+  ///
+  /// A FROZEN PROCESS IS NOT A CLOSED SOCKET. When the app goes to the
+  /// background the OS can stop the isolate without the kernel noticing
+  /// anything; the keepalive stops being written, the far end (or the NAT, or
+  /// the overlay network in between) drops the flow, and this side is never
+  /// told. So "the client says it is open" is not evidence. One round trip with
+  /// a deadline is.
+  ///
+  /// A failed check re-dials through the ordinary path, which means the user
+  /// sees the same "recovering" narration a dropped link produces.
+  void _healthCheck(HostProfile host, int generation) {
+    if (generation != _generation || !ref.mounted) return;
+    final client = _live;
+    if (client == null) return;
+
+    unawaited(() async {
+      try {
+        await client.ping().timeout(resumeHealthCheckTimeout);
+        return;
+      } on Object {
+        // A ping that fails or does not come back in time is the answer we
+        // needed: whatever the socket claims, this connection is not carrying
+        // traffic.
+      }
+      _recover(host, generation);
+    }());
   }
 
   /// Whether the machine a dial is for is still one the user has.
@@ -286,6 +454,12 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
     HostProfile host,
     int generation,
   ) async {
+    // Consumed, not read: the flag describes THIS run. A later dial the user
+    // asked for is not a recovery, and saying "the connection dropped" over a
+    // machine they just tapped would be the app inventing a fact.
+    final afterLoss = _afterLoss;
+    _afterLoss = false;
+
     Object? lastError;
     var spent = 0;
 
@@ -299,7 +473,7 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       // on a screen the user has already left.
       if (!_stillWanted(host)) return const Disconnected();
 
-      _publish(generation, Connecting(attempt: attempt));
+      _publish(generation, Connecting(attempt: attempt, afterLoss: afterLoss));
 
       if (attempt > 1) {
         // Say what is happening BEFORE the wait, not after it. The wait is the
@@ -331,7 +505,11 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
         // somebody watching a screen that has not changed in ten seconds.
         _publish(
           generation,
-          Connecting(attempt: attempt, stage: ConnectStage.verifying),
+          Connecting(
+            attempt: attempt,
+            stage: ConnectStage.verifying,
+            afterLoss: afterLoss,
+          ),
         );
 
         final client = HerdrClient(connected.bundle.transport);
@@ -363,8 +541,54 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
     // entirely. Returning the value rather than writing it is not enough:
     // Riverpod applies the result of a build it has already replaced, which is
     // exactly how the reported bug kept its banner up.
-    _publish(generation, ConnectionFailed(lastError!, attempts: spent));
-    return ConnectionFailed(lastError, attempts: spent);
+    //
+    // `willRetry` is decided HERE and acted on below, so the sentence the user
+    // reads and the timer that is running cannot disagree about whether another
+    // attempt is coming.
+    final willRetry = afterLoss && _slowRounds < connectionSlowRounds;
+    _publish(
+      generation,
+      ConnectionFailed(
+        lastError!,
+        attempts: spent,
+        afterLoss: afterLoss,
+        willRetry: willRetry,
+      ),
+    );
+    if (willRetry) _scheduleSlowRetry(host, generation);
+    return ConnectionFailed(
+      lastError,
+      attempts: spent,
+      afterLoss: afterLoss,
+      willRetry: willRetry,
+    );
+  }
+
+  /// Keeps trying, slowly, while a RECOVERED link refuses to come back.
+  ///
+  /// WHY THIS IS NOT JUST "THE LADDER AGAIN". The three-attempt ladder is sized
+  /// for a user watching a spinner: most of a minute, then a sentence and a
+  /// button. A lost connection is a different situation — the machine is very
+  /// often asleep, or the overlay network that carries it is re-establishing a
+  /// path, and both fix themselves in a minute or two. Without these rounds the
+  /// user taps "reconnect" into a machine that is still asleep, gets the same
+  /// failure, and concludes the app is broken; with them the app simply comes
+  /// back on its own, and the status line says the connection is gone the whole
+  /// time.
+  ///
+  /// Bounded by [connectionSlowRounds] so nothing dials forever, and silent
+  /// between rounds (the published state stays the failure, which is the honest
+  /// description of the next thirty seconds) — until the round runs, when the
+  /// ordinary [Connecting] narration takes over again.
+  void _scheduleSlowRetry(HostProfile host, int generation) {
+    _slowRounds++;
+    _slowRetry?.cancel();
+    _slowRetry = Timer(ref.read(connectionSlowRetryDelayProvider), () {
+      if (!ref.mounted || generation != _generation) return;
+      if (!_stillWanted(host)) return;
+      _afterLoss = true;
+      ref.read(connectRequestProvider.notifier).request();
+    });
   }
 
   /// Dials now, because the user asked.
@@ -418,6 +642,23 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
   /// How long to wait before rebuilding a subscription that ended.
   static const resubscribeDelay = Duration(seconds: 3);
 
+  /// The last board actually read, and the machine it came from.
+  ///
+  /// KEPT ACROSS A RECONNECT, because the alternative is a board that blanks
+  /// itself. A rebuild during a recovery — and there is always one, the
+  /// connection state changes — used to return [AgentList.empty], so an app
+  /// that had just lost its link showed the user "no agents" for as long as the
+  /// re-dial took. Blank is the one answer that is a lie: it says the agents
+  /// are gone when what is gone is the connection, and `refresh()` has said the
+  /// opposite in its own comment since the beginning ("keeps the previous value
+  /// on failure instead of flashing an error").
+  ///
+  /// Keyed by MACHINE, because the other half of the rule is that a stale list
+  /// must never be shown for a different host: switching machines is exactly
+  /// when a board full of the previous one's agents would look right and be
+  /// wrong.
+  ({String hostId, AgentList board})? _lastBoard;
+
   @override
   Future<AgentList> build() async {
     ref.onDispose(() {
@@ -427,11 +668,18 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
       unawaited(_sync?.close());
     });
 
+    final hostId = ref.watch(currentHostProvider)?.id ?? '';
     final connection = await ref.watch(connectionProvider.future);
-    if (connection is! Online) return AgentList.empty();
+    if (connection is! Online) {
+      final cached = _lastBoard;
+      if (cached != null && cached.hostId == hostId) return cached.board;
+      return AgentList.empty();
+    }
 
     await _startSync(connection.client);
-    return await _readBoard(connection.client);
+    final board = await _readBoard(connection.client);
+    _lastBoard = (hostId: hostId, board: board);
+    return board;
   }
 
   Future<void> _startSync(HerdrClient client) async {

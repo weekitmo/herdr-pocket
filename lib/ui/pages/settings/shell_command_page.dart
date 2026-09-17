@@ -169,8 +169,9 @@ class _RestoreRow extends StatelessWidget {
 /// widget instead of a one-line `CupertinoTextField` in the row. A smart quote
 /// or a smart dash in a shell command is not a typo — it is a different
 /// command, or a syntax error on a line the user cannot see, and it arrives
-/// silently. The same four switches the credential fields use, for the same
-/// reason.
+/// silently. Autocorrect goes with them: it rewrites words in place.
+///
+/// SUGGESTIONS ARE A THIRD THING and stay on — see the field below for why.
 ///
 /// The style is written out in full because `CupertinoTextField` hands it
 /// straight to `EditableText` rather than merging it with the ambient
@@ -188,8 +189,13 @@ class _CommandField extends StatelessWidget {
 
     return CupertinoTextField(
       controller: controller,
+      // NOT `enableSuggestions: false`. A session command is not a credential:
+      // a Chinese name in `tmux new -s 会话` is a perfectly ordinary thing to
+      // type, and on Android turning suggestions off hands the field a
+      // `VISIBLE_PASSWORD` input type (see `chat_composer.dart`, where the
+      // engine bytecode is quoted) — which some Chinese keyboards answer with a
+      // secure keyboard that cannot type Chinese at all.
       autocorrect: false,
-      enableSuggestions: false,
       smartDashesType: SmartDashesType.disabled,
       smartQuotesType: SmartQuotesType.disabled,
       keyboardType: TextInputType.text,

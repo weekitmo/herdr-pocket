@@ -30,7 +30,8 @@ class SshSocketTransport
         RemoteCommandRunner,
         RemoteStreamRunner,
         RemoteFilePorter,
-        RemoteFileFetcher {
+        RemoteFileFetcher,
+        ConnectionLiveness {
   SshSocketTransport({
     required this.credentials,
     required this.socketPath,
@@ -59,13 +60,98 @@ class SshSocketTransport
   /// re-installs a live session behind close()'s back and leaks it.
   int _generation = 0;
 
+  /// Completed once when the SSH session ends and WE did not ask it to.
+  ///
+  /// A Completer rather than a pass-through of `SSHClient.done`, because the
+  /// two callers that need this — the connection supervisor and a resume-time
+  /// health check — usually attach AFTER the loss (the link can die while the
+  /// app is frozen, and `close()`'s teardown is asynchronous). A future that is
+  /// already complete still fires; a raw `done` on a client we have already
+  /// dropped cannot be reached any more.
+  final Completer<void> _lost = Completer<void>();
+
+  /// True between [close] and the transport being finished.
+  ///
+  /// It exists so a deliberate close is never reported as a loss. The two want
+  /// opposite responses — one is left alone, one is re-dialled — and
+  /// `SSHClient.done` completes for both.
+  bool _closing = false;
+
+  /// True once this transport is FINISHED: the link died, or [close] was
+  /// called.
+  ///
+  /// A terminal state on purpose. A transport that re-dialled itself would be a
+  /// second, invisible owner of recovery racing the one above it — the
+  /// connection provider watches [lost] and dials a whole new transport, so a
+  /// lazy re-dial inside this one buys nothing and can leave two SSH sessions
+  /// to the same machine. Everything after this point fails fast with the same
+  /// sentence, which is also what makes "a dead transport has exactly one
+  /// answer" true.
+  bool _finished = false;
+
+  @override
+  bool get isAlive => !_finished && _client != null && !_client!.isClosed;
+
+  @override
+  Future<void> get lost => _lost.future;
+
+  /// Records that the connection behind this transport has gone.
+  ///
+  /// Idempotent, and it drops `_client` so that nothing downstream can be
+  /// handed a corpse: a dead client that stays installed is a client that every
+  /// later request will fail on, one at a time, each with its own misleading
+  /// message.
+  void _markLost() {
+    if (_closing) return;
+    _client = null;
+    _finished = true;
+    if (!_lost.isCompleted) _lost.complete();
+  }
+
+  /// Watches one dialled session for its own end.
+  void _watch(SSHClient client) {
+    unawaited(() async {
+      try {
+        // `done` completes normally when the remote or the network ends the
+        // session; it can also complete with an error, and an errored end is
+        // still an end.
+        await client.done;
+      } on Object {
+        // fall through
+      }
+      if (identical(client, _client)) _markLost();
+    }());
+  }
+
   bool get isConnected => _client != null;
 
   /// Connects, or returns the existing client. Concurrent callers share one
   /// attempt rather than each opening — and leaking — their own session.
+  ///
+  /// A CLOSED CLIENT IS NEVER HANDED OUT. It used to be: the only test was
+  /// `_client != null`, so once the SSH session died this method cheerfully
+  /// returned the corpse for the rest of the app's life. Every request then
+  /// failed on its own — with whatever message that request's code happened to
+  /// produce — which is how a dropped link turned into "herdr is not installed
+  /// on this machine" and an 8 KB shell command on the user's screen. Failing
+  /// here instead means a dead transport has exactly one answer, and it says
+  /// what actually happened.
   Future<SSHClient> _connected() async {
+    if (_finished) {
+      throw _lost.isCompleted
+          ? _gone()
+          : HerdrTransportException(
+              TransportFailure.streamClosed,
+              'this connection was closed',
+            );
+    }
+
     final existing = _client;
-    if (existing != null) return existing;
+    if (existing != null) {
+      if (!existing.isClosed) return existing;
+      _markLost();
+      throw _gone();
+    }
 
     final inFlight = _connecting;
     if (inFlight != null) return await inFlight;
@@ -84,11 +170,26 @@ class SshSocketTransport
         );
       }
       _client = client;
+      // A session dialled AFTER a close() is a new session: the flag meant "the
+      // one we closed is not a loss", and it must not outlive the client it was
+      // about.
+      _closing = false;
+      _watch(client);
       return client;
     } finally {
       _connecting = null;
     }
   }
+
+  /// What every operation on a dead transport reports.
+  ///
+  /// One sentence, naming the machine, with no command in it: the caller that
+  /// asked is the one that knows what it was trying to do, and the supervisor
+  /// above is already re-dialling.
+  HerdrTransportException _gone() => HerdrTransportException(
+        TransportFailure.streamClosed,
+        'the SSH connection to ${credentials.host} is gone',
+      );
 
   Future<SSHClient> _connect() => _dialer.dial();
 
@@ -238,7 +339,14 @@ class SshSocketTransport
     } on Object catch (e) {
       throw HerdrTransportException(
         TransportFailure.unknown,
-        'could not start the remote command: $command',
+        // SHORT, AND WITH THE CAUSE IN IT. The command used to be quoted here
+        // in full: for the capability probe that is 8 KB of shell rendered on a
+        // phone, it says nothing about WHY the command failed, and — because
+        // the terminal command embeds the `__HERDR_NOT_INSTALLED__` prelude —
+        // it made downstream classifiers announce a missing herdr on a machine
+        // whose link had merely died.
+        'could not start the remote command '
+        '(${shortCommand(command)}): $e',
         cause: e,
       );
     }
@@ -264,7 +372,12 @@ class SshSocketTransport
     } on Object catch (e) {
       throw HerdrTransportException(
         TransportFailure.unknown,
-        'remote command failed: $command',
+        // Same rule as `openCommandDuplex`: a readable command, and the reason
+        // it did not run. Without the reason this message said only "remote
+        // command failed", which is what a dropped link and a missing binary
+        // both look like from here.
+        'the remote command failed '
+        '(${shortCommand(command)}): $e',
         cause: e,
       );
     }
@@ -504,6 +617,8 @@ class SshSocketTransport
     // Bump first, then snapshot-and-clear. Awaiting the old client's close is a
     // suspension point; clearing afterwards would discard a legitimate
     // reconnect that landed during it.
+    _closing = true;
+    _finished = true;
     _generation++;
     _connecting = null;
     final client = _client;

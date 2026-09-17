@@ -402,7 +402,9 @@ class _HostRow extends ConsumerWidget {
   /// fix, since a retry will not.
   static String _shortReason(AppLocalizations l10n, Object error) {
     if (error is! HerdrTransportException) return l10n.connectionFailed;
-    if (error.message.contains(herdrNotInstalledSentinel)) {
+    // Line-exact, because the sentinel also appears inside the commands this
+    // app builds — see [reportsHerdrMissing].
+    if (reportsHerdrMissing(error.message)) {
       return l10n.errorHerdrNotFound;
     }
     return switch (error.failure) {

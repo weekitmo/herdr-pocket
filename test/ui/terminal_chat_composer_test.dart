@@ -533,6 +533,57 @@ void main() {
       expect(field.controller!.text, '/');
     });
   });
+
+  group('the field the phone actually gets', () {
+    testWidgets('it takes Chinese: suggestions are ON', (tester) async {
+      // THE BUG THIS PINS. Android's engine implements `enableSuggestions:
+      // false` by ORing `TYPE_TEXT_VARIATION_VISIBLE_PASSWORD` into the editor
+      // info — read out of `TextInputPlugin.inputTypeFromTextInputType` in this
+      // machine's own `flutter.jar`, where the `enableSuggestions == false`
+      // branch ends in `sipush 144`. A field that looks like a password box
+      // gets the password treatment from the keyboard, and MIUI answers it with
+      // its secure keyboard, which cannot produce Chinese at all. Reported from
+      // the phone in exactly those words: 弹出的还是安全输入法，无法输入中文.
+      await pump(tester);
+      await openComposer(tester);
+
+      final field =
+          tester.widget<CupertinoTextField>(find.byKey(composerFieldKey));
+      expect(field.enableSuggestions, isTrue);
+
+      // And the switches that protect a COMMAND are still on: autocorrect
+      // rewrites words in place, and the dash/quote substitutions rewrite
+      // punctuation (`--flag` becomes an en dash). Both are silent corruptions
+      // of what reaches an agent, which is why they stay off even though
+      // suggestions do not.
+      expect(field.autocorrect, isFalse);
+      expect(field.smartDashesType, SmartDashesType.disabled);
+      expect(field.smartQuotesType, SmartQuotesType.disabled);
+    });
+
+    testWidgets('the field under the keyboard is configured, not defaulted',
+        (tester) async {
+      // The same question one layer down: `CupertinoTextField` hands these to
+      // `EditableText`, which is what actually builds the `TextInputConnection`
+      // — and the engine only ever sees what THAT carries. Asserting on the
+      // field's own properties and on the editable underneath it is what makes
+      // the claim "Android is told to keep its suggestions" rather than "the
+      // widget was constructed with a value".
+      await pump(tester);
+      await openComposer(tester);
+
+      final editable = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(composerFieldKey),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(editable.enableSuggestions, isTrue);
+      expect(editable.autocorrect, isFalse);
+      expect(editable.smartDashesType, SmartDashesType.disabled);
+      expect(editable.smartQuotesType, SmartQuotesType.disabled);
+    });
+  });
 }
 
 /// A file listing the way the shell command answers one.

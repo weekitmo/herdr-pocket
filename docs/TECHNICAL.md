@@ -128,12 +128,62 @@ SFTP 被关掉时给的是**它自己的**错误（要改 `sshd_config`），不
 被静默丢掉** —— 拨号返回后要对一次账。尺寸策略的最后形态是：按**窗格自己的行数**请求、
 可视窗口**底部对齐**。
 
+## 3.5 连接的生命周期：断了之后
+
+**手机上的连接是会断的，这不是异常而是常态。** 息屏、切后台（系统冻结进程 ⇒ keepalive 停写）、
+Wi-Fi ↔ 蜂窝切换、以及**虚拟内网穿透**（overlay 组网）的路径重算，任何一个都能让一条
+正在用的 SSH 连接在两端都不知情的情况下消失。所以设计目标不是"不断"，而是
+**断了立刻知道、立刻自己接上**。
+
+### 谁负责发现（`ConnectionLiveness`）
+
+`SshSocketTransport` 实现 `ConnectionLiveness`：`lost` 在会话自己结束时完成，
+`isAlive` 反映当下。它是**独立的能力缝**（照 `RemoteCommandRunner` 的先例），
+不是 `HerdrTransport` 的成员 —— 本机 socket 传输每次请求开一条连接，没有东西可观察，
+它的失败就落在调用者面前。
+
+- **自己 `close()` 的不算丢**：两者要的反应相反（一个放着不动，一个要重拨）。
+- **丢了就终态**：不再交出死 client，后续每个请求都失败在同一句话上
+  （`the SSH connection to <host> is gone`）。传输层不做"懒重拨" —— 那会和上层
+  的恢复抢方向盘，甚至留下两条到同一台机器的会话。
+- 判断依据是 `client.done`，dartssh2 默认 **10s keepalive**（`ssh_dial.dart` 依赖这个默认值）。
+
+### 谁负责恢复（`ConnectionNotifier`）
+
+`Online` 之后挂一个 `lost` 观察者 ⇒ 掉线即自动重拨，**沿用 3 次阶梯**，失败后按 30s
+间隔再来**有限几轮**（`connectionSlowRounds`），然后停下、显示「连接已断开」+ 重连按钮。
+用户在看到 `Online` 时不会收到"连接断了"的提示 —— 那正是要消灭的谎言。
+
+**回前台会先做一次健康检查。** 进程被冻住时 socket 在本地内核看来还是"开着"的，
+所以 `AppResumeWatcher` 触发一次带 4s 截止的 `ping`：只有往返一次才算数，失败即重拨。
+
+看板**不会在重连期间清空**：`BoardNotifier` 记住最后一次读到的看板（按机器 id 键控），
+连接不在线时返回它 —— 空白等于说"agent 都没了"，而真相是"连接没了"。
+
+### 三件不能做的事
+
+1. **不要用命令原文当错误消息**。`remote command failed: /bin/sh -c '…8KB…'` 既是屏幕上的
+   一堵墙，也**污染判断**（见下）。
+2. **不要用 `message.contains(sentinel)` 判断"没装 herdr"**。`herdrCommandPrefix` 里就含
+   `__HERDR_NOT_INSTALLED__` 这个字面量，任何引用命令的消息都会命中：断线因此被三处
+   （终端页 / Machines 页 / `isHerdrMissing`）报成「这台机器上没有找到 herdr」。
+   现在一律 `reportsHerdrMissing()`：**整行**相等才认。
+3. **不要把 15s 超时当"连接断了"的证据**：`replyTimeout` 是控制面往返的上限，
+   会丢连接的是网络层，`lost` 才是它的信号。
+
+### 保活（keep-alive）的边界
+
+Dart 侧的 keepalive（10s）只在进程活着时有效；**进后台被冻结后没有任何 Dart 代码在跑**，
+所以"后台也保持连接"在 Android 上只有一条路：**前台服务 + 常驻通知**。
+目前没做 —— 现状是"回前台一秒内自愈"。
+
 ## 4. 代码地图
 
 | 关注点 | 在哪 |
 |---|---|
 | SSH 拨号、主机密钥、认证方式 | `lib/data/transport/ssh_dial.dart` |
 | socket 传输（`direct-streamlocal`） | `lib/data/transport/ssh_socket_transport.dart` |
+| 连接存活与恢复（`ConnectionLiveness` / `ConnectionNotifier`） | `lib/data/transport/ssh_socket_transport.dart`、`lib/data/providers/connection.dart`、`lib/data/app_lifecycle.dart` |
 | 本机 Unix socket（桌面开发用） | `lib/data/transport/unix_socket_transport.dart` |
 | 协议封装与分帧 | `lib/data/protocol/` |
 | 看板同步（订阅先于读取） | `lib/data/board_sync.dart` |
@@ -159,11 +209,17 @@ SFTP 被关掉时给的是**它自己的**错误（要改 `sshd_config`），不
 
 三条命令，见 README 的「测试」一节。这里只说它们背后那条规矩和 CI 多出来的闸：
 
-- **`flutter test`** 约 1000 个测试（实测 1006 passed / ~45s）。
+- **`flutter test`** 约 1000 个测试（实测 1026 passed / ~45s）。
 - **`sh tool/ci_tests.sh`** 起 headless daemon + 一次性 sshd，跑完后**只要有测试被跳过就失败**。
   没有这道闸，一个坏掉的 SSH 传输照样是绿色勾。`HP_LIVE_WRITES=1` 才跑会创建东西的测试。
 - 那个 sshd 是 **/tmp 里的第二个**，自带主机密钥和 `authorized_keys`（`tool/test_sshd.sh`），
-  **刻意不碰 `~/.ssh`**。
+  **刻意不碰 `~/.ssh`**。各测试文件用**各自的端口**（2222 传输 / 2223+2224 SFTP /
+  2225 断线 / 2226 端到端恢复），并行跑才不会互相抢。
+- **丢连接怎么测**：`test/integration/connection_loss_test.dart` 把连接塞进一个
+  **可切的可切断代理**（`CuttableProxy`）再切断 —— `tool/test_sshd.sh stop` **杀不掉已建立的
+  会话**（`sshd-session` 子进程还活着），所以"停掉服务器"根本模拟不出断线。
+  `connection_recovery_test.dart` 再往上走一层：真 SSH + 真 herdr + 真 socket 转发，
+  切路径后断言**第二次** `Online`（第一次那个还站在尸体上，等价于没测）。
 - **`patrol test`** 手跑，三个冒烟测试，只断言结构不断言像素。它不能被
   `flutter test patrol_test/` 代替（那些测试由 Android 的 instrumentation runner 驱动）。
 

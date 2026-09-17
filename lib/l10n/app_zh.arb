@@ -82,6 +82,10 @@
     }
   },
   "connectionFailed": "连接失败",
+  "connectionLost": "连接已断开",
+  "connectionLostRetrying": "连接断了，正在重连…",
+  "connectionLostBody": "会自己再试几次；也可以点「重连」立刻试一次。",
+  "connectionLostGaveUpBody": "和这台机器的连接断了，重试也没成功。",
   "connectionFailedAfterRetries": "试了 {count} 次都没连上",
   "@connectionFailedAfterRetries": {
     "placeholders": {

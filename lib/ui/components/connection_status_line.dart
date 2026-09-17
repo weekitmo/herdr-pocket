@@ -37,6 +37,12 @@ String connectionStatusLabel(
     _ => null,
   };
   if (connecting != null) {
+    // A RECOVERY IS NOT A FIRST CONNECT. "Connecting…" over a board the user
+    // was reading a minute ago reads as if the app had restarted; what they
+    // need told is that the link they were using went away and is being put
+    // back. The try counter is deliberately not part of it: nobody counts
+    // retries they did not ask for.
+    if (connecting.afterLoss) return l10n.connectionLostRetrying;
     if (connecting.isLastAttempt && connecting.isRetry) {
       return l10n.connectionStageLastAttempt;
     }
@@ -54,6 +60,7 @@ String connectionStatusLabel(
 
   return switch (status) {
     Online(:final hello) => hello.version,
+    ConnectionFailed(afterLoss: true) => l10n.connectionLost,
     ConnectionFailed() => l10n.connectionFailed,
     _ => l10n.connectionStateOffline,
   };
@@ -67,6 +74,10 @@ String connectionStatusLabel(
 /// same words for two different experiences, and the user is the one who has to
 /// decide whether to try again.
 ///
+/// A LOST CONNECTION COMES FIRST, because it is the one case where the user is
+/// looking at the explanation for something they can see: the board is stale,
+/// the terminal is frozen, and neither says why.
+///
 /// A generic exception gets NOTHING. The app saying "something went wrong" in
 /// two places is not twice as informative, it is twice as loud.
 String? connectionFailureDetail(
@@ -76,6 +87,14 @@ String? connectionFailureDetail(
   if (failure.isHerdrMissing) return l10n.errorHerdrNotFoundBody;
   if (failure.isForwardingRefused) return l10n.errorForwardingRefused;
   if (failure.isSecurityRelevant) return l10n.connectionStateHostKeyChangedBody;
+  if (failure.afterLoss) {
+    // Whether another round is coming is the difference between "wait" and "it
+    // is not coming back on its own", and the rounds are bounded — so the line
+    // can honestly say which one this is.
+    return failure.willRetry
+        ? l10n.connectionLostBody
+        : l10n.connectionLostGaveUpBody;
+  }
   if (failure.attempts > 1) {
     return l10n.connectionFailedAfterRetries(failure.attempts);
   }

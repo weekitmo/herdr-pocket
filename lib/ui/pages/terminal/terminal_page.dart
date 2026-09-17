@@ -69,6 +69,9 @@ const int _jumpToBottomLines = 65535;
 const double kTerminalMinZoom = 0.8;
 const double kTerminalMaxZoom = 1.8;
 
+/// The button that opens a dead session again, for the page's tests.
+const Key terminalReopenKey = ValueKey('terminal.overlay.reopen');
+
 /// A live terminal on one agent's pane.
 ///
 /// The framing is "a status board that contains a terminal": this is reached by
@@ -120,6 +123,34 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   Object? _error;
   String? _closeReason;
   bool _busy = true;
+
+  /// True while the session on screen is one the daemon is still feeding.
+  ///
+  /// The page has three ways to be looking at nothing — opening, errored and
+  /// closed — and the connection listener above needs to know which, because
+  /// one of them means "this page is fine, do nothing".
+  bool get _sessionLive =>
+      !_busy && _error == null && _closeReason == null && _session != null;
+
+  /// Opens the pane again after its session died.
+  ///
+  /// The old session is closed FIRST and read into a local before the state is
+  /// cleared, which is the same ordering `_switchTo` documents: nulling the
+  /// field and then closing it closes nothing, and the daemon keeps a control
+  /// session on the pane — which is exactly what makes the next attach fail.
+  Future<void> _reopen() async {
+    if (_busy) return;
+    final previous = _session;
+    _session = null;
+    await previous?.close();
+    if (!mounted) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _closeReason = null;
+    });
+    await _open();
+  }
 
   int _cols = 80;
 
@@ -1349,6 +1380,33 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         ref.watch(settingsProvider.select((s) => s.terminalTextScale));
     final zoom = _pinchingScale ?? storedZoom;
 
+    // THE TWO HALVES OF "THE LINK CAME BACK".
+    //
+    // A dropped connection takes this page's stream with it — the session was
+    // opened on the transport that died — so the recovery the connection
+    // provider performs upstairs leaves a terminal that is still looking at a
+    // dead channel. Re-attaching when the connection comes back is what makes
+    // the recovery invisible: the user returns to the app and the pane they
+    // were reading is simply there again.
+    //
+    // Keyed on the CLIENT, not on the status: a reconnect installs a new one,
+    // and comparing objects is how "the connection I am attached to" is
+    // expressed without a flag that can go stale. `_open` is safe to call when
+    // nothing is wrong — it is the same call the pane switcher makes.
+    ref.listen<AsyncValue<ConnectionStatus>>(connectionProvider, (previous, next) {
+      final before = previous?.value;
+      final after = next.value;
+      if (after is! Online) return;
+      if (before is Online && identical(before.client, after.client)) return;
+      // The menus read the machine over the transport that just died
+      // (`ref.read(capabilityProvider)`), so they are re-pointed at the new one
+      // in the same breath. Otherwise the first `/` after a recovery would fail
+      // on a dead connection while the terminal next to it worked.
+      _ensureComposerMenu();
+      if (_sessionLive) return;
+      unawaited(_reopen());
+    });
+
     return CupertinoPageScaffold(
       backgroundColor: palette.background,
       navigationBar: HerdrTopBar(
@@ -1880,6 +1938,13 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         closeReason: _closeReason,
         palette: palette,
         l10n: l10n,
+        // A WAY BACK FROM THE DEAD SESSION. Everything this page shows when it
+        // is not showing a terminal is one of three things — opening, failed,
+        // or the pane's process is gone — and the first two are exactly what a
+        // dropped connection produces. Without this the only way to retry was
+        // to leave the page and open the pane again, which a user on a flaky
+        // overlay network would be doing all day.
+        onReopen: _reopen,
       );
     }
 
@@ -2269,11 +2334,16 @@ class _Overlay extends StatelessWidget {
     required this.closeReason,
     required this.palette,
     required this.l10n,
+    this.onReopen,
   });
 
   final bool busy;
   final Object? error;
   final String? closeReason;
+
+  /// Opens the session again. Null while one is already being opened, and
+  /// suppressed for a page that has nothing to open — the caller decides.
+  final Future<void> Function()? onReopen;
 
   /// The terminal's colours, not the app's: this text sits ON the terminal's
   /// own ground, so the scheme's foreground/background PAIR is the only thing
@@ -2318,6 +2388,30 @@ class _Overlay extends StatelessWidget {
                 ),
               ),
             ],
+            // Not while opening: a button that restarts the attempt already
+            // running is a button that makes the wait longer. The wording
+            // differs by what went wrong — a dead session is opened again, a
+            // failed one is tried again — and both live in the same place
+            // because for the user they are the same gesture.
+            if (!busy && onReopen != null) ...[
+              const SizedBox(height: Space.lg),
+              CupertinoButton(
+                key: terminalReopenKey,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Space.lg,
+                  vertical: Space.sm,
+                ),
+                color: palette.foreground.withValues(alpha: 0.12),
+                onPressed: () => unawaited(onReopen!()),
+                child: Text(
+                  error != null ? l10n.actionRetry : l10n.shellReopen,
+                  style: TextStyle(
+                    color: palette.foreground,
+                    fontSize: TextSize.strong,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -2326,7 +2420,10 @@ class _Overlay extends StatelessWidget {
 
   static String _explain(Object e, AppLocalizations l10n) {
     if (e is HerdrTransportException) {
-      if (e.message.contains(herdrNotInstalledSentinel)) {
+      // A LINE, never a substring: the command this app builds embeds the
+      // sentinel, so any message that quotes a command used to read as "herdr
+      // is not installed" — which is what a dropped SSH connection was told.
+      if (reportsHerdrMissing(e.message)) {
         return l10n.errorHerdrNotFound;
       }
       return l10n.errorGeneric;
