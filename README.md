@@ -285,6 +285,11 @@ assets/           fonts, agent marks, colour schemes
 | `.github/workflows/release.yml` | tag `v*` | release APK (split + universal) and a macOS `.dmg`, attached to a GitHub Release |
 | `.github/workflows/hdp-release.yml` | tag `hdp-v*` | the `hdp` CLI's static binaries |
 
+A release's body is **not** assembled from commit subjects: it is the entry a
+person wrote in [`CHANGELOG.md`](CHANGELOG.md), and `sh tool/release_notes.sh
+<version>` prints it. The release job fails when a tag has no entry, so a tag
+pushed without notes stops instead of publishing a body that says nothing.
+
 ## Pairing a phone: `hdp`
 
 The app needs an SSH key installed on the machine it talks to. Doing that by

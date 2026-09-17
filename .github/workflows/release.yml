@@ -245,6 +245,31 @@ jobs:
           # no directory prefixes — which is what `sha256sum -c` expects.
           merge-multiple: true
 
+      - uses: actions/checkout@v4
+        with:
+          # Only CHANGELOG.md and the script that reads it are used here, and a
+          # shallow checkout is enough: what is being published is the file AT
+          # THIS TAG, which is exactly the version in the body below.
+          fetch-depth: 1
+
+      - name: take this version's entry out of the changelog
+        # THE BODY IS WRITTEN BY A HUMAN, IN CHANGELOG.md, BEFORE THE TAG. It is
+        # never assembled here from commit subjects: this repository's commits
+        # are long sentences with a rationale in them, and a list of those is
+        # not a changelog. The script fails when the section is missing, so a
+        # tag without an entry stops the release instead of publishing a body
+        # that says nothing — which nobody can fix after the fact.
+        id: changelog
+        run: |
+          set -eu
+          version="${GITHUB_REF_NAME#v}"
+          sh tool/release_notes.sh "$version" > "$RUNNER_TEMP/changelog.md"
+          {
+            echo 'body<<CHANGELOG_EOF'
+            cat "$RUNNER_TEMP/changelog.md"
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: checksums
         # In the `<sha256>  <filename>` shape, beside the binaries in the same
         # release, so a user can verify a download without trusting the mirror.
@@ -261,11 +286,18 @@ jobs:
             dist/*.apk
             dist/*.dmg
             dist/checksums.txt
+          # Kept for the `Full Changelog: v0.1.0...v0.2.0` line it appends. With
+          # pull requests disabled on this repository there are no PRs for the
+          # generator to list, so that compare link is all it produces — which
+          # happens to be the one piece of the body worth having without a human.
           generate_release_notes: true
-          # The release body carries the one thing a downloader has to know and
-          # cannot find out from the file: what the macOS build is not.
           append_body: true
+          # The body is the version's entry, then the one thing a downloader
+          # has to know and cannot find out from the file: how to install it,
+          # and what the macOS build is not. (A `#` inside a block scalar is
+          # text, not a comment — that is why this explanation is up here.)
           body: |
+            ${{ steps.changelog.outputs.body }}
 
             ---
 

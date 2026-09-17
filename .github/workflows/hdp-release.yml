@@ -150,7 +150,10 @@ jobs:
           files: |
             dist/hdp_*.tar.gz
             dist/checksums.txt
-          # The tag is already the version, so there is nothing to generate —
-          # and a generated changelog that lists commit subjects is worse than
-          # the tag itself.
+          # Kept for the `Full Changelog: hdp-v0.1.0...hdp-v0.1.1` line it
+          # appends — the one part of a generated body that is worth having.
+          # What it CANNOT produce here is a list of commit subjects, because
+          # pull requests are disabled on this repository: there are no PRs to
+          # list. `CHANGELOG.md` therefore carries the app's versions only, and
+          # a CLI release body is that compare link plus the tarballs.
           generate_release_notes: true

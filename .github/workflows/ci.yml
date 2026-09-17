@@ -79,6 +79,19 @@ jobs:
 
       - run: flutter analyze
 
+      - name: the version in pubspec has a changelog entry
+        # SAME CLASS OF MISTAKE AS THE .arb ONE, and the one this repository is
+        # most likely to make: bump the version, tag, walk away — and the release
+        # body is taken from CHANGELOG.md, so a missing section publishes a
+        # release that says nothing. Catching it here is a red check on a branch
+        # instead of a release nobody can edit afterwards.
+        run: |
+          set -eu
+          version=$(sed -n 's/^version:[[:space:]]*\([0-9][^+]*\).*/\1/p' pubspec.yaml)
+          [ -n "$version" ] || { echo "could not read a version from pubspec.yaml" >&2; exit 1; }
+          sh tool/release_notes.sh --check "$version"
+          echo "CHANGELOG.md has an entry for $version"
+
       - name: vendored icon artwork still matches its recorded hashes
         # Same class of mistake as the .arb one: `tool/fetch_ui_icons.py` records
         # a hash per downloaded icon, so an edit in place — or a re-fetch that

@@ -252,6 +252,10 @@ assets/           字体、agent 图标、配色方案
 | `.github/workflows/release.yml` | tag `v*` | release APK（split + universal）和一个 macOS `.dmg`，挂到 GitHub Release 上 |
 | `.github/workflows/hdp-release.yml` | tag `hdp-v*` | `hdp` CLI 的静态二进制 |
 
+release 的正文**不是**从 commit 标题拼出来的，而是人在 [`CHANGELOG.md`](CHANGELOG.md)
+里写好的那一段 —— `sh tool/release_notes.sh <版本号>` 负责把它取出来。某个 tag 没有对应条目时，
+发布任务会直接失败：宁可停住，也不要发出一个什么都不说的 release。
+
 ## 用手机配对：`hdp`
 
 应用需要在它要对话的机器上有一把 SSH 密钥。手工做这件事意味着生成密钥、找到
