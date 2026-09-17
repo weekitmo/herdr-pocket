@@ -259,6 +259,11 @@ func runPair(args []string) int {
 		}
 	}
 
+	// WHO IS ALREADY HERE, before our own line goes in. The wait below has to be
+	// able to tell the phone that is scanning from the phones that were paired
+	// last month — see [waitForClientKey] for the bug that made this necessary.
+	already := pairedPhoneBlobs(keys)
+
 	token := fmt.Sprintf("%d", time.Now().UnixNano())
 	// The resolved path travels INTO the forced command, so the two halves of
 	// pairing cannot disagree about which file to write. See BootstrapLine.
@@ -338,8 +343,16 @@ func runPair(args []string) int {
 	fmt.Fprintf(os.Stdout, "\nAuthorized keys file: %s\n", keys.Path)
 	fmt.Fprintln(os.Stdout, "Waiting for the phone to install its key…")
 
+	if n := len(already); n > 0 {
+		fmt.Printf(
+			"Note: %d phone key(s) are already paired with this machine.\n"+
+				"      This run waits for a NEW key, so pairing the same phone\n"+
+				"      again is fine — but a phone that was never paired is what\n"+
+				"      makes it finish.\n\n", n)
+	}
+
 	deadline := time.Now().Add(*window)
-	installedKey, err := waitForClientKey(keys, deadline)
+	installedKey, err := waitForClientKey(keys, deadline, already, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\nhdp: %v\n", err)
 		return 1
@@ -356,18 +369,46 @@ func runPair(args []string) int {
 	return 0
 }
 
-// waitForClientKey polls authorized_keys until the phone's own key shows up.
+// waitForClientKey polls authorized_keys until THIS pairing is done.
 //
 // POLLING RATHER THAN BEING TOLD. The forced command runs in a short-lived
 // process with no way to signal its parent — sshd started it, not us — so the
 // only shared state is the file itself. Polling a file the user owns, at 2 s,
 // for at most a few minutes, is the cheapest correct answer available.
-func waitForClientKey(keys *AuthorizedKeys, deadline time.Time) (string, error) {
+//
+// TWO WAYS TO BE DONE, AND BOTH ARE NEEDED.
+//
+//  1. **A phone key that was not there when this run started.** That is the new
+//     phone arriving. The snapshot is what makes a machine that ALREADY has a
+//     phone paired work at all: the first version looked only for the
+//     `hdp-pocket` marker, so on such a machine it matched the existing phone's
+//     line on its very first poll — before the new phone had finished scanning
+//     — printed "Paired", removed its own bootstrap line, and left the code on
+//     screen dead. The app could only report "this pairing code has expired"
+//     about a code that had never been usable for a single second. Measured on
+//     a machine with one phone paired, by the user who hit it.
+//
+//  2. **Our own bootstrap line disappearing.** `__exchange` removes it once it
+//     holds the phone's key (see [releaseSelf]), and that is the only signal
+//     available when the SAME phone re-pairs: its key line is already in the
+//     file, byte for byte, so there is nothing new to see and rule 1 would wait
+//     out the whole window while the phone reported success.
+func waitForClientKey(
+	keys *AuthorizedKeys,
+	deadline time.Time,
+	already map[string]struct{},
+	token string,
+) (string, error) {
 	for {
 		lines, err := keys.Lines()
 		if err == nil {
-			for _, line := range lines {
-				if strings.Contains(line, clientMarker) {
+			if line, ok := newPhoneLine(lines, already); ok {
+				return describeKey(line), nil
+			}
+			// Only credible while there IS a phone line to name: a line that
+			// vanished from a file with no phone in it was never our pairing.
+			if !hasBootstrap(lines, token) {
+				if line, ok := newestPhoneLine(lines); ok {
 					return describeKey(line), nil
 				}
 			}
@@ -380,6 +421,82 @@ func waitForClientKey(keys *AuthorizedKeys, deadline time.Time) (string, error) 
 		}
 		time.Sleep(2 * time.Second)
 	}
+}
+
+// pairedPhoneBlobs returns the key material of every phone already paired with
+// this machine, so a new pairing can tell its phone from the ones already here.
+//
+// By key material and not by comment: the phone's line carries a fixed comment
+// (`hdp-pocket`) for every device, which is exactly why the presence of that
+// comment cannot mean "my phone has arrived".
+func pairedPhoneBlobs(keys *AuthorizedKeys) map[string]struct{} {
+	blobs := make(map[string]struct{})
+	lines, err := keys.Lines()
+	if err != nil {
+		return blobs
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, clientMarker) {
+			continue
+		}
+		if blob := keyBlob(line); blob != "" {
+			blobs[blob] = struct{}{}
+		}
+	}
+	return blobs
+}
+
+// newPhoneLine finds the first paired-phone line that is not in [already].
+func newPhoneLine(lines []string, already map[string]struct{}) (string, bool) {
+	for _, line := range lines {
+		if !strings.Contains(line, clientMarker) {
+			continue
+		}
+		blob := keyBlob(line)
+		if blob == "" {
+			continue
+		}
+		if _, known := already[blob]; !known {
+			return line, true
+		}
+	}
+	return "", false
+}
+
+// newestPhoneLine describes whichever phone key is in the file last.
+//
+// Used on the path where the pairing is known to be done but nothing new
+// appeared: the phone queued behind an identical line, and the last one is the
+// most likely to be it.
+func newestPhoneLine(lines []string) (string, bool) {
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.Contains(lines[i], clientMarker) {
+			return lines[i], true
+		}
+	}
+	return "", false
+}
+
+// hasBootstrap reports whether the line this run installed is still there.
+func hasBootstrap(lines []string, token string) bool {
+	if token == "" {
+		return false
+	}
+	for _, line := range lines {
+		if strings.Contains(line, bootstrapMarker+token) {
+			return true
+		}
+	}
+	return false
+}
+
+// keyBlob is the `type blob` pair that identifies a key line.
+func keyBlob(line string) string {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return ""
+	}
+	return fields[0] + " " + fields[1]
 }
 
 // describeKey gives the user something recognisable to check.
@@ -442,6 +559,13 @@ func runExchange(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 
+	// The token names the ONE bootstrap line that invoked us. Absent on a line
+	// written by an older hdp, and absent when this command is run by hand.
+	token := ""
+	if len(args) > 1 {
+		token = args[1]
+	}
+
 	// Idempotent: pairing twice from the same phone must not append the same
 	// key twice, which would leave the user with two identical lines and no way
 	// to tell which `hdp unpair` removed.
@@ -452,6 +576,7 @@ func runExchange(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	for _, have := range existing {
 		if sameKeyMaterial(have, line) {
+			releaseSelf(keys, token, stderr)
 			fmt.Fprintln(stdout, exchangeOK)
 			return 0
 		}
@@ -462,11 +587,40 @@ func runExchange(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	// THE CREDENTIAL DIES WHEN IT IS USED. `hdp pair` removes this line too, and
+	// still must — a phone that never arrives leaves it behind for the sweep —
+	// but between "the phone's key is installed" and "the parent notices" the
+	// one-time key would otherwise still be live in authorized_keys, which is
+	// the one window a QR photographed off the screen would like to have.
+	//
+	// It is also the signal the parent has nothing else for: when the SAME
+	// phone re-pairs, its key line is unchanged, so the file gains nothing to
+	// see and the disappearance of this line is the only evidence there is.
+	releaseSelf(keys, token, stderr)
+
 	// The marker the waiting `hdp pair` is polling for. It is the APP that adds
 	// `hdp-pocket` to the comment, so nothing here has to invent one; if the
 	// app forgets, pairing times out rather than succeeding silently.
 	fmt.Fprintln(stdout, exchangeOK)
 	return 0
+}
+
+// releaseSelf removes the bootstrap line this invocation was run by.
+//
+// Best effort and never fatal: the phone's key is already installed by the time
+// this runs, so refusing the pairing over a failed tidy-up would throw away the
+// thing that worked. The parent's own cleanup is the backstop, and it warns
+// loudly when even that fails.
+func releaseSelf(keys *AuthorizedKeys, token string, stderr io.Writer) {
+	if token == "" {
+		return
+	}
+	if _, err := keys.RemoveMatching(func(l string) bool {
+		return strings.Contains(l, bootstrapMarker+token)
+	}); err != nil {
+		fmt.Fprintf(stderr,
+			"hdp: could not remove the one-time key from %s: %v\n", keys.Path, err)
+	}
 }
 
 // exchangeOK is what the phone looks for to know the key was installed.

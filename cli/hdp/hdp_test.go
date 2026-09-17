@@ -191,7 +191,7 @@ func TestStringRedactsTheKey(t *testing.T) {
 
 func TestBootstrapLinePinsAllFourParts(t *testing.T) {
 	line := BootstrapLine("ssh-ed25519 AAAA test", "/usr/local/bin/hdp",
-		"/home/you/.ssh/authorized_keys", "tok123")
+		"/home/you/.ssh/authorized_keys", "1700000000000000000")
 
 	// `restrict` is the difference between "a key that can install a key" and
 	// "a login key in a QR code".
@@ -201,13 +201,14 @@ func TestBootstrapLinePinsAllFourParts(t *testing.T) {
 	// An ABSOLUTE path: a forced command is run by a non-interactive shell
 	// whose PATH rarely contains wherever hdp was installed, and the failure is
 	// a pairing that hangs rather than an error.
-	if !strings.Contains(line, `command="/usr/local/bin/hdp __exchange '/home/you/.ssh/authorized_keys'"`) {
+	if !strings.Contains(line, `command="/usr/local/bin/hdp __exchange '/home/you/.ssh/authorized_keys' 1700000000000000000"`) {
 		t.Fatalf("the forced command must be an absolute path AND carry the "+
 			"authorized_keys path, so the two halves of pairing cannot disagree "+
-			"about which file to write: %s", line)
+			"about which file to write — and the token, so the exchange can "+
+			"delete the one line it was run by: %s", line)
 	}
 	// The handle the cleanup removes it by.
-	if !strings.HasSuffix(line, bootstrapMarker+"tok123") {
+	if !strings.HasSuffix(line, bootstrapMarker+"1700000000000000000") {
 		t.Fatalf("the line must end with its own token: %s", line)
 	}
 	if !strings.Contains(line, "ssh-ed25519 AAAA test") {
@@ -287,7 +288,7 @@ func TestAuthorizedKeysAddAndRemoveRoundTrip(t *testing.T) {
 	if err := keys.Add("ssh-ed25519 AAAA someone-elses-key"); err != nil {
 		t.Fatal(err)
 	}
-	if err := keys.Add(BootstrapLine("ssh-ed25519 BBBB ours", "/bin/hdp", keys.Path, "tok")); err != nil {
+	if err := keys.Add(BootstrapLine("ssh-ed25519 BBBB ours", "/bin/hdp", keys.Path, "7")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,7 +301,7 @@ func TestAuthorizedKeysAddAndRemoveRoundTrip(t *testing.T) {
 	}
 
 	removed, err := keys.RemoveMatching(func(l string) bool {
-		return strings.Contains(l, bootstrapMarker+"tok")
+		return strings.Contains(l, bootstrapMarker+"7")
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -401,7 +402,7 @@ func TestBootstrapLineRefusesAnUnquotablePath(t *testing.T) {
 					t.Fatalf("BootstrapLine accepted the path %q", bad)
 				}
 			}()
-			BootstrapLine("ssh-ed25519 AAAA x", "/bin/hdp", bad, "tok")
+			BootstrapLine("ssh-ed25519 AAAA x", "/bin/hdp", bad, "7")
 		})
 	}
 }
@@ -753,7 +754,7 @@ func TestSweepTreatsAnUnparseableTokenAsStale(t *testing.T) {
 	// A token in some other format came from a build that wrote a different
 	// shape, so it cannot belong to a run that is waiting right now.
 	now := time.Now()
-	line := BootstrapLine("ssh-ed25519 AAAA x", "/bin/hdp", "/k", "not-a-timestamp")
+	line := BootstrapLine("ssh-ed25519 AAAA x", "/bin/hdp", "/k", "1")
 	if !isStaleBootstrap(line, now, time.Hour) {
 		t.Fatal("an unparseable token must be swept rather than kept forever")
 	}
@@ -761,4 +762,144 @@ func TestSweepTreatsAnUnparseableTokenAsStale(t *testing.T) {
 
 func strNanos(t time.Time) string {
 	return strconv.FormatInt(t.UnixNano(), 10)
+}
+
+// TestBootstrapLineRefusesANonDecimalToken keeps the token out of the shell.
+//
+// It travels inside `command="..."`, so a token with a space or a quote in it
+// would add a shell word to a line sshd runs. The value is generated here and
+// is a decimal clock reading; this is the guard that keeps it that way.
+func TestBootstrapLineRefusesANonDecimalToken(t *testing.T) {
+	for _, bad := range []string{"", "tok123", "12 34", `1"; id; "`} {
+		t.Run(bad, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("BootstrapLine accepted the token %q", bad)
+				}
+			}()
+			BootstrapLine("ssh-ed25519 AAAA x", "/bin/hdp", "/k", bad)
+		})
+	}
+}
+
+// TestPairingWithAPhoneAlreadyPairedIsNotInstantSuccess is THE regression test
+// for the bug the user hit.
+//
+// The first version of the wait looked only for the `hdp-pocket` comment, so on
+// a machine that already had a phone paired it matched that phone's line on its
+// first poll: `hdp pair` printed "Paired", removed its own bootstrap line, and
+// the code still on screen was dead. The person scanning it got "this pairing
+// code has expired" for a code that had never been usable — reported, verbatim,
+// as "a machine's code can only be used once?"
+func TestPairingWithAPhoneAlreadyPairedIsNotInstantSuccess(t *testing.T) {
+	dir := t.TempDir()
+	keys := &AuthorizedKeys{Path: filepath.Join(dir, "authorized_keys")}
+
+	// One phone from an earlier month, and this run's own bootstrap line.
+	if err := keys.Add("ssh-ed25519 AAAAOLD first-phone hdp-pocket"); err != nil {
+		t.Fatal(err)
+	}
+	already := pairedPhoneBlobs(keys)
+	if len(already) != 1 {
+		t.Fatalf("the existing phone was not snapshotted: %v", already)
+	}
+	if err := keys.Add(BootstrapLine("ssh-ed25519 BBBBNEW one-time", "/bin/hdp", keys.Path, "42")); err != nil {
+		t.Fatal(err)
+	}
+
+	// The state right after the QR is printed: nothing new has arrived, so the
+	// wait must NOT be finished. A deadline in the past makes the point without
+	// a two-second sleep.
+	_, err := waitForClientKey(keys, time.Now().Add(-time.Second), already, "42")
+	if err == nil {
+		t.Fatal("the wait finished before the new phone arrived — this is the " +
+			"bug that made a freshly printed pairing code report as expired")
+	}
+
+	// The new phone arrives.
+	if err := keys.Add("ssh-ed25519 AAAANEW second-phone hdp-pocket"); err != nil {
+		t.Fatal(err)
+	}
+	line, err := waitForClientKey(keys, time.Now().Add(time.Second), already, "42")
+	if err != nil {
+		t.Fatalf("the new phone's key was not seen: %v", err)
+	}
+	if !strings.Contains(line, "ed25519") {
+		t.Fatalf("describeKey should name the key type, got %q", line)
+	}
+
+	// And the phone that was already paired is not mistaken for the new one.
+	if _, ok := newPhoneLine([]string{"ssh-ed25519 AAAAOLD first-phone hdp-pocket"}, already); ok {
+		t.Fatal("an already-paired phone's line was read as a new arrival")
+	}
+}
+
+// TestExchangeRemovesTheLineItWasRunBy is the other half of the fix.
+//
+// Two reasons it matters. The credential dies at the instant it is used rather
+// than when the parent process next looks at the file — the window a photograph
+// of the screen would like to have. And when the SAME phone re-pairs, its key
+// line is unchanged, so the disappearance of this line is the only evidence
+// that anything happened at all.
+func TestExchangeRemovesTheLineItWasRunBy(t *testing.T) {
+	dir := t.TempDir()
+	keys := &AuthorizedKeys{Path: filepath.Join(dir, "authorized_keys")}
+	if err := keys.Add(
+		"ssh-ed25519 AAAAOTHER someone-else",
+		BootstrapLine("ssh-ed25519 BBBBONE-TIME", "/bin/hdp", keys.Path, "99"),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr strings.Builder
+	code := runExchange([]string{keys.Path, "99"},
+		strings.NewReader("ssh-ed25519 AAAAPHONE mine hdp-pocket\n"), &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exchange failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), exchangeOK) {
+		t.Fatalf("the app's marker is missing: %q", stdout.String())
+	}
+
+	lines, _ := keys.Lines()
+	for _, line := range lines {
+		if strings.Contains(line, bootstrapMarker) {
+			t.Fatalf("the one-time key outlived the exchange: %v", lines)
+		}
+	}
+	if len(lines) != 2 {
+		t.Fatalf("expected the other key plus the phone's, got %v", lines)
+	}
+	if _, ok := newestPhoneLine(lines); !ok {
+		t.Fatalf("the phone's key is not in the file: %v", lines)
+	}
+}
+
+// TestRepairingTheSamePhoneIsSeenByTheLineGoingAway covers rule 2 of the wait.
+func TestRepairingTheSamePhoneIsSeenByTheLineGoingAway(t *testing.T) {
+	dir := t.TempDir()
+	keys := &AuthorizedKeys{Path: filepath.Join(dir, "authorized_keys")}
+	phone := "ssh-ed25519 AAAAPHONE mine hdp-pocket"
+	if err := keys.Add(phone); err != nil {
+		t.Fatal(err)
+	}
+	already := pairedPhoneBlobs(keys)
+
+	// Same phone, so nothing new appears — but the bootstrap line is gone,
+	// because the exchange removed it on its way through.
+	line, err := waitForClientKey(keys, time.Now().Add(time.Second), already, "7")
+	if err != nil {
+		t.Fatalf("a re-pairing that consumed the code was reported as a timeout: %v", err)
+	}
+	if !strings.Contains(line, "ed25519") {
+		t.Fatalf("the phone's own key should be named, got %q", line)
+	}
+
+	// A line that vanishes while our own is still there means nothing.
+	if err := keys.Add(BootstrapLine("ssh-ed25519 BBBBX", "/bin/hdp", keys.Path, "7")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := waitForClientKey(keys, time.Now().Add(-time.Second), already, "7"); err == nil {
+		t.Fatal("a wait with its own code still in the file must not finish")
+	}
 }

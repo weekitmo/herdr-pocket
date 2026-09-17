@@ -205,7 +205,7 @@ func (a *AuthorizedKeys) write(lines []string) error {
 
 // BootstrapLine builds the authorized_keys entry for a pairing.
 //
-// FIVE PARTS, and each one is load-bearing:
+// SIX PARTS, and each one is load-bearing:
 //
 //  1. `restrict` — no pty, no agent forwarding, no port forwarding, no X11, no
 //     user rc. Without it the bootstrap key is a login key, and the whole
@@ -235,8 +235,16 @@ func (a *AuthorizedKeys) write(lines []string) error {
 //     it. What the peer sends is only ever a public key, and only ever on
 //     stdin, after sshd has already accepted this line.
 //
-//  5. A per-run comment, which is the handle `hdp unpair` and the cleanup path
-//     remove the line by.
+//  5. THE TOKEN, as the forced command's second argument. It names the ONE line
+//     this invocation belongs to, which is what lets `__exchange` delete that
+//     line the moment the phone's key is in — the credential dying at the
+//     instant it is used, rather than when a parent process notices. It is also
+//     the only signal that distinguishes "this phone paired" from "nothing
+//     happened" when the SAME phone re-pairs: an unchanged key line leaves the
+//     file looking exactly as it did before.
+//
+//  6. The same token as a per-run comment, which is the handle `hdp unpair`,
+//     the parent's cleanup, and a later `hdp pair`'s stale sweep find it by.
 func BootstrapLine(pubKeyLine, binaryPath, keysPath, token string) string {
 	if err := checkForcedCommandPath(binaryPath); err != nil {
 		panic("hdp: refusing to write a forced command: " + err.Error())
@@ -244,9 +252,31 @@ func BootstrapLine(pubKeyLine, binaryPath, keysPath, token string) string {
 	if err := checkForcedCommandPath(keysPath); err != nil {
 		panic("hdp: refusing to write a forced command: " + err.Error())
 	}
+	if err := checkForcedCommandToken(token); err != nil {
+		panic("hdp: refusing to write a forced command: " + err.Error())
+	}
 	return fmt.Sprintf(
-		`restrict,command="%s __exchange %s" %s %s%s`,
-		binaryPath, shellSingleQuote(keysPath), pubKeyLine, bootstrapMarker, token)
+		`restrict,command="%s __exchange %s %s" %s %s%s`,
+		binaryPath, shellSingleQuote(keysPath), token, pubKeyLine,
+		bootstrapMarker, token)
+}
+
+// checkForcedCommandToken refuses a token that cannot be embedded safely.
+//
+// The token is a decimal clock reading and is generated here, so this can only
+// fail if something else starts calling this function with a value a phone sent
+// — which is precisely the mistake worth failing loudly on, because the token
+// goes inside `command="…"` where a space or a quote would add a shell word.
+func checkForcedCommandToken(token string) error {
+	if token == "" {
+		return errors.New("the token is empty")
+	}
+	for _, r := range token {
+		if r < '0' || r > '9' {
+			return fmt.Errorf("%q is not a decimal token", token)
+		}
+	}
+	return nil
 }
 
 // checkForcedCommandPath refuses a path that cannot be embedded safely.

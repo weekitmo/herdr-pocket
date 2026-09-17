@@ -29,6 +29,13 @@ const TextEditingValue kComposerResting = TextEditingValue(
 /// `domain/terminal/composer.dart` is the fix; this widget is the half that
 /// owns the input connection.
 ///
+/// AND A HARDWARE KEYBOARD IS A SECOND DOOR. A physical keyboard — a Bluetooth
+/// one on the desk, or anything driving the phone through `adb shell input` —
+/// does not go through the IME at all: it arrives as key events on the focus
+/// node. A real text field gets that half for free; a hand-written client has
+/// to ask for it, and the terminal would simply type nothing from a real
+/// keyboard without [_onKeyEvent].
+///
 /// WHY A HAND-WRITTEN `TextInputClient` RATHER THAN A FIELD. Owning the
 /// connection is also what makes `setEditingState` possible on our own terms:
 /// the field is put back to the sentinel after every report, so nothing
@@ -150,6 +157,41 @@ class _TerminalComposerState extends State<TerminalComposer>
     connection.setEditingState(_state);
   }
 
+  /// Hardware keys, which never reach the input connection.
+  ///
+  /// Only the three that have an unambiguous terminal meaning are handled here:
+  /// the delete key, Enter, and printable characters. Arrows, Escape and Tab
+  /// are deliberately left alone — the key bar sends those with the escape
+  /// sequences they need, and a phone keyboard sends none of them anyway.
+  ///
+  /// With Ctrl or Alt held the platform reports no character, so nothing is
+  /// typed and nothing is wrongly typed either: the sticky modifiers on the key
+  /// bar remain the app's way to reach a control code.
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.backspace ||
+        key == LogicalKeyboardKey.delete) {
+      widget.onDelete(1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      widget.onEnter();
+      return KeyEventResult.handled;
+    }
+
+    final character = event.character;
+    if (character != null && character.isNotEmpty) {
+      widget.onInsert(character);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   void _close() {
     final open = _connection;
     _connection = null;
@@ -230,6 +272,7 @@ class _TerminalComposerState extends State<TerminalComposer>
       child: Focus(
         focusNode: widget.focusNode,
         autofocus: widget.autofocus,
+        onKeyEvent: _onKeyEvent,
         // The terminal's gestures are the pointer's, not the focus system's.
         canRequestFocus: true,
         child: const SizedBox.expand(),

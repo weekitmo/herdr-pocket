@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,6 +178,42 @@ void main() {
       contains('--rows 46'),
       reason: "a shorter request makes the daemon crop the pane's bottom away",
     );
+  });
+
+  testWidgets('a hardware backspace sends DEL too', (tester) async {
+    // The other door into the composer: a physical keyboard (or `adb shell
+    // input`) delivers KeyEvents, not edits to a field, and a hand-written
+    // input client sees none of them unless it asks. Without this the terminal
+    // types nothing at all from a real keyboard.
+    final daemon = await pumpTerminal(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    final input = inputCommands(daemon);
+    expect(input, hasLength(1));
+    expect(
+      utf8.decode(base64.decode(input.single['bytes']! as String)),
+      '\x7f',
+    );
+  });
+
+  testWidgets('hardware keys type the characters they carry', (tester) async {
+    final daemon = await pumpTerminal(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pump();
+
+    expect(inputCommands(daemon).single['text'], 'l');
+  });
+
+  testWidgets('a hardware Enter is the key bar Enter', (tester) async {
+    final daemon = await pumpTerminal(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(inputCommands(daemon).single['text'], '\r');
   });
 
   testWidgets(
