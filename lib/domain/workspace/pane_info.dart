@@ -36,6 +36,7 @@ class PaneInfo {
     this.isFocused = false,
     this.revision,
     this.scrollOffsetFromBottom,
+    this.scrollMaxOffsetFromBottom,
     this.viewportRows,
   });
 
@@ -66,6 +67,21 @@ class PaneInfo {
         // scrolled, or that the pane is taller than the window being rendered
         // for it.
         final Map<Object?, Object?> m => switch (m['offset_from_bottom']) {
+          final int v => v,
+          _ => null,
+        },
+        _ => null,
+      },
+      scrollMaxOffsetFromBottom: switch (json['scroll']) {
+        // HOW MUCH HISTORY THERE IS, in lines. `max_offset_from_bottom` is a
+        // required member of `PaneScrollInfo` in the daemon's own schema
+        // (protocol 22), so this is not a guess about a field that might exist:
+        // it is the number that answers "can this pane scroll back at all?".
+        // Zero is a real answer — a pane whose program has printed less than a
+        // screenful has nothing behind it — and it is the answer that lets the
+        // terminal stop claiming the user is "N lines back" on a pane that
+        // cannot move.
+        final Map<Object?, Object?> m => switch (m['max_offset_from_bottom']) {
           final int v => v,
           _ => null,
         },
@@ -112,6 +128,15 @@ class PaneInfo {
   /// Lines this pane's viewport is scrolled back from the live bottom, when the
   /// daemon reports it. Null means "not reported", NOT "at the bottom".
   final int? scrollOffsetFromBottom;
+
+  /// How many lines of scrollback this pane HAS, when the daemon reports it.
+  ///
+  /// The companion to [scrollOffsetFromBottom], and the one the terminal screen
+  /// was missing: an offset tells you where the reader is, this tells you
+  /// whether there was anywhere to go in the first place. Null means "not
+  /// reported" — the caller then keeps its own mirror rather than clamping
+  /// against a number it does not have.
+  final int? scrollMaxOffsetFromBottom;
 
   /// How many rows this pane's terminal HAS, in cells.
   ///

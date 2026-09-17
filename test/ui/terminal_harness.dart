@@ -122,9 +122,32 @@ int boxRows(WidgetTester tester, TerminalPainter painter) {
 /// how a test can script a skills probe without a machine.
 class FakeTerminalDaemon
     implements HerdrTransport, RemoteStreamRunner, RemoteCommandRunner {
-  FakeTerminalDaemon({required this.paneRows, this.agent = 'claude'});
+  FakeTerminalDaemon({
+    required this.paneRows,
+    this.agent = 'claude',
+    this.scrollOffset = 0,
+    this.scrollMax = 0,
+    this.scrollEvents = true,
+  });
 
   final int paneRows;
+
+  /// What `pane.list` reports this pane is scrolled back to.
+  final int scrollOffset;
+
+  /// How much history `pane.list` reports for this pane.
+  ///
+  /// ZERO IS THE DAEMON'S REAL ANSWER for a pane whose program has printed less
+  /// than a screenful, and it is the answer the terminal screen has to act on:
+  /// a swipe on such a pane must not draw a "3 lines back" bar over a screen
+  /// that never moved. A test that wants a scrollable pane says so here.
+  final int scrollMax;
+
+  /// Whether the daemon opens `pane.scroll_changed`.
+  ///
+  /// False is the degrade path — an older protocol, or a daemon that refuses —
+  /// and the page has to keep working on its own mirror when it happens.
+  final bool scrollEvents;
 
   /// What `pane.list` reports for this pane.
   ///
@@ -146,6 +169,12 @@ class FakeTerminalDaemon
 
   final List<String> _written = [];
   final _lines = StreamController<String>.broadcast();
+
+  /// The event channel, once something subscribes. Null until then.
+  StreamController<String>? _events;
+
+  /// What every subscription asked for, verbatim.
+  final List<Map<String, Object?>> subscriptions = [];
 
   /// Everything the app has written on the terminal channel.
   List<String> sentOnTerminal() => List.unmodifiable(_written);
@@ -211,8 +240,8 @@ class FakeTerminalDaemon
             '"cwd":"/home/u/proj",'
             // The key is OMITTED for a shell, exactly as herdr omits it.
             '${agent == null ? '' : '"agent":"$agent",'}'
-            '"revision":1,"scroll":{"offset_from_bottom":0,'
-            '"max_offset_from_bottom":0,"viewport_rows":$paneRows}}]}}',
+            '"revision":1,"scroll":{"offset_from_bottom":$scrollOffset,'
+            '"max_offset_from_bottom":$scrollMax,"viewport_rows":$paneRows}}]}}',
       // Anything else is answered "unknown method" the way the daemon does,
       // rather than by hanging: a page that waits forever in a test is a test
       // that times out with no explanation.
@@ -220,9 +249,53 @@ class FakeTerminalDaemon
     };
   }
 
+  /// The event channel a subscription opens.
+  ///
+  /// Implemented rather than thrown because the terminal screen now watches
+  /// `pane.scroll_changed` while it is open, and a harness that could not answer
+  /// would leave that path — the one that corrects a lying scroll bar — only
+  /// ever exercised against a live machine.
   @override
-  Future<HerdrDuplex> openDuplex(String openLine) =>
-      throw UnimplementedError();
+  Future<HerdrDuplex> openDuplex(String openLine) async {
+    final request = (jsonDecode(openLine) as Map).cast<String, Object?>();
+    if (request['method'] != 'events.subscribe') {
+      throw UnimplementedError('not an event channel: ${request['method']}');
+    }
+    subscriptions.add((request['params']! as Map).cast<String, Object?>());
+    final controller = StreamController<String>();
+    _events = controller;
+    if (scrollEvents) {
+      controller.add(
+        '{"id":"${request['id']}","result":{"type":"subscription_started"}}',
+      );
+    } else {
+      controller.add(
+        '{"id":"${request['id']}","error":{"code":"invalid_request",'
+        '"message":"unknown subscription"}}',
+      );
+    }
+    return _FakeDuplex('', controller.stream, _written);
+  }
+
+  /// Announces a new scroll state the way the daemon does.
+  void emitScroll({int? offset, int? max}) {
+    final controller = _events;
+    if (controller == null || controller.isClosed) return;
+    controller.add(
+      jsonEncode({
+        'event': 'pane.scroll_changed',
+        'data': {
+          'pane_id': kTestPaneId,
+          'workspace_id': 'w1',
+          'scroll': {
+            'offset_from_bottom': offset ?? scrollOffset,
+            'max_offset_from_bottom': max ?? scrollMax,
+            'viewport_rows': paneRows,
+          },
+        },
+      }),
+    );
+  }
 
   @override
   Future<void> close() async {}

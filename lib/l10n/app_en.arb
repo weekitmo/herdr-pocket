@@ -128,6 +128,15 @@
   "hostInvalidPort": "Port must be between 1 and 65535",
   "hostSecretNote": "Stored in this device's keystore, never in the host list.",
   "terminalScrolledBack": "{lines} lines back — tap to return to live",
+  "terminalScrolledBackOldest": "at the oldest · {lines} lines back — tap to return to live",
+  "@terminalScrolledBackOldest": {
+    "description": "Terminal: scrolled to the oldest line",
+    "placeholders": {
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
   "terminalSelectionHint": "Select text",
   "copyAction": "Copy",
   "settingsNotifications": "Notifications",

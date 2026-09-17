@@ -127,6 +127,15 @@
   "hostInvalidPort": "端口必须在 1 到 65535 之间",
   "hostSecretNote": "保存在本机密钥库中，不会写进主机列表。",
   "terminalScrolledBack": "已回看 {lines} 行 — 点按回到实时",
+  "terminalScrolledBackOldest": "已到最早 · 已回看 {lines} 行 — 点按回到实时",
+  "@terminalScrolledBackOldest": {
+    "description": "终端：已经滚到最早那一行",
+    "placeholders": {
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
   "terminalSelectionHint": "选择文本",
   "copyAction": "复制",
   "settingsNotifications": "通知",

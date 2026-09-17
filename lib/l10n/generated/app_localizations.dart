@@ -716,6 +716,12 @@ abstract class AppLocalizations {
   /// **'{lines} lines back — tap to return to live'**
   String terminalScrolledBack(Object lines);
 
+  /// Terminal: scrolled to the oldest line
+  ///
+  /// In en, this message translates to:
+  /// **'at the oldest · {lines} lines back — tap to return to live'**
+  String terminalScrolledBackOldest(int lines);
+
   /// No description provided for @terminalSelectionHint.
   ///
   /// In en, this message translates to:

@@ -346,6 +346,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String terminalScrolledBackOldest(int lines) {
+    return 'at the oldest · $lines lines back — tap to return to live';
+  }
+
+  @override
   String get terminalSelectionHint => 'Select text';
 
   @override

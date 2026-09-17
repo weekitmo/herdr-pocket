@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/local/file_pick.dart';
+import 'package:herdr_pocket/data/pane_scroll_watch.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/nav_tree.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
@@ -26,6 +27,7 @@ import 'package:herdr_pocket/domain/terminal/window.dart';
 import 'package:herdr_pocket/domain/workspace/jump_target.dart';
 import 'package:herdr_pocket/domain/workspace/pane_actions.dart';
 import 'package:herdr_pocket/domain/workspace/pane_info.dart';
+import 'package:herdr_pocket/domain/workspace/pane_scroll_event.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/menu_popover.dart';
 import 'package:herdr_pocket/ui/components/pane_actions_sheet.dart';
@@ -174,9 +176,30 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// it could only ever be zero. History lives on the machine, and looking at it
   /// is a request — `terminal.scroll` — not a scroll of what we already have.
   ///
-  /// This field is therefore a MIRROR of the daemon's `offset_from_bottom`, kept
-  /// for the "N lines back" bar and for knowing which way to ask next.
+  /// This field is a MIRROR of the daemon's `offset_from_bottom`, advanced
+  /// locally the moment a gesture asks for a move so the bar responds under the
+  /// finger, and CORRECTED from [PaneScrollWatch] a moment later. It is bounded
+  /// by [_scrollMax] whenever the daemon has told us what that is — see
+  /// [_scrollBy] for the lying bar this replaced.
   int _scrollOffset = 0;
+
+  /// How many lines of history this pane has, or null when not reported.
+  ///
+  /// THE NUMBER THAT ANSWERS "CAN THIS PANE SCROLL AT ALL?", and the one the bar
+  /// never used to consult. Zero is a real answer for a pane whose program has
+  /// printed less than a screenful, and it is what stops a swipe on such a pane
+  /// from drawing "已回看 3 行" over a screen that never moved.
+  ///
+  /// Null is NOT zero: not reported means the client keeps its own mirror
+  /// unclamped, which is exactly the old behaviour and is right for a pane only
+  /// this phone is scrolling.
+  int? _scrollMax;
+
+  /// The daemon's own scroll events for the pane on screen.
+  ///
+  /// Null while it is not running, which is a supported state rather than a
+  /// failure — see [PaneScrollWatch.start].
+  PaneScrollWatch? _scrollWatch;
 
   /// True while the expanded key panel is open.
   ///
@@ -308,12 +331,17 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       if (!mounted) return;
       final pane = tree.paneById(_paneId);
       final offset = pane?.scrollOffsetFromBottom;
+      final max = pane?.scrollMaxOffsetFromBottom;
       final rows = pane?.viewportRows;
       final foundRows = rows != null && rows > 0;
       setState(() {
         if (offset != null && offset != 0 && _scrollOffset == 0) {
           _scrollOffset = offset;
         }
+        // Learned here as well as from the event stream, because a pane that is
+        // NOT scrolled emits no scroll events at all — and "this pane has no
+        // history" is precisely the answer that never arrives by itself.
+        if (max != null) _scrollMax = max;
         if (foundRows) _paneRows = rows;
       });
       sized = foundRows;
@@ -345,6 +373,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     _menu?.dispose();
     _resizeDebounce?.cancel();
     _repaint.dispose();
+    unawaited(_scrollWatch?.close());
     unawaited(_session?.close());
     super.dispose();
   }
@@ -381,12 +410,22 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     });
     await previous?.close();
 
+    // The scroll events belong to the pane being left, and a stale one must not
+    // arrive after the switch and move the new pane's mirror.
+    final previousWatch = _scrollWatch;
+    _scrollWatch = null;
+    unawaited(previousWatch?.close());
+
     if (!mounted) return;
     setState(() {
       _paneId = pane.paneId;
       _title = pane.displayName;
       _terminal = Terminal(maxLines: 4000);
       _scrollOffset = 0;
+      // The history depth belongs to the pane we just left. Cleared rather than
+      // kept, for the same reason the mirror is: it would clamp this pane's
+      // scrollback to a number that describes another terminal.
+      _scrollMax = pane.scrollMaxOffsetFromBottom;
       _dragCarry = 0;
       _selection = null;
       _selectionAnchor = null;
@@ -517,6 +556,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         _session = session;
         _busy = false;
       });
+      // And the daemon's own account of where this pane is scrolled — see
+      // [PaneScrollWatch] for why a rendered frame cannot provide it.
+      unawaited(_watchScroll());
     } on Object catch (e) {
       if (mounted) {
         setState(() {
@@ -1076,13 +1118,86 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// Every step is its own request, because there is no way to know what the far
   /// end has done until it re-renders — so the mirror is advanced by exactly
   /// what was asked for, and the frames that come back are what the user sees.
+  ///
+  /// THE BAR USED TO LIE, and this method is where it did it. The mirror was
+  /// advanced by whatever was ASKED FOR, with no notion of how much history the
+  /// pane has: swipe back on a pane that has none, or past the top of one that
+  /// has some, and the daemon refuses — and the mirror kept counting anyway, so
+  /// the screen announced "3 lines back" over a screen that never moved. It was
+  /// not a rendering bug and could not be seen in a frame: a rendered frame of
+  /// history and a rendered frame of the present are identical, so the only
+  /// thing that knows is the daemon's own `offset_from_bottom` /
+  /// `max_offset_from_bottom` — measured against a live daemon in
+  /// `test/integration/scroll_probe_test.dart`.
   void _scrollBy(int lines) {
     if (lines == 0) return;
-    final next = math.max(0, _scrollOffset + lines);
-    final step = next - _scrollOffset;
-    if (step == 0) return;
-    _session?.scroll(step);
-    setState(() => _scrollOffset = next);
+
+    // A PANE WITH NO HISTORY HAS NOWHERE TO GO. Not asking is the honest answer,
+    // and it is also what keeps the daemon from being poked once per drag frame
+    // for a move it will refuse every time.
+    if (lines > 0 && _scrollMax == 0) return;
+
+    // Ask for what the FINGER asked for rather than for the difference to the
+    // mirror. The far end clamps at its own top, and the `pane.scroll_changed`
+    // it emits when it moves is what keeps [_scrollMax] honest — a request
+    // filtered through a stale local maximum would never produce that event.
+    _session?.scroll(lines);
+
+    // The mirror is clamped where the daemon has told us its maximum, so a
+    // refused request cannot become a bar counting past the end of the buffer.
+    // With no maximum reported there is nothing to clamp against, which is the
+    // old behaviour and is right for a pane only this phone scrolls.
+    final wanted = _scrollOffset + lines;
+    final max = _scrollMax;
+    final next = max == null ? math.max(0, wanted) : wanted.clamp(0, max);
+    if (next != _scrollOffset) setState(() => _scrollOffset = next);
+  }
+
+  /// Adopts the daemon's own scroll state for the pane on screen.
+  ///
+  /// The mirror above is a guess with a good reason (the bar has to move under
+  /// the finger); this is the answer, and it wins. It also moves the mirror in
+  /// the two cases no gesture could express: the far end refused to move at all,
+  /// and the far end moved on its own because output arrived while the reader
+  /// was parked in history.
+  void _onScrollState(PaneScrollEvent event) {
+    if (!mounted || event.paneId != _paneId) return;
+    setState(() {
+      _scrollMax = event.max;
+      _scrollOffset = event.offset;
+    });
+  }
+
+  /// Starts — or restarts, after a pane switch — the daemon's scroll events.
+  ///
+  /// ONE AT A TIME, and the old one is closed first: two live subscriptions for
+  /// two panes would leave the newer one racing the older pane's events into the
+  /// same mirror.
+  Future<void> _watchScroll() async {
+    final previous = _scrollWatch;
+    _scrollWatch = null;
+    await previous?.close();
+
+    final paneId = _paneId;
+    final connection = ref.read(connectionProvider).value;
+    if (connection is! Online || !mounted) return;
+
+    // Null rather than an exception when the daemon will not open it: a screen
+    // that works with its own mirror is worth more than one that refuses to
+    // open. See [PaneScrollWatch.start].
+    final watch = await PaneScrollWatch.start(
+      connection.client,
+      paneId: paneId,
+    );
+    if (watch == null) return;
+    // The pane may have changed while the channel was opening, which is a
+    // genuine race: attaching to a pane is a tap, and a tap takes no time.
+    if (!mounted || _paneId != paneId) {
+      await watch.close();
+      return;
+    }
+    _scrollWatch = watch;
+    watch.states.listen(_onScrollState);
   }
 
   /// Begins a selection at the pressed cell.
@@ -1339,6 +1454,14 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                 else if (!_following)
                   _ScrollBackBar(
                     offset: _scrollOffset,
+                    // AT THE OLDEST LINE, the bar says so. This is the one
+                    // state the user cannot read off the number: 382 and 382 do
+                    // not look different, and without the word the reader keeps
+                    // swiping at a wall. `max` is the daemon's, so it is true
+                    // even when the mirror is behind it.
+                    atOldest: _scrollMax != null &&
+                        _scrollMax! > 0 &&
+                        _scrollOffset >= _scrollMax!,
                     palette: palette,
                     l10n: l10n,
                     onJump: _jumpToBottom,
@@ -1993,15 +2116,26 @@ class _Repaint extends ChangeNotifier {
 /// Tells the reader they are not looking at the live screen, and offers one tap
 /// back. Without this, a terminal that is silently parked in history looks
 /// broken — keystrokes go somewhere the user cannot see.
+///
+/// IT ONLY EVER DRAWS A SCROLLBACK THE PANE ACTUALLY HAS. The number comes from
+/// the daemon ([PaneScrollEvent]), not from what this client asked for, and the
+/// bar is never shown at all for an offset of zero — so a pane whose program has
+/// printed less than a screenful shows no bar no matter how hard the reader
+/// swipes, instead of announcing a history that does not exist.
 class _ScrollBackBar extends StatelessWidget {
   const _ScrollBackBar({
     required this.offset,
+    required this.atOldest,
     required this.palette,
     required this.l10n,
     required this.onJump,
   });
 
   final int offset;
+
+  /// Whether this is as far back as the buffer goes.
+  final bool atOldest;
+
   final TerminalColors palette;
   final AppLocalizations l10n;
   final VoidCallback onJump;
@@ -2016,7 +2150,9 @@ class _ScrollBackBar extends StatelessWidget {
         color: palette.cursor.withValues(alpha: 0.18),
         alignment: Alignment.center,
         child: Text(
-          l10n.terminalScrolledBack(offset),
+          atOldest
+              ? l10n.terminalScrolledBackOldest(offset)
+              : l10n.terminalScrolledBack(offset),
           style: TextStyle(
             color: palette.foreground,
             fontSize: TextSize.meta,

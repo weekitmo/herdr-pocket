@@ -332,6 +332,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String terminalScrolledBackOldest(int lines) {
+    return '已到最早 · 已回看 $lines 行 — 点按回到实时';
+  }
+
+  @override
   String get terminalSelectionHint => '选择文本';
 
   @override
