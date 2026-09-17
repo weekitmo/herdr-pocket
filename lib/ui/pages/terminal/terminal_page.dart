@@ -49,19 +49,6 @@ import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:xterm/core.dart';
 
-/// A live terminal on one agent's pane.
-///
-/// The framing is "a status board that contains a terminal": this is reached by
-/// tapping an agent, it takes over that pane's input, and it closes back to the
-/// board. It is a real character grid, not a chat transcript — the whole reason
-/// the board exists is that a chat wrapper throws away everything you need to
-/// read a TUI.
-/// The font size the terminal is drawn at before the user scales it.
-///
-/// One of the two numbers that decide how much of a desktop the phone can show
-/// at once (the other is the screen): at 12 points, a 411-point-wide phone fits
-/// about 68 columns, which is a full-width TUI and a narrow editor.
-const double kTerminalBaseFontSize = 12;
 
 /// How far "return to live" asks the daemon to scroll down.
 ///
@@ -82,6 +69,13 @@ const int _jumpToBottomLines = 65535;
 const double kTerminalMinZoom = 0.8;
 const double kTerminalMaxZoom = 1.8;
 
+/// A live terminal on one agent's pane.
+///
+/// The framing is "a status board that contains a terminal": this is reached by
+/// tapping an agent, it takes over that pane's input, and it closes back to the
+/// board. It is a real character grid, not a chat transcript — the whole reason
+/// the board exists is that a chat wrapper throws away everything you need to
+/// read a TUI.
 class TerminalPage extends ConsumerStatefulWidget {
   const TerminalPage({required this.paneId, required this.title, super.key});
 
@@ -855,7 +849,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       originalName: picked.name,
     );
   }
-
 
   String _pickMessage(PickException e, AppLocalizations l10n) => switch (e.reason) {
     PickFailure.tooLarge => l10n.attachTooLarge,

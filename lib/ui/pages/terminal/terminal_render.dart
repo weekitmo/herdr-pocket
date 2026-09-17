@@ -579,3 +579,16 @@ class CellMetrics {
     return CellMetrics(width: painter.width, height: painter.height);
   }
 }
+
+/// The font size the terminal is drawn at before the user scales it.
+///
+/// One of the two numbers that decide how much of a desktop the phone can show
+/// at once (the other is the screen): at 12 points, a 411-point-wide phone fits
+/// about 68 columns, which is a full-width TUI and a narrow editor.
+///
+/// It lives beside the cell metrics because the two are one decision: this is
+/// the number, [CellMetrics.measure] is what it works out to in pixels, and
+/// every surface that draws a grid has to agree on both. There are two of them
+/// now — the herdr pane mirror and a plain PTY — and a second copy of this
+/// number would be a second, quietly different, terminal.
+const double kTerminalBaseFontSize = 12;
