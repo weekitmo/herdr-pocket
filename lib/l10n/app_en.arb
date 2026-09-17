@@ -571,5 +571,30 @@
   "shellCommandNote": "Runs directly on the remote pty, not through a login shell.",
   "shellCommandPlaceholder": "blank = login shell",
   "shellCommandRestore": "Restore the default command",
-  "shellCommandFooter": "The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback.\n\n⚠️ This command runs in a NON-LOGIN shell, whose PATH is narrower than the one you use interactively — /opt/homebrew/bin on macOS and ~/.local/bin on Linux are usually missing, so tmux exits with code 127 (command not found). Give the full path for anything installed outside the default location. Leave the field blank for a login shell, which has the PATH you expect."
+  "shellCommandFooter": "The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback.\n\n⚠️ This command runs in a NON-LOGIN shell, whose PATH is narrower than the one you use interactively — /opt/homebrew/bin on macOS and ~/.local/bin on Linux are usually missing, so tmux exits with code 127 (command not found). Give the full path for anything installed outside the default location. Leave the field blank for a login shell, which has the PATH you expect.",
+  "shellScrollbackTitle": "Scrollback",
+  "shellScrollbackLabel": "Lines to keep",
+  "shellScrollbackNote": "The history the terminal holds. Drag up to read it.",
+  "shellScrollbackFooter": "One number doing two jobs: how far back you can read, and how much memory a session holds — a line is a full row of cells, not a string. Accepts {min} to {max}, and applies the next time a terminal is opened.",
+  "@shellScrollbackFooter": {
+    "description": "The SSH terminal's scrollback depth.",
+    "placeholders": {
+      "min": {
+        "type": "int",
+        "example": "1000"
+      },
+      "max": {
+        "type": "int",
+        "example": "200000"
+      }
+    }
+  },
+  "shellScrollbackLines": "{lines} lines",
+  "@shellScrollbackLines": {
+    "placeholders": {
+      "lines": {
+        "type": "int"
+      }
+    }
+  }
 }

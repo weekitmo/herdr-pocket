@@ -23,6 +23,7 @@ import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/settings/icons_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/key_bar_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/shell_command_page.dart';
+import 'package:herdr_pocket/ui/pages/settings/shell_scrollback_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/theme_page.dart';
 
 /// The sentinel standing for "follow the system" in the language picker.
@@ -286,6 +287,21 @@ class SettingsPage extends ConsumerWidget {
                     onTap: () => Navigator.of(context).push(
                       CupertinoPageRoute<void>(
                         builder: (_) => const ShellCommandPage(),
+                      ),
+                    ),
+                  ),
+                  // Both rows name the SSH terminal in their own labels rather
+                  // than sitting under a heading that says so: the heading rule
+                  // (no card titled with the words of the row beneath it) cuts
+                  // both ways, and a card headed "SSH terminal" over a row
+                  // reading "terminal command" is the same duplication.
+                  _Disclosure(
+                    label: l10n.shellScrollbackTitle,
+                    colors: colors,
+                    value: l10n.shellScrollbackLines(settings.scrollbackLines),
+                    onTap: () => Navigator.of(context).push(
+                      CupertinoPageRoute<void>(
+                        builder: (_) => const ShellScrollbackPage(),
                       ),
                     ),
                   ),

@@ -66,7 +66,16 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   /// The character grid. Owned here, not by the painter, and never replaced
   /// except on reopen: the scrollback is the user's, and dropping it to redraw
   /// would be dropping what they were reading.
-  Terminal _terminal = Terminal(maxLines: 4000);
+  /// The character grid. Its depth comes from Settings — see
+  /// [defaultScrollbackLines] for why that is a number the user owns.
+  late Terminal _terminal = Terminal(maxLines: _maxLines);
+
+  /// Read once per page rather than watched: `maxLines` is a constructor
+  /// argument, so honouring a change means building a new Terminal, and
+  /// swapping the buffer under a live session would throw away the very
+  /// scrollback the setting exists to keep.
+  int get _maxLines =>
+      ref.read(settingsProvider.select((s) => s.scrollbackLines));
 
   /// The one notifier the painter listens to. See [_Repaint].
   final _repaint = _Repaint();
@@ -128,6 +137,10 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       final runner = await ref.read(shellRunnerProvider)(profile);
       if (!mounted) return;
 
+      // Sized to the same grid the pty is opened at, before a byte arrives:
+      // the model and the far end must agree from the first frame, or the
+      // first full-screen draw lands in the wrong cells.
+      _terminal.resize(_cols, _rows);
       final session = await runner.open(cols: _cols, rows: _rows);
       if (!mounted) {
         await session.close();
@@ -188,7 +201,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     });
     // A fresh grid: the old one holds a dead session's output, and scrolling
     // back into it would be scrolling into a terminal that no longer exists.
-    _terminal = Terminal(maxLines: 4000);
+    _terminal = Terminal(maxLines: _maxLines);
     _terminal.resize(_cols, _rows);
     await old?.close();
     if (mounted) await _open();
@@ -205,10 +218,6 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     if (cols == _cols && rows == _rows) return;
     _cols = cols;
     _rows = rows;
-    // Tell the MODEL first: the painter draws `rows` lines from the end of the
-    // buffer, and a grid that disagrees with the PTY puts every wrap in the
-    // wrong place.
-    _terminal.resize(cols, rows);
     if (_ended) return;
 
     final session = _session;
@@ -227,7 +236,29 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     // The user sees their terminal flicker while the keyboard slides.
     _resizeTimer?.cancel();
     _resizeTimer = Timer(const Duration(milliseconds: 180), () {
-      if (mounted) _session?.resize(_cols, _rows);
+      if (!mounted) return;
+      final live = _session;
+      if (live == null) return;
+      // THE MODEL MOVES WITH THE PTY, NOT WITH THE BOX, and that is the whole
+      // reason this line is here rather than at the top of this method.
+      //
+      // Measured against xterm 4.0.0: resizing while the ALTERNATE buffer is
+      // active — which is where tmux lives, it sends `smcup` — DISCARDS the
+      // rows that no longer fit, from the top, and they never come back:
+      //
+      //     6 rows: AAA / BBB / _ / _ / _ / STATUS
+      //     4 rows: _ / _ / STATUS          <- AAA and BBB are gone
+      //     6 rows: _ / STATUS / _          <- and staying gone is the point
+      //
+      // The keyboard animates, so a layout change is not one size but twenty.
+      // Resizing the model on each of them truncated the top of tmux's screen
+      // over and over while the far end was still drawing for the old geometry
+      // — and tmux only repaints what CHANGES, so the rows we threw away were
+      // never sent again. On the phone that showed up as a terminal missing its
+      // status bar. One resize, at the moment the far end is told, is one
+      // truncation that tmux's own full repaint then overwrites.
+      _terminal.resize(_cols, _rows);
+      live.resize(_cols, _rows);
     });
   }
 

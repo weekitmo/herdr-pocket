@@ -39,6 +39,7 @@ void main() {
       'flutter.settings.iconSet': 'system',
       'flutter.settings.autoUpdateCheck': false,
       'flutter.settings.sessionCommand': 'zsh -l',
+      'flutter.settings.scrollbackLines': 12345,
     });
     final prefs = await SharedPreferences.getInstance();
     final settings = launch(prefs).read(settingsProvider);
@@ -58,6 +59,7 @@ void main() {
     expect(settings.iconSet, AppIconSet.system);
     expect(settings.autoUpdateCheck, isFalse);
     expect(settings.sessionCommand, 'zsh -l');
+    expect(settings.scrollbackLines, 12345);
   });
 
   test('what one launch writes is what the next launch reads', () async {
@@ -73,6 +75,7 @@ void main() {
     await first.read(settingsProvider.notifier).setIconSet(AppIconSet.system);
     await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: false);
     await first.read(settingsProvider.notifier).setSessionCommand('fish -l');
+    await first.read(settingsProvider.notifier).setScrollbackLines(20000);
 
     // A second launch against the same store — which is what closing and
     // reopening the app does.
@@ -83,6 +86,7 @@ void main() {
     expect(second.iconSet, AppIconSet.system);
     expect(second.autoUpdateCheck, isFalse);
     expect(second.sessionCommand, 'fish -l');
+    expect(second.scrollbackLines, 20000);
 
     // And clearing goes all the way back to the built-in palette rather than
     // leaving a stale id that no longer exists.
@@ -118,6 +122,9 @@ void main() {
     // that loses its session every time you close the app is one you stop
     // reaching for.
     expect(settings.sessionCommand, defaultSessionCommand);
+    // Ten thousand lines: long enough to be worth scrolling, small enough
+    // that a session does not hold a phone's worth of cells for nothing.
+    expect(settings.scrollbackLines, defaultScrollbackLines);
   });
 
   test('turning the chat window off survives a relaunch', () async {
@@ -127,5 +134,32 @@ void main() {
 
     final second = launch(await SharedPreferences.getInstance()).read(settingsProvider);
     expect(second.composerEnabled, isFalse);
+  });
+
+  test('the scrollback depth is clamped wherever it comes from', () async {
+    // A NUMBER STORED BY A BUILD THAT ALLOWED A DIFFERENT RANGE is the case
+    // this guards: the setting is a memory bound as well as a reading distance,
+    // so a value from disk is not automatically a value that is safe to honour.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'flutter.settings.scrollbackLines': 9999999,
+    });
+    final stored = launch(await SharedPreferences.getInstance());
+    expect(stored.read(settingsProvider).scrollbackLines, maxScrollbackLines);
+
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final store = await SharedPreferences.getInstance();
+    final live = launch(store);
+
+    // And the same on the way in, because a terminal with no history cannot be
+    // scrolled at all — the gesture that reveals it would look broken.
+    await live.read(settingsProvider.notifier).setScrollbackLines(0);
+    expect(live.read(settingsProvider).scrollbackLines, minScrollbackLines);
+
+    await live.read(settingsProvider.notifier).setScrollbackLines(9999999);
+    expect(live.read(settingsProvider).scrollbackLines, maxScrollbackLines);
+
+    // CLAMPED ON THE WAY TO DISK TOO, read back the way a relaunch would: a
+    // store that kept the number that was refused would hand it back next time.
+    expect(launch(store).read(settingsProvider).scrollbackLines, maxScrollbackLines);
   });
 }

@@ -96,6 +96,13 @@ void main() {
     await tester.pump();
   }
 
+  /// The grid the page is drawing, reached through the painter.
+  TerminalPainter painterOf(WidgetTester tester) => tester
+      .widgetList<CustomPaint>(find.byType(CustomPaint))
+      .map((w) => w.painter)
+      .whereType<TerminalPainter>()
+      .first;
+
   testWidgets('the pty is opened once, at the size the box asks for', (
     tester,
   ) async {
@@ -119,6 +126,8 @@ void main() {
     final first = runner.opened.single;
     final session = runner.sessions.single;
 
+    final rowsBefore = painterOf(tester).terminal.buffer.height;
+
     // Rotate: same session, wider grid.
     tester.view.physicalSize = const Size(800 * 3, 360 * 3);
     await tester.pump();
@@ -128,9 +137,24 @@ void main() {
       reason: 'the window-change is debounced: the keyboard animates, and a '
           'SIGWINCH per animation frame is a full redraw per animation frame',
     );
+    expect(
+      painterOf(tester).terminal.buffer.height,
+      rowsBefore,
+      reason: 'THE MODEL MOVES WITH THE PTY, NOT WITH THE BOX. Resizing it '
+          'here, on a size the far end has not been told about, is what lost '
+          'tmux its status bar: xterm discards the rows that no longer fit '
+          'when the ALTERNATE buffer is active, from the top, permanently — '
+          'and tmux only repaints what changed. A layout change is twenty '
+          'sizes, not one; the debounce is what makes it one.',
+    );
 
     await tester.pump(const Duration(milliseconds: 250));
     expect(session.resizes, hasLength(1));
+    expect(
+      painterOf(tester).terminal.buffer.height,
+      session.resizes.single.rows,
+      reason: 'once the far end has been told, the model follows it',
+    );
     expect(
       session.resizes.single.cols,
       greaterThan(first.cols),

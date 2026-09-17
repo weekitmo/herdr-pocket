@@ -97,6 +97,28 @@ const String builtInThemeId = '__builtin__';
 /// finds the same scrollback rather than a fresh prompt.
 const String defaultSessionCommand = 'tmux new -A -s herdr-pocket';
 
+/// How many lines an SSH terminal keeps in its scrollback.
+///
+/// ONE NUMBER WITH TWO JOBS, which is why it is a setting rather than a
+/// constant: it is how far back the user can read, and it is also how much
+/// memory a session holds for as long as it is open (each line is a row of
+/// cells, not a string). Ten thousand lines is a long afternoon of output on a
+/// phone, and it is about the point where the buffer stops being free.
+const int defaultScrollbackLines = 10000;
+
+/// The range the setting accepts.
+///
+/// A floor rather than zero: a terminal with no history cannot be scrolled at
+/// all, and the gesture that reveals it would look broken. A ceiling because a
+/// phone that holds a million lines is a phone that runs out of memory while
+/// the user is reading logs.
+const int minScrollbackLines = 1000;
+const int maxScrollbackLines = 200000;
+
+/// Clamps a stored or typed line count into [minScrollbackLines]..[maxScrollbackLines].
+int clampScrollbackLines(int lines) =>
+    lines.clamp(minScrollbackLines, maxScrollbackLines);
+
 class SettingsState {
   const SettingsState({
     this.themeMode = AppThemeMode.system,
@@ -113,6 +135,7 @@ class SettingsState {
     this.fileTransferEnabled = false,
     this.composerEnabled = true,
     this.sessionCommand = defaultSessionCommand,
+    this.scrollbackLines = defaultScrollbackLines,
     this.downloadDirUri,
     this.downloadDirLabel,
     this.autoUpdateCheck = true,
@@ -245,6 +268,9 @@ class SettingsState {
   /// app does not.
   final String sessionCommand;
 
+  /// How far back an SSH terminal can scroll. See [defaultScrollbackLines].
+  final int scrollbackLines;
+
   SettingsState copyWith({
     AppThemeMode? themeMode,
     String? languageCode,
@@ -266,6 +292,7 @@ class SettingsState {
     bool? autoUpdateCheck,
     bool? composerEnabled,
     String? sessionCommand,
+    int? scrollbackLines,
   }) {
     return SettingsState(
       themeMode: themeMode ?? this.themeMode,
@@ -283,6 +310,7 @@ class SettingsState {
       fileTransferEnabled: fileTransferEnabled ?? this.fileTransferEnabled,
       composerEnabled: composerEnabled ?? this.composerEnabled,
       sessionCommand: sessionCommand ?? this.sessionCommand,
+      scrollbackLines: scrollbackLines ?? this.scrollbackLines,
       // Both or neither: a label without a URI names a folder the app cannot
       // write to, and a URI without a label is a row full of percent-escapes.
       downloadDirUri:
@@ -314,6 +342,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kFileTransfer = 'settings.fileTransferEnabled';
   static const _kComposer = 'settings.composerEnabled';
   static const _kSessionCommand = 'settings.sessionCommand';
+  static const _kScrollback = 'settings.scrollbackLines';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
   static const _kDownloadDirLabel = 'settings.downloadDirLabel';
   static const _kAutoUpdate = 'settings.autoUpdateCheck';
@@ -350,6 +379,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
       composerEnabled: prefs.getBool(_kComposer) ?? true,
       sessionCommand: prefs.getString(_kSessionCommand) ?? defaultSessionCommand,
+      // Clamped on the way IN as well as out: a value typed on a build that
+      // allowed a different range must not become a buffer nobody can afford.
+      scrollbackLines: clampScrollbackLines(
+        prefs.getInt(_kScrollback) ?? defaultScrollbackLines,
+      ),
       downloadDirUri: prefs.getString(_kDownloadDirUri),
       downloadDirLabel: prefs.getString(_kDownloadDirLabel),
       autoUpdateCheck: prefs.getBool(_kAutoUpdate) ?? true,
@@ -430,6 +464,17 @@ class SettingsNotifier extends Notifier<SettingsState> {
   /// Blank and whitespace are stored as given and interpreted at use: "no
   /// command" is a legitimate choice — the login shell — and trimming it here
   /// would make the settings field fight the user's cursor.
+  /// Sets the SSH terminal's scrollback depth.
+  ///
+  /// Clamped here rather than at the field: the field is one caller, and a
+  /// stored value that a future screen sets directly must be as safe as one
+  /// that came through the keyboard.
+  Future<void> setScrollbackLines(int lines) async {
+    final clamped = clampScrollbackLines(lines);
+    state = state.copyWith(scrollbackLines: clamped);
+    await _prefs.setInt(_kScrollback, clamped);
+  }
+
   Future<void> setSessionCommand(String command) async {
     state = state.copyWith(sessionCommand: command);
     await _prefs.setString(_kSessionCommand, command);

@@ -1313,4 +1313,23 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get shellCommandFooter =>
       '默认是 tmux new -A -s herdr-pocket：有就接上、没有就新建，所以关掉 App 再回来，看到的是同一个会话和它的回滚缓冲。\n\n⚠️ 这条命令跑在非登录 shell 里，PATH 比你平时用的窄——macOS 的 /opt/homebrew/bin、Linux 的 ~/.local/bin 通常都不在里面，于是 tmux 会以退出码 127（command not found）结束。装在非默认位置的命令请写全路径（如 /opt/homebrew/bin/tmux）。留空则直接开登录 shell，PATH 就是你熟悉的那个。';
+
+  @override
+  String get shellScrollbackTitle => '回滚行数';
+
+  @override
+  String get shellScrollbackLabel => '保留多少行';
+
+  @override
+  String get shellScrollbackNote => '终端缓冲区里留着的历史。往上拖就能读到。';
+
+  @override
+  String shellScrollbackFooter(int min, int max) {
+    return '这一个数字同时是「能往回读多久」和「一个会话占多少内存」——每一行是一整行的格子，不是一行文本。取值范围 $min 到 $max，改完下次打开终端生效。';
+  }
+
+  @override
+  String shellScrollbackLines(int lines) {
+    return '$lines 行';
+  }
 }

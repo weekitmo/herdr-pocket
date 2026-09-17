@@ -2569,6 +2569,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback.\n\n⚠️ This command runs in a NON-LOGIN shell, whose PATH is narrower than the one you use interactively — /opt/homebrew/bin on macOS and ~/.local/bin on Linux are usually missing, so tmux exits with code 127 (command not found). Give the full path for anything installed outside the default location. Leave the field blank for a login shell, which has the PATH you expect.'**
   String get shellCommandFooter;
+
+  /// No description provided for @shellScrollbackTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Scrollback'**
+  String get shellScrollbackTitle;
+
+  /// No description provided for @shellScrollbackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lines to keep'**
+  String get shellScrollbackLabel;
+
+  /// No description provided for @shellScrollbackNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The history the terminal holds. Drag up to read it.'**
+  String get shellScrollbackNote;
+
+  /// The SSH terminal's scrollback depth.
+  ///
+  /// In en, this message translates to:
+  /// **'One number doing two jobs: how far back you can read, and how much memory a session holds — a line is a full row of cells, not a string. Accepts {min} to {max}, and applies the next time a terminal is opened.'**
+  String shellScrollbackFooter(int min, int max);
+
+  /// No description provided for @shellScrollbackLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{lines} lines'**
+  String shellScrollbackLines(int lines);
 }
 
 class _AppLocalizationsDelegate
