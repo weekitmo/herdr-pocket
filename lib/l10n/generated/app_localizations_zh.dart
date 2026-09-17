@@ -1312,7 +1312,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shellCommandFooter =>
-      '默认是 tmux new -A -s herdr-pocket：有就接上、没有就新建，所以关掉 App 再回来，看到的是同一个会话和它的回滚缓冲。\n\n⚠️ 这条命令跑在非登录 shell 里，PATH 比你平时用的窄——macOS 的 /opt/homebrew/bin、Linux 的 ~/.local/bin 通常都不在里面，于是 tmux 会以退出码 127（command not found）结束。装在非默认位置的命令请写全路径（如 /opt/homebrew/bin/tmux）。留空则直接开登录 shell，PATH 就是你熟悉的那个。';
+      '默认会带上常见安装目录去找 tmux：找得到就接上去（有就接、没有就新建，所以关掉 App 再回来是同一个会话和它的回滚缓冲），**找不到就退化成普通登录 shell**——没装 tmux 的机器照样能用。\n\n⚠️ 这条命令跑在非登录 shell 里，PATH 比你平时窄（macOS 的 /opt/homebrew/bin、Linux 的 ~/.local/bin 通常都不在），所以默认值里补了这三个目录；你自己写的命令如果装在别处，请写全路径。留空则直接开登录 shell。';
 
   @override
   String get shellScrollbackTitle => '回滚行数';
@@ -1332,4 +1332,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String shellScrollbackLines(int lines) {
     return '$lines 行';
   }
+
+  @override
+  String get shellCommandDefaultValue => 'tmux（没有则登录 shell）';
 }

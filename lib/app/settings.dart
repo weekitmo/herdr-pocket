@@ -95,7 +95,33 @@ const String builtInThemeId = '__builtin__';
 /// attaches if one is already there, and starts it if not. That is what makes a
 /// phone terminal survive the phone — closing the app detaches, and coming back
 /// finds the same scrollback rather than a fresh prompt.
-const String defaultSessionCommand = 'tmux new -A -s herdr-pocket';
+///
+/// ## Why it is not just the tmux command
+///
+/// TWO CLAUSES, and each one earns its place on a real machine:
+///
+/// 1. **The PATH prefix.** `ssh host <command>` runs in a NON-LOGIN shell, so
+///    `/etc/zprofile` is never read and `path_helper` never runs. On a Mac with
+///    Homebrew that leaves `tmux` unfindable even though it is installed, and
+///    the terminal died with `command not found` — exit 127, measured on a
+///    phone. The three directories cover where a user-installed tmux lives:
+///    `~/.local/bin` (what herdr's own installer uses), `/opt/homebrew/bin`
+///    (Apple silicon Homebrew) and `/usr/local/bin` (Intel Homebrew, and the
+///    usual place for a hand-built binary).
+///
+/// 2. **The fallback.** A machine with no tmux at all should still give you a
+///    terminal — that is the point of the feature, and a user who wanted tmux
+///    specifically can install it and get it on the next open. `exec` rather
+///    than a plain call so the shell REPLACES this process: it becomes the
+///    pty's foreground process, which is what makes job control and SIGWINCH
+///    behave. `$SHELL` is set by sshd to the account's login shell.
+///
+/// The condition is `||` rather than testing for tmux first, deliberately: a
+/// tmux that is installed and then fails to start should also land you
+/// somewhere usable rather than on an exit code.
+const String defaultSessionCommand =
+    r'PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; '
+    r'tmux new -A -s herdr-pocket || exec "$SHELL"';
 
 /// How many lines an SSH terminal keeps in its scrollback.
 ///

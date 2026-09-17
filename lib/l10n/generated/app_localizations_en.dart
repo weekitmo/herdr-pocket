@@ -1397,7 +1397,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellCommandFooter =>
-      'The default is tmux new -A -s herdr-pocket: it attaches if the session exists and starts it if not, so closing the app and coming back finds the same session and its scrollback.\n\n⚠️ This command runs in a NON-LOGIN shell, whose PATH is narrower than the one you use interactively — /opt/homebrew/bin on macOS and ~/.local/bin on Linux are usually missing, so tmux exits with code 127 (command not found). Give the full path for anything installed outside the default location. Leave the field blank for a login shell, which has the PATH you expect.';
+      'The default prepends the usual user-install directories to PATH and looks for tmux: found, it attaches to the named session (or starts it), so closing the app and coming back finds the same scrollback; **not found, and you get a plain login shell instead** — a machine without tmux still gives you a terminal.\n\n⚠️ The command runs in a NON-LOGIN shell, whose PATH is narrower than an interactive one (no /opt/homebrew/bin on macOS, no ~/.local/bin on Linux), which is why the default adds those three directories. Anything you install elsewhere needs its full path. Leave the field blank for a login shell.';
 
   @override
   String get shellScrollbackTitle => 'Scrollback';
@@ -1418,4 +1418,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String shellScrollbackLines(int lines) {
     return '$lines lines';
   }
+
+  @override
+  String get shellCommandDefaultValue => 'tmux, or a login shell';
 }
