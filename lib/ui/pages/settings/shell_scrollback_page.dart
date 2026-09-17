@@ -95,7 +95,6 @@ class _ShellScrollbackPageState extends ConsumerState<ShellScrollbackPage> {
                 rows: [
                   SettingsRow(
                     label: l10n.shellScrollbackLabel,
-                    note: l10n.shellScrollbackNote,
                     below: _LinesField(controller: _controller),
                   ),
                 ],

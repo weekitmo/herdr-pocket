@@ -1107,13 +1107,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAutoUpdate => '自动检查更新';
 
   @override
-  String get settingsAutoUpdateFooter => '每次启动应用时检查一次。默认关闭。';
-
-  @override
-  String get settingsUpdatesFooter =>
-      '更新来自 GitHub Releases（weekitmo/herdr-pocket）。下载会跟随手机设置的 HTTP 代理。';
-
-  @override
   String get updateSheetTitle => '软件更新';
 
   @override
@@ -1302,17 +1295,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellCommandLabel => '打开时运行';
 
   @override
-  String get shellCommandNote => '这条命令在远端 PTY 里直接执行，不经过登录 shell。';
-
-  @override
   String get shellCommandPlaceholder => '留空 = 登录 shell';
 
   @override
   String get shellCommandRestore => '恢复默认命令';
 
   @override
-  String get shellCommandFooter =>
-      '默认会带上常见安装目录去找 tmux：找得到就接上去（有就接、没有就新建，所以关掉 App 再回来是同一个会话和它的回滚缓冲），**找不到就退化成普通登录 shell**——没装 tmux 的机器照样能用。\n\n⚠️ 这条命令跑在非登录 shell 里，PATH 比你平时窄（macOS 的 /opt/homebrew/bin、Linux 的 ~/.local/bin 通常都不在），所以默认值里补了这三个目录；你自己写的命令如果装在别处，请写全路径。留空则直接开登录 shell。';
+  String get shellCommandFooter => '命令跑在非登录 shell 里，PATH 较窄；PATH 里没有的命令请写全路径。';
 
   @override
   String get shellScrollbackTitle => '回滚行数';
@@ -1321,11 +1310,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellScrollbackLabel => '保留多少行';
 
   @override
-  String get shellScrollbackNote => '终端缓冲区里留着的历史。往上拖就能读到。';
-
-  @override
   String shellScrollbackFooter(int min, int max) {
-    return '这一个数字同时是「能往回读多久」和「一个会话占多少内存」——每一行是一整行的格子，不是一行文本。取值范围 $min 到 $max，改完下次打开终端生效。';
+    return '取值 $min–$max，改完下次打开终端生效。';
   }
 
   @override

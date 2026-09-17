@@ -1171,14 +1171,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAutoUpdate => 'Check automatically';
 
   @override
-  String get settingsAutoUpdateFooter =>
-      'Checks once each time the app starts. Off by default.';
-
-  @override
-  String get settingsUpdatesFooter =>
-      'Updates come from GitHub Releases (weekitmo/herdr-pocket). Downloads follow the phone\'s HTTP proxy when one is set.';
-
-  @override
   String get updateSheetTitle => 'Software update';
 
   @override
@@ -1386,10 +1378,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellCommandLabel => 'Run on open';
 
   @override
-  String get shellCommandNote =>
-      'Runs directly on the remote pty, not through a login shell.';
-
-  @override
   String get shellCommandPlaceholder => 'blank = login shell';
 
   @override
@@ -1397,7 +1385,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellCommandFooter =>
-      'The default prepends the usual user-install directories to PATH and looks for tmux: found, it attaches to the named session (or starts it), so closing the app and coming back finds the same scrollback; **not found, and you get a plain login shell instead** — a machine without tmux still gives you a terminal.\n\n⚠️ The command runs in a NON-LOGIN shell, whose PATH is narrower than an interactive one (no /opt/homebrew/bin on macOS, no ~/.local/bin on Linux), which is why the default adds those three directories. Anything you install elsewhere needs its full path. Leave the field blank for a login shell.';
+      'Runs in a non-login shell, so PATH is narrow — use a full path for anything missing from it.';
 
   @override
   String get shellScrollbackTitle => 'Scrollback';
@@ -1406,12 +1394,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellScrollbackLabel => 'Lines to keep';
 
   @override
-  String get shellScrollbackNote =>
-      'The history the terminal holds. Drag up to read it.';
-
-  @override
   String shellScrollbackFooter(int min, int max) {
-    return 'One number doing two jobs: how far back you can read, and how much memory a session holds — a line is a full row of cells, not a string. Accepts $min to $max, and applies the next time a terminal is opened.';
+    return 'Accepts $min–$max. Applies the next time a terminal is opened.';
   }
 
   @override

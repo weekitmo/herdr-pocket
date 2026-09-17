@@ -354,12 +354,6 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
 
-            // BELOW THE CARD, at the footnote inset — the third row of a card
-            // whose other two rows are controls would read as another control.
-            SliverToBoxAdapter(
-              child: SettingsNote(text: l10n.settingsUpdatesFooter),
-            ),
-
             SliverToBoxAdapter(
               child: SettingsGroup(
                 title: l10n.settingsAbout,
@@ -664,6 +658,12 @@ class _Disclosure extends StatelessWidget {
             Flexible(
               child: Text(
                 value,
+                // RIGHT-ALIGNED, because `expandTrailing` gives this row the
+                // whole remaining width and a left-aligned value then sits
+                // immediately after the label with a wasteland of space before
+                // the chevron. Measured on a phone ("还没检查过" next to
+                // "检查更新"), because no test asserts on where text sits.
+                textAlign: TextAlign.end,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

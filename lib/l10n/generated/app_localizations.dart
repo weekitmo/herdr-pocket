@@ -2192,18 +2192,6 @@ abstract class AppLocalizations {
   /// **'Check automatically'**
   String get settingsAutoUpdate;
 
-  /// No description provided for @settingsAutoUpdateFooter.
-  ///
-  /// In en, this message translates to:
-  /// **'Checks once each time the app starts. Off by default.'**
-  String get settingsAutoUpdateFooter;
-
-  /// No description provided for @settingsUpdatesFooter.
-  ///
-  /// In en, this message translates to:
-  /// **'Updates come from GitHub Releases (weekitmo/herdr-pocket). Downloads follow the phone\'s HTTP proxy when one is set.'**
-  String get settingsUpdatesFooter;
-
   /// No description provided for @updateSheetTitle.
   ///
   /// In en, this message translates to:
@@ -2546,12 +2534,6 @@ abstract class AppLocalizations {
   /// **'Run on open'**
   String get shellCommandLabel;
 
-  /// No description provided for @shellCommandNote.
-  ///
-  /// In en, this message translates to:
-  /// **'Runs directly on the remote pty, not through a login shell.'**
-  String get shellCommandNote;
-
   /// No description provided for @shellCommandPlaceholder.
   ///
   /// In en, this message translates to:
@@ -2567,7 +2549,7 @@ abstract class AppLocalizations {
   /// No description provided for @shellCommandFooter.
   ///
   /// In en, this message translates to:
-  /// **'The default prepends the usual user-install directories to PATH and looks for tmux: found, it attaches to the named session (or starts it), so closing the app and coming back finds the same scrollback; **not found, and you get a plain login shell instead** — a machine without tmux still gives you a terminal.\n\n⚠️ The command runs in a NON-LOGIN shell, whose PATH is narrower than an interactive one (no /opt/homebrew/bin on macOS, no ~/.local/bin on Linux), which is why the default adds those three directories. Anything you install elsewhere needs its full path. Leave the field blank for a login shell.'**
+  /// **'Runs in a non-login shell, so PATH is narrow — use a full path for anything missing from it.'**
   String get shellCommandFooter;
 
   /// No description provided for @shellScrollbackTitle.
@@ -2582,16 +2564,10 @@ abstract class AppLocalizations {
   /// **'Lines to keep'**
   String get shellScrollbackLabel;
 
-  /// No description provided for @shellScrollbackNote.
-  ///
-  /// In en, this message translates to:
-  /// **'The history the terminal holds. Drag up to read it.'**
-  String get shellScrollbackNote;
-
   /// The SSH terminal's scrollback depth.
   ///
   /// In en, this message translates to:
-  /// **'One number doing two jobs: how far back you can read, and how much memory a session holds — a line is a full row of cells, not a string. Accepts {min} to {max}, and applies the next time a terminal is opened.'**
+  /// **'Accepts {min}–{max}. Applies the next time a terminal is opened.'**
   String shellScrollbackFooter(int min, int max);
 
   /// No description provided for @shellScrollbackLines.

@@ -90,7 +90,6 @@ class _ShellCommandPageState extends ConsumerState<ShellCommandPage> {
                 rows: [
                   SettingsRow(
                     label: l10n.shellCommandLabel,
-                    note: l10n.shellCommandNote,
                     // `below` rather than `trailing`: a command is longer than
                     // the space a trailing control gets, and a field that
                     // shrink-wrapped beside its label would show four
