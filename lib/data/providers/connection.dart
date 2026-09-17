@@ -207,8 +207,20 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
   /// gets closed at all.
   HerdrClient? _live;
 
+  /// Which run of [build] owns the screen.
+  ///
+  /// A REBUILD DOES NOT UNDO A DIAL THAT IS ALREADY IN FLIGHT. Dart cannot
+  /// cancel a future, so invalidating this provider starts a second run and
+  /// leaves the first one somewhere inside `connect()` — and that abandoned run
+  /// still holds a reference to `state` and still intends to publish
+  /// "connecting, try 2 of 3" when its dial fails. The user sees the retry
+  /// banner for a machine they just deleted, which is the bug this field exists
+  /// for: a run may only publish while it is still the current one.
+  int _generation = 0;
+
   @override
   Future<ConnectionStatus> build() async {
+    final generation = ++_generation;
     final host = ref.watch(currentHostProvider);
     if (host == null) return const Disconnected();
 
@@ -226,7 +238,33 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       if (client != null) unawaited(client.close());
     });
 
-    return await _dialUntilAnswered(host);
+    return await _dialUntilAnswered(host, generation);
+  }
+
+  /// Whether the machine a dial is for is still one the user has.
+  ///
+  /// THE OTHER HALF OF THE SAME BUG. A profile captured before the dial started
+  /// is a snapshot, and the user can delete the machine it names while the loop
+  /// is between attempts — at which point every further attempt is a connection
+  /// to something that no longer exists, narrated on a screen that has already
+  /// moved on. Reading the list again is what makes "I deleted it" mean "it
+  /// stops".
+  ///
+  /// The local pseudo-profile is exempt by construction: it is not in the list,
+  /// because it is not a machine the user added — see `HostStore.localProfile`.
+  bool _stillWanted(HostProfile host) =>
+      host.isLocal ||
+      ref.read(hostListProvider).any((h) => h.id == host.id);
+
+  /// Writes progress to this provider's state, but only while this run owns it.
+  ///
+  /// Every write goes through here. The alternative — checking in the loop and
+  /// writing directly — leaves the smallest and most confusing gap of all: a
+  /// generation check followed by an `await` followed by a write, which is a
+  /// write from a run that was superseded during the await.
+  void _publish(int generation, ConnectionStatus next) {
+    if (generation != _generation || !ref.mounted) return;
+    state = AsyncValue.data(next);
   }
 
   /// Dials, and dials again while the failure is one that time can fix.
@@ -244,12 +282,24 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
   /// window can observe `Connecting`. That is self-correcting — the final
   /// value re-notifies the future and the dependent rebuilds — and it is the
   /// price of the UI being able to say "retrying, 2 of 3" at all.
-  Future<ConnectionStatus> _dialUntilAnswered(HostProfile host) async {
+  Future<ConnectionStatus> _dialUntilAnswered(
+    HostProfile host,
+    int generation,
+  ) async {
     Object? lastError;
     var spent = 0;
 
     for (var attempt = 1; attempt <= connectionMaxAttempts; attempt++) {
-      state = AsyncValue.data(Connecting(attempt: attempt));
+      // SUPERSEDED: another run of [build] owns the screen now — the user
+      // tapped connect again, changed a setting, or deleted a machine. This run
+      // keeps its hands off the state and stops dialling.
+      if (generation != _generation) return const Disconnected();
+      // DELETED: the machine this loop is dialling is not one the user has any
+      // more. Every further attempt would be a connection to nothing, narrated
+      // on a screen the user has already left.
+      if (!_stillWanted(host)) return const Disconnected();
+
+      _publish(generation, Connecting(attempt: attempt));
 
       if (attempt > 1) {
         // Say what is happening BEFORE the wait, not after it. The wait is the
@@ -266,15 +316,30 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
         final connected = await connector.connect(host);
         opened = connected.bundle.transport;
 
+        // THE DIAL MAY HAVE TAKEN A MINUTE, and the user may have spent it
+        // deleting the machine — in which case this connection now belongs to
+        // nobody. Closing it here rather than returning it is the difference
+        // between "the app stopped" and "the app left an SSH session open on a
+        // machine the user removed".
+        if (generation != _generation || !_stillWanted(host)) {
+          unawaited(opened.close().catchError((_) {}));
+          return const Disconnected();
+        }
+
         // The transport is up. The daemon has still said nothing, and saying
         // so is the difference between "connecting" and "verifying" for
         // somebody watching a screen that has not changed in ten seconds.
-        state = AsyncValue.data(
+        _publish(
+          generation,
           Connecting(attempt: attempt, stage: ConnectStage.verifying),
         );
 
         final client = HerdrClient(connected.bundle.transport);
         final hello = await client.ping();
+        if (generation != _generation || !_stillWanted(host)) {
+          unawaited(client.close());
+          return const Disconnected();
+        }
         _live = client;
         return Online(
           client: client,
@@ -291,7 +356,15 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       }
     }
 
-    return ConnectionFailed(lastError!, attempts: spent);
+    // THE FAILURE IS PUBLISHED THE SAME WAY PROGRESS IS, and that is not
+    // tidiness. This is the last write a run makes, so a run that was
+    // superseded while its last dial was failing would otherwise paint "could
+    // not reach 10.0.0.7" over a screen that has since said something else
+    // entirely. Returning the value rather than writing it is not enough:
+    // Riverpod applies the result of a build it has already replaced, which is
+    // exactly how the reported bug kept its banner up.
+    _publish(generation, ConnectionFailed(lastError!, attempts: spent));
+    return ConnectionFailed(lastError, attempts: spent);
   }
 
   /// Dials now, because the user asked.
