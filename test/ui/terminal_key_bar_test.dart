@@ -7,6 +7,7 @@ import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/domain/terminal/key_bar.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
+import 'package:herdr_pocket/ui/pages/terminal/key_strip.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
