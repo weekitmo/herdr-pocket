@@ -8,12 +8,62 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.3.3](#v033) | 2026-09-18 | 从 shell 页返回后，界面不再假死 |
 | [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
 | [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
 | [0.3.0](#v030) | 2026-09-17 | 没有 herdr 的机器也能开终端；终端里可以整段说话，而且 `/` 和 `@` 菜单还在 |
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v033"></a>
+## [0.3.3] — 2026-09-18
+
+### 中文
+
+**修复**
+
+- **从 SSH shell 页返回后，整个界面不能点（假死）**。画面完全正常、图标在手指下有反应、
+  窗口也聚焦着，但点什么都没用 —— 而且只有真机（release 包）这样，测试一条不红。
+  真相不在触摸层：**页面的 `dispose` 里写了一次 keep-alive 状态**，而 `dispose` 跑在**帧的
+  卸载阶段**。在那里标记「需要重建」会把框架的「已经有一帧在路上了」标志置为 true，
+  却因为当前正在绘帧而**不申请那一帧** —— 这个标志只在下一帧开头才会被清掉，
+  也就是那个没人申请过的帧。于是**整个进程从此再也排不出任何一帧**：
+  触摸照收、回调照跑、状态照改，**只是永远不再重绘**。
+
+  修法：这类写入统一走 `runOutsideFrame()` —— 安全时机（空闲/帧后）立刻写，
+  帧内则推迟到**本帧结束**（那个时机申请帧是有效的），最多晚一帧，永不丢。
+  同时补了 `ref.mounted` 守卫，因为推迟后的写入可能活得比容器久。
+
+  > 诊断价值高于修复本身：手机装的是 release 包，而 `print` 在 release 里照样进 logcat
+  > （`I/flutter`）—— 探针顺序是「根 Listener 看触摸有没有到 → 各回调打点 →
+  > 数帧 + 打印调度状态」，一条 `frames=85` 反复出现就是结论。
+
+### English
+
+**Fixed**
+
+- **After closing the SSH shell page, nothing on screen responded.** The picture was perfectly
+  normal, icons lit up under a finger, the window was focused — and every tap was ignored.
+  Only release builds on a phone did this; no test went red. The touch layer was innocent:
+  the page wrote a keep-alive state from **`dispose`**, which runs inside the frame's **unmount
+  pass**. Marking a widget dirty there sets the framework's "a frame is already on its way"
+  flag and then fails to ask for that frame — a frame is being drawn, so the scheduler does
+  not schedule. The flag is only cleared at the start of the next frame, the one nobody asked
+  for, so **the process could never schedule a frame again**: taps arrived, callbacks ran, the
+  state changed, and the screen never repainted.
+
+  Such writes now go through `runOutsideFrame()`: immediately from the safe phases, and
+  otherwise at the end of the frame already being drawn — late by at most one frame, never
+  lost. The holders also check `ref.mounted`, because a deferred write can outlive its
+  container.
+
+  > The diagnosis is worth more than the fix: the phone runs a release build, and `print`
+  > still reaches logcat there (`I/flutter`). Probes in order — a root `Listener` for whether
+  > touches arrive at all, a print in each callback, then a frame counter with the scheduling
+  > state on every touch. A `frames=85` line that never changes IS the answer.
 
 ---
 
