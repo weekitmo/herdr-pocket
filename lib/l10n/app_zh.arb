@@ -383,6 +383,7 @@
   "composerSend": "发送",
   "composerAttach": "上传手机上的图片或文件",
   "composerCommands": "技能与 MCP",
+  "composerMention": "引用文件或文件夹",
   "composerSectionSkills": "技能",
   "composerSectionMcp": "MCP",
   "composerSectionFiles": "文件",
@@ -498,8 +499,8 @@
   "updateResume": "继续下载",
   "updateOpenRelease": "打开发布页",
   "updateDownloading": "下载中",
-  "updateCancelDownload": "取消（保留已下载部分）",
-  "updateCancelled": "已取消。已下载的部分保留着，按「下载」可以接着下。",
+  "updateCancelDownload": "取消",
+  "updateCancelled": "已取消。",
   "updateReady": "已下载 {version} 并校验通过",
   "@updateReady": {
     "placeholders": {

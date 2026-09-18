@@ -185,7 +185,13 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// `domain/terminal/window.dart` for the measurement behind that.
   int? _paneRows;
 
-  /// The first buffer row that reaches the screen. See [firstVisibleRow].
+  /// The frame's placement in the box: how much of its top is cropped, and how
+  /// many blank rows sit above it. See [framePlacement].
+  ///
+  /// Kept as `skip - pad` for [_cellAt], which maps a touch to a frame row: the
+  /// padding rows are above the frame's first row, so they map to negative rows
+  /// and a long-press there selects nothing rather than a row that is not on
+  /// screen.
   int _topRow = 0;
 
   /// Which modifiers are armed on the key bar, and what that means for the next
@@ -233,6 +239,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// the terminal — the bar only owns the button that opens it, and a widget
   /// that held this flag would have to reach up to paint outside itself.
   bool _fanOpen = false;
+
   double _dragCarry = 0;
   double _lastCellHeight = 16;
   TerminalSelection? _selection;
@@ -268,6 +275,15 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
   /// The `/` and `@` menus, rebuilt for whatever pane is open.
   ComposerMenuController? _menu;
+
+  /// The `/` answers, one per pane, for as long as this visit lasts.
+  ///
+  /// On the page rather than in the controller because the controller is
+  /// rebuilt every time the chat window opens — and re-running the remote probe
+  /// behind every open is exactly what this exists to stop. Leaving the
+  /// terminal page (and coming back) is what clears it. See
+  /// [ComposerCapabilityCache].
+  final ComposerCapabilityCache _capabilityCache = ComposerCapabilityCache();
 
   /// Files attached to the message being written, already uploaded to the host.
   List<UploadedAttachment> _composerFiles = const [];
@@ -727,6 +743,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       l10n: l10n,
       capabilities: ref.read(capabilityProvider),
       fileIndex: ref.read(fileIndexProvider),
+      // One cache for the page, keyed by the pane inside it. The controller is
+      // rebuilt on every open of the chat window; the cache is what stops that
+      // rebuild from re-running the remote probe. See [ComposerCapabilityCache].
+      cache: _capabilityCache,
+      paneId: _paneId,
       cwd: pane?.cwd,
       agent: pane?.agent,
     );
@@ -763,20 +784,26 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     _composerFocus.requestFocus();
   }
 
-  /// The `…` button: opens the menu for whatever this pane can actually do.
+  /// The `/` button: the pane's skills and MCP servers.
+  void _openSlashMenu() => _openMenu(MenuTrigger.slash);
+
+  /// The `@` button: files and folders to mention.
+  void _openMentionMenu() => _openMenu(MenuTrigger.at);
+
+  /// Types a trigger character and lets the ordinary rules open the menu.
   ///
-  /// It types the trigger and lets the ordinary rules open the menu, rather than
-  /// opening a menu with no token behind it — one notion of "open", so the
-  /// query, the caret and the pick cannot disagree with each other.
+  /// ONE KIND OF OPEN MENU. The button types the character rather than opening
+  /// a menu with no token behind it, so the query, the caret and the pick can
+  /// never disagree — and the same character typed by hand takes the same path.
   ///
-  /// WHICH TRIGGER DEPENDS ON THE PANE, and that is the whole point of the
-  /// button being one button: an agent understands `/skill` and `@file`, so it
-  /// gets the skills; a plain shell understands neither, and its `/` is a path
-  /// separator — all it has use for is a path from the workspace.
-  void _openCommands() {
+  /// WHICH BUTTON IS WHICH IS THE USER'S, NOT THE PANE'S. The first version had
+  /// a single `…` whose trigger depended on whether the pane was running an
+  /// agent; the phone report was 「不要混用」, and it is right — the two lists
+  /// answer different questions, and the buttons are drawn as the characters
+  /// they insert.
+  void _openMenu(MenuTrigger trigger) {
     final menu = _menu;
     if (menu == null) return;
-    final trigger = menu.hasAgent ? MenuTrigger.slash : MenuTrigger.at;
     if (menu.token?.trigger == trigger) {
       menu.close();
       return;
@@ -1571,8 +1598,20 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                   // The field owns the rebuild: every keystroke changes whether
                   // there is anything to send, and rebuilding the whole terminal
                   // page for that would repaint the grid on each character.
+                  //
+                  // AND THE MENU JOINS IT, because one thing in the card depends
+                  // on the menu's answer rather than on the draft: whether the
+                  // pane has an agent at all, which decides whether the `/`
+                  // button exists. That answer can arrive LATE — the pane census
+                  // is re-read when this page opens it, and `_menu.updateContext`
+                  // fills it in afterwards — and without a listener here the
+                  // button simply never appeared on the phone (found on the
+                  // device: `+` and `@` only, while the same pane as the board's
+                  // `π` agent). It is one widget tree either way, and the card
+                  // is already rebuilt per keystroke, so joining the two costs
+                  // nothing that was not already being paid.
                   ListenableBuilder(
-                    listenable: _draft,
+                    listenable: Listenable.merge([_draft, ?_menu]),
                     builder: (context, _) => _buildChatComposer(
                       palette,
                       colors,
@@ -1843,12 +1882,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       }),
       onSend: _sendDraft,
       onAttach: () => unawaited(_attach()),
-      onCommands: _openCommands,
-      // One button, two names: it opens the agent's skills on a pane that has
-      // an agent, and the workspace's files on a pane that does not.
-      commandsLabel: (_menu?.hasAgent ?? false)
-          ? l10n.composerCommands
-          : l10n.composerSectionFiles,
+      onSlash: _openSlashMenu,
+      onMention: _openMentionMenu,
+      // A shell has no skills; its `/` is a path separator. The button is
+      // absent there rather than present and empty — see `ChatComposer`.
+      slashEnabled: _menu?.hasAgent ?? false,
       onChanged: _onDraftChanged,
     );
   }
@@ -1918,14 +1956,17 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     final cols = fitsCols;
     final rows = rowsToRequest(paneRows: _paneRows ?? 0, boxRows: fitsRows);
 
-    // Which part of that frame reaches the screen. The grid above is fixed, so
-    // a keyboard that takes a third of the screen moves this number instead of
-    // triggering a re-render of somebody's terminal.
-    final topRow = firstVisibleRow(
+    // How the frame sits in the box. The grid above is fixed, so a keyboard
+    // that takes a third of the screen moves THIS instead of triggering a
+    // re-render of somebody's terminal — and a phone taller than the pane uses
+    // it the other way round, keeping the pane's last row against the key bar
+    // with the spare rows at the top.
+    final placement = framePlacement(
       frameRows: rows,
       boxRows: fitsRows,
       following: _following,
     );
+    final topRow = placement.skip;
 
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _reportSize(cols, rows),
@@ -1950,7 +1991,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     _lastCellHeight = cellHeight;
     _lastCellWidth = cellWidth;
-    _topRow = topRow;
+    _topRow = topRow - placement.pad;
 
     return Stack(
       children: [
@@ -2015,9 +2056,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               // offset — `_scrollOffset` describes the far end's viewport, not
               // a window into our buffer.
               scrollOffset: 0,
-              // The frame's bottom is what fits when the box is short: see
-              // [firstVisibleRow].
+              // The frame's bottom is what fits when the box is short, and its
+              // last row stays against the key bar when the box is tall: see
+              // [framePlacement].
               topRow: topRow,
+              topPadding: placement.pad,
               selection: _selection,
               repaint: _repaint,
             ),

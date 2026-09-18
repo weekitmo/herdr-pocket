@@ -1748,6 +1748,12 @@ abstract class AppLocalizations {
   /// **'Skills and MCP'**
   String get composerCommands;
 
+  /// No description provided for @composerMention.
+  ///
+  /// In en, this message translates to:
+  /// **'Mention a file or folder'**
+  String get composerMention;
+
   /// No description provided for @composerSectionSkills.
   ///
   /// In en, this message translates to:
@@ -2309,13 +2315,13 @@ abstract class AppLocalizations {
   /// No description provided for @updateCancelDownload.
   ///
   /// In en, this message translates to:
-  /// **'Cancel — keep what has arrived'**
+  /// **'Cancel'**
   String get updateCancelDownload;
 
   /// No description provided for @updateCancelled.
   ///
   /// In en, this message translates to:
-  /// **'Cancelled. What arrived is kept; press Download to continue.'**
+  /// **'Cancelled.'**
   String get updateCancelled;
 
   /// No description provided for @updateReady.

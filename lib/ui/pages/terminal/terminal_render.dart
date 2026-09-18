@@ -240,6 +240,7 @@ class TerminalPainter extends CustomPainter {
     required this.selection,
     required super.repaint,
     this.topRow = 0,
+    this.topPadding = 0,
   });
 
   final Terminal terminal;
@@ -273,6 +274,19 @@ class TerminalPainter extends CustomPainter {
   /// `domain/terminal/window.dart`, where it is tested without a canvas.
   final int topRow;
 
+  /// Blank rows left ABOVE the frame, in cell rows.
+  ///
+  /// The other half of the same arithmetic: the frame is SHORTER than the box
+  /// (a 48-row desktop pane on a phone that fits 66), and the spare rows are
+  /// kept at the top so the pane's last row — the status bar, the prompt, the
+  /// line being typed — sits against the key bar instead of floating above a
+  /// band of empty terminal. A real terminal viewport is anchored the same way:
+  /// the end of the buffer is the fixed point.
+  ///
+  /// Counted in ROWS rather than pixels so it is the same unit as [topRow], and
+  /// the canvas does the multiplication with the cell height it was given.
+  final int topPadding;
+
   @override
   void paint(Canvas canvas, Size size) {
     final buffer = terminal.buffer;
@@ -296,15 +310,22 @@ class TerminalPainter extends CustomPainter {
     );
 
     // The rows this canvas can hold, after the shifted-away ones. Drawing the
-    // rest would only paint them under the keyboard bar.
+    // rest would only paint them under the keyboard bar — and the frame starts
+    // [topPadding] rows down when the box is the taller of the two.
     final drawnRows = math.max(0, window.rowCount - topRow);
+    final topOffset = topPadding * cellHeight;
 
     for (var y = 0; y < drawnRows; y++) {
       final lineIndex = window.start + topRow + y;
       if (lineIndex >= buffer.lines.length) break;
 
       final line = buffer.lines[lineIndex];
-      final top = y * cellHeight;
+      final top = topOffset + y * cellHeight;
+      // The frame is at most as tall as it says it is; a canvas given a shorter
+      // box than its frame draws only what fits. (`topRow` normally covers
+      // this; the guard is for the pinch-zoom case where the cell size is
+      // between two whole rows.)
+      if (top >= size.height) break;
 
       // Pass 1: background rectangles for the whole row, merged into runs so a
       // full-width coloured row costs one rect instead of one per cell.
@@ -409,17 +430,16 @@ class TerminalPainter extends CustomPainter {
       }
     }
 
-    _paintSelection(canvas, window.start + topRow, drawnRows);
-    _paintCursor(canvas);
+    _paintSelection(canvas, window.start + topRow, drawnRows, size);
+    _paintCursor(canvas, size);
   }
-
   /// Tints the selected cells.
   ///
   /// Drawn as a wash over the existing glyphs rather than as an inverted block:
   /// a terminal's colours carry meaning — red is an error, green is a pass — and
   /// replacing them while the user is reading would hide exactly the thing they
   /// are selecting.
-  void _paintSelection(Canvas canvas, int bufferStart, int rowCount) {
+  void _paintSelection(Canvas canvas, int bufferStart, int rowCount, Size size) {
     final range = selection;
     if (range == null || range.isEmpty) return;
 
@@ -431,13 +451,18 @@ class TerminalPainter extends CustomPainter {
       for (var column = 0; column <= terminal.viewWidth; column++) {
         final inside =
             column < terminal.viewWidth && range.contains(lineIndex, column);
+        // Rows pushed below the canvas by the padding (a frame taller than the
+        // box it is drawn into) are not worth walking cell by cell — the same
+        // reason the text loop stops.
+        final top = (topPadding + row) * cellHeight;
+        if (top >= size.height) break;
         if (inside && runStart < 0) {
           runStart = column;
         } else if (!inside && runStart >= 0) {
           canvas.drawRect(
             Rect.fromLTWH(
               runStart * cellWidth,
-              row * cellHeight,
+              top,
               (column - runStart) * cellWidth,
               cellHeight,
             ),
@@ -449,7 +474,7 @@ class TerminalPainter extends CustomPainter {
     }
   }
 
-  void _paintCursor(Canvas canvas) {
+  void _paintCursor(Canvas canvas, Size size) {
     // A cursor drawn over history would claim the shell is typing into text it
     // has already scrolled past.
     if (!cursorVisible || scrollOffset > 0) return;
@@ -460,10 +485,17 @@ class TerminalPainter extends CustomPainter {
 
     // `cursorY` is a row of the LIVE SCREEN — xterm keeps it relative to the
     // viewport, not to the history — and with the viewport at the bottom that
-    // screen starts exactly at the frame's top. So the only thing between it
-    // and the canvas is the shift.
-    final row = y - topRow;
-    if (row < 0 || row >= terminal.viewHeight) return;
+    // screen starts exactly at the frame's top. So the only things between it
+    // and the canvas are the shift and the padding.
+    final row = y - topRow + topPadding;
+    if (row < 0) return;
+    // THE CANVAS IS THE BOUND, NOT THE FRAME. While only `topRow` existed,
+    // `row >= terminal.viewHeight` could never fire (row ≤ y < viewHeight) and
+    // stood in for "off the bottom". With padding it fires on every cursor in
+    // the lower part of a frame that is SHORTER than the box — i.e. exactly the
+    // prompt the user is typing at when the keyboard is down (found by review:
+    // a 48-row pane in a 66-row box dropped every cursor at row ≥ 30).
+    if ((row + 1) * cellHeight > size.height) return;
 
     final rect = Rect.fromLTWH(
       x * cellWidth,
@@ -545,6 +577,7 @@ class TerminalPainter extends CustomPainter {
       old.terminal != terminal ||
       old.scrollOffset != scrollOffset ||
       old.topRow != topRow ||
+      old.topPadding != topPadding ||
       old.selection != selection ||
       old.cellWidth != cellWidth ||
       old.fontSize != fontSize ||

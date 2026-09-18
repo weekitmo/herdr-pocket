@@ -873,6 +873,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get composerCommands => '技能与 MCP';
 
   @override
+  String get composerMention => '引用文件或文件夹';
+
+  @override
   String get composerSectionSkills => '技能';
 
   @override
@@ -1172,10 +1175,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateDownloading => '下载中';
 
   @override
-  String get updateCancelDownload => '取消（保留已下载部分）';
+  String get updateCancelDownload => '取消';
 
   @override
-  String get updateCancelled => '已取消。已下载的部分保留着，按「下载」可以接着下。';
+  String get updateCancelled => '已取消。';
 
   @override
   String updateReady(String version) {

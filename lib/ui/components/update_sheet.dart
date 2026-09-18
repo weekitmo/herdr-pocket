@@ -25,15 +25,23 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 /// the user happened to be on when it finished.
 Future<void> showUpdateSheet(BuildContext context) {
   final l10n = AppLocalizations.of(context);
+  // ONE HOLDER, TWO READERS: the route consults it before any dismissal, and
+  // the body writes it from the phase it is already rendering. See
+  // [SheetDismissal] for why it is not a listenable.
+  final dismissal = SheetDismissal()..allowed = true;
   return showHerdrSheet<void>(
     context: context,
     title: l10n.updateSheetTitle,
-    builder: (_, _) => const _UpdateSheetBody(),
+    dismissal: dismissal,
+    builder: (_, _) => _UpdateSheetBody(dismissal: dismissal),
   );
 }
 
 class _UpdateSheetBody extends ConsumerStatefulWidget {
-  const _UpdateSheetBody();
+  const _UpdateSheetBody({required this.dismissal});
+
+  /// The gate the sheet's route reads. See [showUpdateSheet].
+  final SheetDismissal dismissal;
 
   @override
   ConsumerState<_UpdateSheetBody> createState() => _UpdateSheetBodyState();
@@ -50,16 +58,24 @@ class _UpdateSheetBodyState extends ConsumerState<_UpdateSheetBody>
     // screen: from their side, a button that does nothing.
     WidgetsBinding.instance.addObserver(this);
     super.initState();
-    // Started here rather than by the caller, and only from IDLE. A sheet that
-    // opens on the previous answer ("you are up to date") is right; a sheet
-    // that opens on "nothing has happened" has to start something, or the user
-    // is looking at an empty panel wondering what the button they pressed was
-    // for.
+    // Started here rather than by the caller, and it is started on EVERY open
+    // unless something would be lost by asking. The first version only asked
+    // from IDLE, and that read as a broken button on the phone: once any check
+    // had answered in this process — the launch check does, now that the
+    // automatic check defaults to on — every later tap on 「检查更新」 showed the
+    // previous answer without asking GitHub again. Nothing ever reset the
+    // controller to idle, so "check for updates" could only ever mean "show the
+    // last check".
+    //
+    // The three states that are NOT re-asked are the ones where a fresh answer
+    // would throw something away: a transfer in flight, a file already waiting
+    // for the installer, and a paused transfer.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (ref.read(updateControllerProvider).phase is UpdateIdle) {
-        unawaited(ref.read(updateControllerProvider.notifier).check());
-      }
+      final phase = ref.read(updateControllerProvider).phase;
+      if (phase is UpdateDownloading || phase is UpdateReady) return;
+      if (phase is UpdateAvailable && phase.partialBytes > 0) return;
+      unawaited(ref.read(updateControllerProvider.notifier).check());
     });
   }
 
@@ -83,6 +99,13 @@ class _UpdateSheetBodyState extends ConsumerState<_UpdateSheetBody>
     final l10n = AppLocalizations.of(context);
     final status = ref.watch(updateControllerProvider);
     final notifier = ref.read(updateControllerProvider.notifier);
+    // THE DOWNLOAD IS THE ONE PHASE THAT CANNOT BE INTERRUPTED BY A GESTURE.
+    // The button in the panel is the way out, and it is called 取消; a stray
+    // back gesture or a tap outside would otherwise leave 46 MB arriving over
+    // the network with nothing on screen to watch or stop. Written during build
+    // on purpose: the phase being rendered IS the answer, and a plain bool read
+    // by the route cannot go stale.
+    widget.dismissal.allowed = status.phase is! UpdateDownloading;
     // Null on every platform that has no installer to hand a file to. The
     // update still CHECKS everywhere; what changes is what can be done next.
     final installable = ref.watch(apkInstallTargetProvider) != null;
@@ -117,10 +140,20 @@ class _UpdateSheetBodyState extends ConsumerState<_UpdateSheetBody>
                     ? formatByteCount(received)
                     : '${formatByteCount(received)} / ${formatByteCount(total)}',
                 fraction: fraction,
-                // The sentence the user needs before pressing it: cancelling
-                // keeps what has arrived. Without it, nobody dares.
+                // The sentence the user needs before pressing it is gone, and
+                // deliberately: cancelling now DISCARDS what has arrived, so
+                // the button is just 取消. Promising "keeps what has arrived"
+                // in the label while deleting the partial file underneath was
+                // the older design, and it is not this one.
                 cancelLabel: l10n.updateCancelDownload,
-                onCancel: notifier.cancel,
+                // Cancelling ends the transfer AND closes the panel. The phase
+                // goes back to the offer once the download future unwinds
+                // (see `UpdateController.cancel`), so reopening the sheet shows
+                // a fresh offer rather than a half-finished one.
+                onCancel: () {
+                  notifier.cancel();
+                  Navigator.of(context).pop();
+                },
               ),
             UpdateReady(:final release, :final canInstall) => _Ready(
                 colors: colors,

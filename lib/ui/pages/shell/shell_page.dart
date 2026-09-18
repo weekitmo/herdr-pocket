@@ -238,6 +238,10 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     setState(() {
       _ended = true;
       _exitCode = code;
+      // The panel belongs to a live session: its expand button has just been
+      // replaced by the end banner, and leaving it up would leave a panel over
+      // the output with no control visible that says how to close it.
+      _fanOpen = false;
     });
     _holds?.release(_shellHoldId);
   }
@@ -358,6 +362,20 @@ class _ShellPageState extends ConsumerState<ShellPage> {
     if (outcome.bytes != null) _send(outcome.bytes!);
   }
 
+  /// Sends a key from the BAR or from the expanded panel.
+  ///
+  /// One entry point for both, so a key means the same thing wherever it was
+  /// pressed — and so the panel gets the terminal page's rule for free: a
+  /// modifier keeps it open because the next tap is its other half, and
+  /// anything else closes it, because the panel is in the way of the screen it
+  /// was opened to serve.
+  void _tapKey(SoftKey key) {
+    _onKeyTap(key);
+    if (_fanOpen && !keyPanelStaysOpen(key)) {
+      setState(() => _fanOpen = false);
+    }
+  }
+
   Future<void> _copySelection() async {
     // NOT a selection yet: this page has no selection gesture in this version,
     // so Copy takes the visible screen — which is what `Buffer.getText()` does
@@ -463,7 +481,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       state: _keys,
       enabled: _session != null,
       palette: palette,
-      onTap: _onKeyTap,
+      onTap: _tapKey,
       onKeyboard: _toggleKeyboard,
       keyboardUp: MediaQuery.viewInsetsOf(context).bottom > 0,
       onExpand: () {
@@ -576,15 +594,43 @@ class _ShellPageState extends ConsumerState<ShellPage> {
               label: l10n.shellBackToLive,
             ),
           ),
+        // THE SAME SHAPE THE PANE MIRROR USES, and for the same reasons. The
+        // panel is a bubble ABOVE THE BAR at the bottom-right — anchored, not
+        // stretched: a bare `Positioned.fill` here handed the panel's container
+        // a TIGHT box, so its `maxWidth: 320` was defeated in width and ignored
+        // in height, and the keys came out as a full-screen sheet. See
+        // `KeyFan` for the max-width, and `terminal_page.dart` for the twin of
+        // this block.
+        //
+        // The dismiss surface covers the TERMINAL, not the bar: the pinned
+        // buttons stay reachable while the panel is open, which is what makes
+        // 更多 a toggle rather than a mode.
         if (_fanOpen)
           Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _fanOpen = false),
+            ),
+          ),
+        if (_fanOpen)
+          Positioned(
+            right: Space.md,
+            bottom: Space.sm,
             child: KeyFan(
-              keys: ref.watch(settingsProvider.select((s) => s.keyBarKeys)),
+              // Named, so a test can aim at the panel rather than at "some
+              // widget somewhere that happens to say esc".
+              key: keyFanKey,
+              // THE WHOLE CATALOGUE, not the user's strip: the panel exists to
+              // reach the keys the strip cannot show, and handing it the same
+              // list the bar already shows would make 更多 a duplicate of the
+              // bar rather than the rest of the keyboard. The pane mirror
+              // passes the catalogue for the same reason.
+              keys: keyBarCatalogue,
               state: _keys,
               palette: palette,
               colors: colors,
               enabled: _session != null,
-              onTap: _onKeyTap,
+              onTap: _tapKey,
             ),
           ),
       ],

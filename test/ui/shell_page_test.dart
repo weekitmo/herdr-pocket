@@ -11,6 +11,7 @@ import 'package:herdr_pocket/data/transport/shell_transport.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/shell/shell_page.dart';
+import 'package:herdr_pocket/ui/pages/terminal/key_strip.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -350,6 +351,72 @@ void main() {
     await tester.tap(find.text('Open again'));
     await flush(tester);
     expect(runner.opened, hasLength(2));
+  });
+
+  testWidgets('the expanded panel is a bubble above the bar, not a sheet', (
+    tester,
+  ) async {
+    // REPORTED FROM THE PHONE: 「<更多> 展开时的面板全屏」. The panel's container
+    // caps itself at 320 points wide, and a `Positioned.fill` handed it a tight
+    // box — which in Flutter is not a suggestion: the width cap lost to the
+    // tight constraint's minimum and the height was simply forced. The keys
+    // came out as a full-screen sheet, while the pane mirror drew the same
+    // widget as a bubble in the bottom-right corner.
+    final runner = _FakeRunner();
+    await pumpShell(tester, runner);
+
+    await tester.tap(find.bySemanticsLabel('All keys'));
+    await tester.pumpAndSettle();
+
+    final panel = find.byKey(keyFanKey);
+    expect(panel, findsOneWidget);
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    final rect = tester.getRect(panel);
+    expect(
+      rect.width,
+      lessThan(screen.width),
+      reason: 'a bubble does not span the phone',
+    );
+    expect(
+      rect.height,
+      lessThan(screen.height / 2),
+      reason: 'and it is a grid of caps, not a column down the screen',
+    );
+    expect(
+      screen.width - rect.right,
+      lessThan(24),
+      reason: 'anchored to the right edge, like the pane mirror',
+    );
+    expect(
+      screen.height - rect.bottom,
+      lessThan(80),
+      reason: 'sits just above the key bar',
+    );
+  });
+
+  testWidgets('a key from the panel puts it away; a modifier keeps it', (
+    tester,
+  ) async {
+    final runner = _FakeRunner();
+    await pumpShell(tester, runner, size: const Size(900 * 3, 800 * 3));
+    final session = runner.sessions.single;
+
+    await tester.tap(find.bySemanticsLabel('All keys'));
+    await tester.pumpAndSettle();
+    final panel = find.byKey(keyFanKey);
+    // `pgdn` is not on the default bar, so finding it here proves this is the
+    // catalogue and not the strip behind it.
+    await tester.tap(find.descendant(of: panel, matching: find.text('pgdn')));
+    await tester.pumpAndSettle();
+    expect(panel, findsNothing, reason: 'the panel did its job and got out of the way');
+    expect(session.sent, isNotEmpty);
+
+    // An armed modifier is the exception: its other half is the next tap.
+    await tester.tap(find.bySemanticsLabel('All keys'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of: panel, matching: find.text('Ctrl')));
+    await tester.pumpAndSettle();
+    expect(panel, findsOneWidget);
   });
 }
 

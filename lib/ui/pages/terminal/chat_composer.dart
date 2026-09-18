@@ -13,8 +13,11 @@ const Key composerSendKey = ValueKey('terminal.composer.send');
 /// The attach button — this PHONE's files.
 const Key composerAttachKey = ValueKey('terminal.composer.attach');
 
-/// The `/` menu, opened by a button.
-const Key composerCommandsKey = ValueKey('terminal.composer.commands');
+/// The `/` button — the pane's skills and MCP servers.
+const Key composerSlashKey = ValueKey('terminal.composer.slash');
+
+/// The `@` button — files and folders to mention.
+const Key composerMentionKey = ValueKey('terminal.composer.mention');
 
 /// The chat window: type a whole message on the phone, send it in one go.
 ///
@@ -48,9 +51,22 @@ const Key composerCommandsKey = ValueKey('terminal.composer.commands');
 ///  * **It grows, up to a point.** Five lines is a message; more than that is a
 ///    document, and the terminal underneath has to stay usable.
 ///
-/// The row under the field is the reference layout the user asked for: attach and
-/// commands on the left, send on the right, and nothing else competing for the
-/// thumb.
+/// The row under the field is the reference layout the user asked for: attach,
+/// the two TRIGGERS, and send.
+///
+///   * **`/` and `@` are two buttons, never one.** The first version of this
+///     row had a single `…` whose meaning depended on the pane: it opened the
+///     skills menu for a pane running an agent and the file menu for a plain
+///     shell. That is one button asking the USER to know what the pane is
+///     running, and the two lists are different questions — a skill is a
+///     command, a file is a reference. They are drawn as the two characters the
+///     terminal actually understands (`/` and `@`), because that is what they
+///     insert: the same rule the key strip uses when it draws `C-c` as a word
+///     and Copy as an icon.
+///   * **On a pane with no agent the `/` button is not drawn.** A shell has no
+///     skills, and a `/` there is a path separator — a button that opened an
+///     empty menu would be a worse lie than an absent one. `@` stays, because a
+///     file reference is useful in a shell too.
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
     required this.controller,
@@ -60,9 +76,10 @@ class ChatComposer extends StatelessWidget {
     required this.colors,
     required this.onSend,
     required this.onAttach,
-    required this.onCommands,
-    required this.commandsLabel,
+    required this.onSlash,
+    required this.onMention,
     required this.onChanged,
+    this.slashEnabled = true,
     this.canSend = true,
     this.uploading = false,
     this.attachments = const [],
@@ -82,12 +99,17 @@ class ChatComposer extends StatelessWidget {
 
   final VoidCallback onSend;
   final VoidCallback onAttach;
-  final VoidCallback onCommands;
 
-  /// What the `…` button opens, in this pane's own words. The page knows
-  /// whether it is opening an agent's skills or the workspace's files; this
-  /// widget only knows the label.
-  final String commandsLabel;
+  /// Types `/` and opens the skills-and-MCP menu for this pane.
+  final VoidCallback onSlash;
+
+  /// Types `@` and opens the files-and-folders menu for this pane.
+  final VoidCallback onMention;
+
+  /// Whether the pane has an agent at all. False hides the `/` button rather
+  /// than disabling it: a shell cannot run a skill, so there is no menu behind
+  /// the button on that pane.
+  final bool slashEnabled;
 
   /// Fires on every edit AND every caret move — the menu trigger lives on the
   /// caret, so a tap that moves it has to be heard too.
@@ -170,11 +192,20 @@ class ChatComposer extends StatelessWidget {
                     buttonKey: composerAttachKey,
                   ),
                 const SizedBox(width: Space.sm),
-                _circle(
-                  icon: CupertinoIcons.ellipsis,
-                  label: commandsLabel,
-                  onTap: onCommands,
-                  buttonKey: composerCommandsKey,
+                if (slashEnabled) ...[
+                  _glyph(
+                    glyph: '/',
+                    label: l10n.composerCommands,
+                    onTap: onSlash,
+                    buttonKey: composerSlashKey,
+                  ),
+                  const SizedBox(width: Space.sm),
+                ],
+                _glyph(
+                  glyph: '@',
+                  label: l10n.composerMention,
+                  onTap: onMention,
+                  buttonKey: composerMentionKey,
                 ),
                 const Spacer(),
                 _sendButton(),
@@ -373,6 +404,48 @@ class ChatComposer extends StatelessWidget {
     required VoidCallback onTap,
     Key? buttonKey,
   }) {
+    return _button(
+      buttonKey: buttonKey,
+      label: label,
+      onTap: onTap,
+      child: Icon(icon, size: 17, color: colors.textDim),
+    );
+  }
+
+  /// A button whose face is the character it inserts.
+  ///
+  /// The monospace face is the point: `/` and `@` are shown as the terminal
+  /// shows them, and the two buttons read as a pair because they are drawn in
+  /// the same voice.
+  Widget _glyph({
+    required String glyph,
+    required String label,
+    required VoidCallback onTap,
+    Key? buttonKey,
+  }) {
+    return _button(
+      buttonKey: buttonKey,
+      label: label,
+      onTap: onTap,
+      child: Text(
+        glyph,
+        style: TextStyle(
+          color: colors.textDim,
+          fontSize: 19,
+          height: 1,
+          fontFamily: HerdrFonts.mono,
+          fontFamilyFallback: HerdrFonts.monoFallback,
+        ),
+      ),
+    );
+  }
+
+  Widget _button({
+    required Key? buttonKey,
+    required String label,
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
     return CupertinoButton(
       key: buttonKey,
       padding: EdgeInsets.zero,
@@ -390,7 +463,8 @@ class ChatComposer extends StatelessWidget {
             color: colors.surface,
             border: Border.all(color: colors.hairline),
           ),
-          child: Icon(icon, size: 17, color: colors.textDim),
+          alignment: Alignment.center,
+          child: child,
         ),
       ),
     );

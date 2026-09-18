@@ -40,6 +40,8 @@ class ComposerMenuController extends ChangeNotifier {
     required this.l10n,
     this.capabilities,
     this.fileIndex,
+    this.cache,
+    this.paneId,
     this.cwd,
     this.agent,
   });
@@ -47,6 +49,19 @@ class ComposerMenuController extends ChangeNotifier {
   final AppLocalizations l10n;
   final RemoteCapabilities? capabilities;
   final RemoteFileIndex? fileIndex;
+
+  /// Where the `/` answer is remembered between openings of this screen.
+  ///
+  /// THE CONTROLLER IS REBUILT EVERY TIME THE CHAT WINDOW OPENS, which is why
+  /// the cache cannot live in a field here: the first version of this file
+  /// cached `_probe` in the instance, and every open of the composer paid for
+  /// the probe again (0.4 s, 54 KB and one `sh -c` on the machine this was
+  /// measured on). See [ComposerCapabilityCache].
+  final ComposerCapabilityCache? cache;
+
+  /// Which pane this menu belongs to — the cache's key. See the cache's own
+  /// docs for why a pane and not the app.
+  final String? paneId;
 
   /// The pane's own directory — the workspace whose skills, MCP servers and
   /// files these menus are about.
@@ -159,6 +174,12 @@ class ComposerMenuController extends ChangeNotifier {
   }
 
   /// Reads the machine again for whatever the open menu is about.
+  ///
+  /// [force] bypasses the cache — the "read the machine again" affordance a
+  /// stale list needs. Everything else uses it, which is the point: the lists
+  /// are the machine's files, and re-running a 54 KB probe behind every
+  /// keystroke-triggered menu would put a round trip where the composer exists
+  /// to remove one.
   void reload() {
     _generation++;
     _probe = null;
@@ -168,16 +189,30 @@ class ComposerMenuController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    unawaited(_load(open.trigger));
+    unawaited(_load(open.trigger, force: true));
   }
 
-  Future<void> _load(MenuTrigger trigger) async {
-    final cached = trigger == MenuTrigger.slash ? _probe : _files;
-    if (cached != null) {
-      _loading = false;
-      _recompute();
-      notifyListeners();
-      return;
+  Future<void> _load(MenuTrigger trigger, {bool force = false}) async {
+    // ADOPTING THE CACHED ANSWER INTO `_probe`, not merely reading it, is what
+    // makes the cache visible: the view is recomputed from `_probe`, so a hit
+    // that did not land there would leave the menu empty with the answer
+    // sitting in a map next to it.
+    if (!force) {
+      if (trigger == MenuTrigger.slash) {
+        final cached = _probe ?? _cachedProbe;
+        if (cached != null) {
+          _probe = cached;
+          _loading = false;
+          _recompute();
+          notifyListeners();
+          return;
+        }
+      } else if (_files != null) {
+        _loading = false;
+        _recompute();
+        notifyListeners();
+        return;
+      }
     }
 
     // A menu that cannot be filled on this connection says why, once, and stops
@@ -203,7 +238,13 @@ class ComposerMenuController extends ChangeNotifier {
     // makes each cast safe.
     switch (trigger) {
       case MenuTrigger.slash:
-        _probe = await capabilities!.probe(cwd: cwd, agent: agent);
+        final result = await capabilities!.probe(cwd: cwd, agent: agent);
+        _probe = result;
+        // REMEMBERED BEFORE THE GENERATION CHECK, deliberately: the answer is
+        // about the pane and directory captured above, so it stays true even if
+        // this controller has since been reset by a pane switch. Dropping it
+        // would mean paying for the same probe again on the way back.
+        _rememberProbe(result);
       case MenuTrigger.at:
         _files = await fileIndex!.list(cwd!);
     }
@@ -212,6 +253,21 @@ class ComposerMenuController extends ChangeNotifier {
     _loading = false;
     _recompute();
     notifyListeners();
+  }
+
+  /// The probe this pane's cache holds for the current context, if any.
+  ProbeResult? get _cachedProbe {
+    final cache = this.cache;
+    final paneId = this.paneId;
+    if (cache == null || paneId == null) return null;
+    return cache.probeFor(paneId: paneId, cwd: cwd, agent: agent);
+  }
+
+  void _rememberProbe(ProbeResult result) {
+    final cache = this.cache;
+    final paneId = this.paneId;
+    if (cache == null || paneId == null) return;
+    cache.remember(paneId: paneId, cwd: cwd, agent: agent, result: result);
   }
 
   bool _canRead(MenuTrigger trigger) => switch (trigger) {
@@ -320,6 +376,63 @@ class ComposerMenuController extends ChangeNotifier {
 
   List<ComposerMenuRow> _cap(List<ComposerMenuRow> rows) =>
       rows.length <= maxRows ? rows : rows.sublist(0, maxRows);
+}
+
+/// The `/` probe, remembered for as long as one visit to a terminal lasts.
+///
+/// ## Why it exists
+///
+/// The skills and MCP lists are read from the MACHINE (there is no herdr API
+/// for them — see `remote_capabilities.dart`), and the read is one `sh -c`
+/// that walks 27 skill roots and 14 MCP config files: measured at 0.4 s and
+/// 54 KB on the developer's machine. The menu controller is rebuilt every time
+/// the chat window opens, so without this the price was paid on every open.
+///
+/// ## Why per pane, and why the context is part of the key
+///
+/// The lists are the machine's files under the PANE's directory. Two panes in
+/// two projects have two different sets of skills and MCP servers, so one
+/// shared answer would hand project A's menu to project B — the same mistake
+/// the menus' own context handling exists to avoid. The directory and the agent
+/// are part of the key for the same reason: a file is project-scoped and a
+/// skill list is filtered by what the pane is running, so an answer only counts
+/// while both are unchanged.
+///
+/// ## Why it is a plain object on the page
+///
+/// The lifetime is the point: "once per visit to the terminal, not once per
+/// chat window". The page owns it, the widgets read it, and leaving the
+/// terminal and coming back is what clears it. No provider, no invalidation
+/// graph — a page-scoped map is the whole requirement.
+class ComposerCapabilityCache {
+  final Map<String, _CachedProbe> _byPane = {};
+
+  /// The answer [paneId] already has for this exact context, if any.
+  ProbeResult? probeFor({required String paneId, String? cwd, String? agent}) {
+    final entry = _byPane[paneId];
+    if (entry == null) return null;
+    if (entry.cwd != cwd || entry.agent != agent) return null;
+    return entry.result;
+  }
+
+  /// Remembers an answer for [paneId].
+  void remember({
+    required String paneId,
+    required ProbeResult result,
+    String? cwd,
+    String? agent,
+  }) {
+    _byPane[paneId] = _CachedProbe(cwd: cwd, agent: agent, result: result);
+  }
+}
+
+/// One pane's answer, and the context it was made in.
+class _CachedProbe {
+  const _CachedProbe({required this.cwd, required this.agent, required this.result});
+
+  final String? cwd;
+  final String? agent;
+  final ProbeResult result;
 }
 
 String _skillName(SkillEntry entry) => entry.name;

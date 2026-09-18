@@ -56,6 +56,18 @@ control 模式从 stdin 读 `terminal.input` / `resize` / `scroll` / `release`�
 **观察不是 resize。** 用一个 40×12 的小窗口 observe，用户真实窗格仍然保持自己的
 尺寸和矩形 —— 这就是「手机是 viewer，永远不动你的屏幕」这条产品承诺的实现。
 
+**窗口怎么放：** 不自己算，只请求
+窗格自己的行数（`pane.list` 的 `viewport_rows`），然后按盒子与帧的大小关系摆：
+帧比盒子**高**（软键盘占了屏幕）就把帧的底部对齐按键条上沿；帧比盒子**矮**
+（桌面窗格 48 行、手机能装 66 行）就把多出的行留在**顶部**，同样让帧的最后一行
+贴着按键条。两条都是同一个不变量：**窗格最后一行永远在按键条上沿**。
+代码在 `lib/domain/terminal/window.dart` 的 `framePlacement()`，绘制在
+`terminal_render.dart` 的 `topRow` / `topPadding` 两个参数里。
+
+⚠️ **不要请求盒子的行数来「填满」屏幕。** daemon 对较矮的请求是左上裁剪（丢掉输入框），
+对较高的请求是在下面补空行 —— 多要行数只会拿到空白，填不满，还会把窗格的最后一行
+推得离按键条更远。
+
 ### 1.3 shell —— 文件、git、skills/MCP、shell 页
 
 同一连接上 exec 一条 shell 命令。退出码**随输出返回**：命令尾部 `printf` 一个
@@ -69,6 +81,10 @@ control 模式从 stdin 读 `terminal.input` / `resize` / `scroll` / `release`�
   根目录 + 14 处 MCP 配置），回复按三个 marker 切分：`HERDR_HOME\t<path>`、
   `<path>\t<description>`、`\u0001HERDR-FILE\u0001<path>`。控制字符是故意的 ——
   一个配置文件能伪造的 marker，就是会把文件切成两半的 marker。
+  聊天窗的 `/` 菜单把这**一次**探测的结果缓存在 `ComposerCapabilityCache`：
+  **按 pane**（键还带 cwd 与 agent）缓存，活到离开终端页为止 —— 因为控制器每次开
+  聊天窗都重建，不缓就是每开一次跑一次（实测 0.4s / 54KB）。`@` 菜单的文件列
+  表不缓，那是「现在有什么」的问题。
 - **shell 页**（`lib/data/transport/shell_transport.dart` + `lib/ui/pages/shell/`）：
   `SSHClient.execute(cmd, pty: …)` 直接跑命令（命令留空则 `client.shell(pty: …)` 开登录
   shell），不是把命令打进一个登录 shell（否则会回显、依赖远端 shell 方言、

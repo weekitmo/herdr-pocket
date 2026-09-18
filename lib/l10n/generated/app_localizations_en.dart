@@ -916,6 +916,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get composerCommands => 'Skills and MCP';
 
   @override
+  String get composerMention => 'Mention a file or folder';
+
+  @override
   String get composerSectionSkills => 'skills';
 
   @override
@@ -1240,11 +1243,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateDownloading => 'Downloading';
 
   @override
-  String get updateCancelDownload => 'Cancel — keep what has arrived';
+  String get updateCancelDownload => 'Cancel';
 
   @override
-  String get updateCancelled =>
-      'Cancelled. What arrived is kept; press Download to continue.';
+  String get updateCancelled => 'Cancelled.';
 
   @override
   String updateReady(String version) {

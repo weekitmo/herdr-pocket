@@ -384,6 +384,7 @@
   "composerSend": "Send",
   "composerAttach": "Upload a picture or file from this phone",
   "composerCommands": "Skills and MCP",
+  "composerMention": "Mention a file or folder",
   "composerSectionSkills": "skills",
   "composerSectionMcp": "MCP",
   "composerSectionFiles": "files",
@@ -499,8 +500,8 @@
   "updateResume": "Continue download",
   "updateOpenRelease": "Open release page",
   "updateDownloading": "Downloading",
-  "updateCancelDownload": "Cancel — keep what has arrived",
-  "updateCancelled": "Cancelled. What arrived is kept; press Download to continue.",
+  "updateCancelDownload": "Cancel",
+  "updateCancelled": "Cancelled.",
   "updateReady": "{version} downloaded and checked",
   "@updateReady": {
     "placeholders": {

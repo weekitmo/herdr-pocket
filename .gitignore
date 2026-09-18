@@ -75,3 +75,8 @@ app.*.map.json
 /patrol_test/test_bundle.dart
 /patrol_test/.patrol/
 build/app/reports/
+
+# The workspace-level planning directory (plannings/) lives OUTSIDE this repository
+# (the workspace root is not a git repo), so this entry is a guard: if anyone ever
+# runs git from a directory where plannings/ IS reachable, it must not be added.
+plannings/

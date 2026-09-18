@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -401,10 +403,12 @@ void main() {
     testWidgets('a plain shell gets files, not skills', (tester) async {
       // The pane this was first tried on: a shell in a repo. `pane.list` leaves
       // `agent` empty for it, and `/` there is a path separator — so a slash
-      // must NOT open a menu, and the `…` button has to offer the one thing a
-      // shell can use, which is a path.
+      // must NOT open a menu, and the `/` BUTTON IS NOT DRAWN: there is no menu
+      // behind it, and a button that opens nothing is a worse lie than an
+      // absent one. `@` is still there, because a path is useful in a shell
+      // too.
       // One scripted machine, two answers: the `@` menu wants a file listing
-      // and the `/` menu wants the capability probe.
+      // and the capability probe would be the `/` menu's.
       final daemon = FakeTerminalDaemon(paneRows: 46, agent: null)
         ..onCommand = (command) => command.contains('ls-files')
             ? _fileListing(['lib/main.dart', 'lib/app.dart'])
@@ -418,17 +422,21 @@ void main() {
         findsNothing,
         reason: 'a shell has no skills to offer',
       );
-
-      // The button names what it will open: a shell has files, not skills.
       expect(
-        find.bySemanticsLabel('files'),
-        findsOneWidget,
-        reason: 'the … button must offer the workspace files on a shell pane',
+        find.byKey(composerSlashKey),
+        findsNothing,
+        reason: 'and so the / button has nothing to open',
+      );
+      expect(find.byKey(composerMentionKey), findsOneWidget);
+      expect(
+        daemon.shellCommands.where((c) => !c.contains('ls-files')),
+        isEmpty,
+        reason: 'typing a path must not even ask the machine for skills',
       );
 
-      // Empty again, so what the pick produces is the pick's own doing.
+      // The mention button opens the workspace's files.
       await write(tester, '');
-      await tester.tap(find.byKey(composerCommandsKey));
+      await tester.tap(find.byKey(composerMentionKey));
       await tester.pumpAndSettle();
 
       expect(find.byKey(composerMenuKey), findsOneWidget);
@@ -519,18 +527,113 @@ void main() {
       expect(find.text('Type here'), findsOneWidget);
     });
 
-    testWidgets('the button opens the same menu a slash would', (tester) async {
+    testWidgets('the / and @ buttons open their own menus, never each other', (
+      tester,
+    ) async {
+      // THE PHONE REPORT WAS 「不要混用」. The single `…` button used to pick a
+      // trigger by asking what the pane was running, which is the wrong
+      // question: `/` is a command and `@` is a reference, and a user who
+      // pressed a button for one of them should not have to know what the pane
+      // is to get it.
       final daemon = FakeTerminalDaemon(paneRows: 46)
-        ..onCommand = (command) => probeReply();
+        ..onCommand = (command) => command.contains('ls-files')
+            ? _fileListing(['lib/main.dart', 'lib/app.dart'])
+            : probeReply();
       await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
       await openComposer(tester);
 
-      await tester.tap(find.byKey(composerCommandsKey));
+      await tester.tap(find.byKey(composerSlashKey));
       await tester.pumpAndSettle();
 
       expect(find.byKey(composerMenuKey), findsOneWidget);
-      final field = tester.widget<CupertinoTextField>(find.byKey(composerFieldKey));
+      expect(find.text('code-review'), findsOneWidget);
+      var field =
+          tester.widget<CupertinoTextField>(find.byKey(composerFieldKey));
       expect(field.controller!.text, '/');
+
+      // And the other button opens the other menu on the same pane.
+      await write(tester, '');
+      await tester.tap(find.byKey(composerMentionKey));
+      await tester.pumpAndSettle();
+      expect(find.text('main.dart'), findsOneWidget);
+      field = tester.widget<CupertinoTextField>(find.byKey(composerFieldKey));
+      expect(field.controller!.text, '@');
+    });
+
+    testWidgets('opening the chat window again does not ask the machine again',
+        (tester) async {
+      // THE PROBE IS ONE `sh -c` THAT WALKS 27 SKILL ROOTS AND 14 MCP FILES
+      // (0.4 s and 54 KB, measured against a real machine). The menu
+      // controller is rebuilt every time the composer opens, so without the
+      // page-scoped cache every open paid that again — and the user asked for
+      // the cache in exactly these words: 「不会每次获取远程」.
+      final daemon = FakeTerminalDaemon(paneRows: 46)
+        ..onCommand = (command) => probeReply();
+      await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
+
+      await openComposer(tester);
+      await write(tester, '/');
+      expect(find.text('code-review'), findsOneWidget);
+      final reads = daemon.shellCommands.length;
+      expect(reads, greaterThan(0));
+
+      // Close the chat window and open it again, the way a user checking what
+      // an agent can do would. The draft survives the round trip (it is stashed
+      // per pane), so it is cleared first: a write of the same text is not a
+      // change, and the field only reports changes.
+      await tester.tap(find.bySemanticsLabel('Composer'));
+      await tester.pumpAndSettle();
+      await openComposer(tester);
+      await write(tester, '');
+      await write(tester, '/');
+
+      expect(
+        find.text('code-review'),
+        findsOneWidget,
+        reason: 'the answer comes back without another round trip',
+      );
+      expect(
+        daemon.shellCommands.length,
+        reads,
+        reason: 'the probe is paid once per visit to the pane',
+      );
+    });
+
+    testWidgets('the / button appears when the pane census arrives LATE',
+        (tester) async {
+      // FOUND ON THE PHONE, after the buttons were split: the chat window
+      // showed `+` and `@` but no `/`, on a pane the board calls a π agent.
+      // The pane census is re-read when the composer opens, and when that read
+      // has not answered yet the menu is built with no `agent` — so the button
+      // is hidden. It has to appear when the answer lands, which means the
+      // card has to listen to the MENU as well as to the draft.
+      final daemon = FakeTerminalDaemon(paneRows: 46);
+      await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
+
+      // The tree provider is auto-dispose and nothing is listening to it once
+      // the page has seeded itself, so the read that the composer makes is a
+      // FRESH one — which is the state the phone was in when the button was
+      // missing. Hold that read so the "not yet" state is stable enough to
+      // assert on.
+      await tester.pump(const Duration(seconds: 1));
+      daemon.treeGate = Completer<void>();
+
+      await openComposer(tester);
+      expect(
+        find.byKey(composerSlashKey),
+        findsNothing,
+        reason: 'nothing knows this pane runs an agent yet',
+      );
+      expect(find.byKey(composerMentionKey), findsOneWidget);
+
+      daemon.treeGate!.complete();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(composerSlashKey),
+        findsOneWidget,
+        reason: "the late census has to reach the button, not only the menus",
+      );
     });
   });
 

@@ -18,6 +18,7 @@ import 'package:herdr_pocket/data/update/update_http.dart';
 import 'package:herdr_pocket/domain/update/app_version.dart';
 import 'package:herdr_pocket/domain/update/release_info.dart';
 import 'package:herdr_pocket/domain/update/system_proxy.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The update path, driven against a local server that speaks like GitHub.
@@ -238,18 +239,38 @@ void main() {
     Future<ProviderContainer> containerFor({
       required SharedPreferences prefs,
       String abi = 'arm64-v8a',
-      String version = '0.1.0',
+      String? version = '0.1.0',
+      Duration? packageInfoDelay,
+      AssetDownloader? downloader,
     }) async {
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          appVersionProvider.overrideWithValue(AppVersion.tryParse(version)),
+          // `version == null` is the COLD START: the real `appVersionProvider`
+          // derived from a `PackageInfo` that has not answered yet, which is
+          // the shape that used to make the automatic check do nothing at all.
+          if (version != null)
+            appVersionProvider.overrideWithValue(AppVersion.tryParse(version))
+          else
+            packageInfoProvider.overrideWith((ref) async {
+              if (packageInfoDelay != null) {
+                await Future<void>.delayed(packageInfoDelay);
+              }
+              return PackageInfo(
+                appName: 'Herdr Pocket',
+                packageName: installedApplicationId,
+                version: '0.1.0',
+                buildNumber: '1',
+              );
+            }),
           deviceAbiProvider.overrideWithValue(abi),
           releaseClientProvider.overrideWith(
             (ref) => ReleaseClient(http: http, userAgent: 'test'),
           ),
           assetDownloaderProvider.overrideWith(
-            (ref) => AssetDownloader(http: http, userAgent: 'test'),
+            (ref) =>
+                downloader ??
+                AssetDownloader(http: http, userAgent: 'test'),
           ),
           apkInstallTargetProvider.overrideWithValue(target),
         ],
@@ -495,6 +516,98 @@ void main() {
       await notifier.install();
       expect(target.installed, isTrue);
     });
+
+    test('a cold start WAITS for the platform to say its own version', () async {
+      // THE BUG THIS PINS, measured on a phone: the automatic check is switched
+      // on, the app cold-starts, and the settings row still says 「还没检查过」
+      // — because the launch check runs one frame after the first build, while
+      // `PackageInfo.fromPlatform()` is a platform round trip that has not
+      // answered yet. The first version read the derived provider once, saw
+      // null and returned WITHOUT writing state, so there was no spinner, no
+      // failure, no retry, and no record: the feature looked dead.
+      github.releases.add(_releaseJson());
+      final container = await containerFor(
+        prefs: await _prefs(),
+        version: null,
+        packageInfoDelay: const Duration(milliseconds: 40),
+      );
+
+      final outcome = await container.read(updateControllerProvider.notifier).check();
+
+      expect(outcome, UpdateCheckOutcome.available);
+      expect(container.read(updateControllerProvider).phase, isA<UpdateAvailable>());
+    });
+
+    test('cancelling a STUCK transfer moves the state back at once', () async {
+      // MEASURED ON THE PHONE: the CDN was slow enough that nothing had
+      // arrived yet, 取消 was pressed, and a minute later the panel still read
+      // 下载中 — because cancelling a token only reaches a parked response
+      // stream when the server or the stall timer resolves it. The face the
+      // user just cancelled must not still offer to cancel.
+      github.releases.add(_releaseJson());
+      final stuck = _StuckDownloader();
+      final container = await containerFor(
+        prefs: await _prefs(),
+        downloader: stuck,
+      );
+      final notifier = container.read(updateControllerProvider.notifier);
+      await notifier.check();
+
+      final download = notifier.download();
+      await stuck.started.future;
+      expect(
+        container.read(updateControllerProvider).phase,
+        isA<UpdateDownloading>(),
+      );
+
+      notifier.cancel();
+      expect(
+        container.read(updateControllerProvider).phase,
+        isA<UpdateAvailable>(),
+        reason: 'the answer to 「is something downloading?」 is immediate',
+      );
+
+      // And when the stuck socket finally unwinds, the cleanup must not
+      // disturb the state the user is already looking at.
+      stuck.release();
+      await download;
+      expect(container.read(updateControllerProvider).phase, isA<UpdateAvailable>());
+    });
+
+    test('cancelling throws the partial file away', () async {
+      // What 取消 means now, and it is the opposite of what the downloader
+      // promises on its own: the button says only 取消, and the contract is
+      // that nothing of the transfer is kept — 46 MB of half an APK is not a
+      // gift to leave on someone's phone. (A FAILED transfer still keeps its
+      // partial; that is what the resume hint is for.)
+      github.body = List.filled(256 * 1024, 7);
+      github.chunkSize = 16 * 1024;
+      github.chunkDelay = const Duration(milliseconds: 20);
+      github.releases.add(
+        _releaseJson(assets: [('HerdrPocket-0.2.0-arm64-v8a.apk', 256 * 1024)]),
+      );
+
+      final container = await containerFor(prefs: await _prefs());
+      final notifier = container.read(updateControllerProvider.notifier);
+      await notifier.check();
+
+      final part = File('${staging.path}/HerdrPocket-0.2.0-arm64-v8a.apk.part');
+      final download = notifier.download();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(part.existsSync(), isTrue, reason: 'the test needs a transfer in flight');
+
+      notifier.cancel();
+      await download;
+
+      final phase = container.read(updateControllerProvider).phase;
+      expect(phase, isA<UpdateAvailable>());
+      expect(
+        (phase as UpdateAvailable).partialBytes,
+        0,
+        reason: 'a cancelled transfer has nothing left to resume from',
+      );
+      expect(part.existsSync(), isFalse);
+    });
   });
 }
 
@@ -504,6 +617,42 @@ class _NoProxy implements SystemProxySource {
 
   @override
   Future<SystemProxy?> read() async => null;
+}
+
+/// A download whose socket never answers.
+///
+/// The shape behind a flaky proxy: the request went out, the response headers
+/// may or may not have arrived, and no bytes follow — so the transfer parks
+/// inside `await for` and only notices a cancel when the far end gives up.
+class _StuckDownloader extends AssetDownloader {
+  _StuckDownloader()
+      : super(
+          http: UpdateHttp(
+            resolver: ProxyResolver(source: const _NoProxy()),
+          ),
+          userAgent: 'test',
+        );
+
+  final started = Completer<void>();
+  final _parked = Completer<void>();
+
+  @override
+  Future<void> sweep(Directory staging, {String? keep}) async {}
+
+  @override
+  Future<DownloadedFile> download({
+    required ReleaseAsset asset,
+    required Directory staging,
+    required CancelToken cancelToken,
+    void Function(DownloadProgress progress)? onProgress,
+  }) async {
+    started.complete();
+    await _parked.future;
+    throw const UpdateException(UpdateFailure.cancelled);
+  }
+
+  /// Lets the parked transfer unwind.
+  void release() => _parked.complete();
 }
 
 /// The install half, faked: no Android, no installer, just the contract.

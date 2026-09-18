@@ -149,6 +149,15 @@ class FakeTerminalDaemon
   /// and the page has to keep working on its own mirror when it happens.
   final bool scrollEvents;
 
+  /// Holds the workspace tree back until it is completed.
+  ///
+  /// FOR THE LATE-CENSUS CASE: the page opens its session anyway once the seed
+  /// deadline passes, so a test can reach a state where the pane's `agent` is
+  /// not known yet and then let the census arrive — which is what happens on a
+  /// phone when the tree provider has been disposed between the page opening
+  /// and the chat window being opened.
+  Completer<void>? treeGate;
+
   /// What `pane.list` reports for this pane.
   ///
   /// Null means the key is ABSENT, which is exactly how herdr describes a plain
@@ -222,7 +231,11 @@ class FakeTerminalDaemon
   @override
   Future<String> roundTrip(String requestLine) async {
     final request = (jsonDecode(requestLine) as Map).cast<String, Object?>();
-    return switch (request['method']) {
+    final method = request['method'];
+    if (const {'workspace.list', 'tab.list', 'pane.list'}.contains(method)) {
+      await treeGate?.future;
+    }
+    return switch (method) {
       'workspace.list' =>
         '{"id":"x","result":{"type":"workspace_list","workspaces":['
             '{"workspace_id":"w1","number":1,"label":"dev","focused":true,'

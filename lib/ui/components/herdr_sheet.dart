@@ -1,6 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 
+/// A yes/no the sheet's own route consults when something tries to close it.
+///
+/// A MUTABLE HOLDER RATHER THAN A `ValueNotifier`, deliberately: nothing
+/// rebuilds from it. All three dismissal paths — the barrier's tap, the system
+/// back gesture, and a fling of the header — READ it at the instant the user
+/// asks, so a listener list would be machinery that never rings. It also has no
+/// ownership to get wrong: there is no `dispose` to forget, or to race against
+/// a barrier that is still on screen during the exit transition.
+///
+/// One caller uses it today: the update sheet, which must not be closable while
+/// an APK is downloading — closing it would leave a 46 MB transfer running with
+/// nothing on screen to watch or stop.
+class SheetDismissal {
+  /// Whether a back gesture, a barrier tap or a header fling may close the
+  /// sheet right now.
+  bool allowed = true;
+}
+
 /// A sheet that rises from the bottom, in this app's own material.
 ///
 /// ## Why this is not `showCupertinoModalPopup` or `CupertinoActionSheet`
@@ -27,37 +45,68 @@ Future<T?> showHerdrSheet<T>({
   required Widget Function(BuildContext context, ScrollController scroll) builder,
   required String title,
   Widget? action,
+  SheetDismissal? dismissal,
 }) {
   final colors = HerdrTheme.of(context);
 
   return Navigator.of(context).push<T>(
-    PageRouteBuilder<T>(
-      opaque: false,
-      barrierDismissible: true,
+    _HerdrSheetRoute<T>(
+      dismissal: dismissal,
       barrierColor: colors.groundDeep.withValues(alpha: 0.45),
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (routeContext, _, _) => HerdrSheet(
+      builder: (routeContext) => HerdrSheet(
         title: title,
         action: action,
+        dismissal: dismissal,
         builder: builder,
       ),
-      transitionsBuilder: (_, animation, _, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        );
-      },
     ),
   );
+}
+
+/// The sheet's route, with a barrier that can be switched off while it is open.
+///
+/// BOTH OVERRIDES ARE POLICIES, NOT STATE: `barrierDismissible` is asked at the
+/// moment of the tap and `popDisposition` at the moment of the back gesture, so
+/// a sheet can become undismissable (and dismissable again) with no rebuild and
+/// no route juggling. `popDisposition` is what makes the back gesture and the
+/// header fling honour the same answer as the barrier — they both go through
+/// `Navigator.maybePop`, which asks the route.
+class _HerdrSheetRoute<T> extends PageRouteBuilder<T> {
+  _HerdrSheetRoute({
+    required this.dismissal,
+    required super.barrierColor,
+    required WidgetBuilder builder,
+  }) : super(
+          opaque: false,
+          transitionDuration: const Duration(milliseconds: 320),
+          reverseTransitionDuration: const Duration(milliseconds: 240),
+          pageBuilder: (context, _, _) => builder(context),
+          transitionsBuilder: (_, animation, _, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            );
+          },
+        );
+
+  /// The policy, or null for "always dismissable".
+  final SheetDismissal? dismissal;
+
+  @override
+  bool get barrierDismissible => dismissal?.allowed ?? true;
+
+  @override
+  RoutePopDisposition get popDisposition => barrierDismissible
+      ? super.popDisposition
+      : RoutePopDisposition.doNotPop;
 }
 
 /// The sheet surface itself.
@@ -71,6 +120,7 @@ class HerdrSheet extends StatefulWidget {
     required this.title,
     required this.builder,
     this.action,
+    this.dismissal,
     super.key,
   });
 
@@ -82,6 +132,9 @@ class HerdrSheet extends StatefulWidget {
   /// enabled, what it says, and whether it is a button at all — the pairing
   /// sheet wants a 完成 that only appears once there is something to finish.
   final Widget? action;
+
+  /// The dismissal policy, when the caller has one. See [SheetDismissal].
+  final SheetDismissal? dismissal;
 
   final Widget Function(BuildContext context, ScrollController scroll) builder;
 
@@ -112,9 +165,15 @@ class _HerdrSheetState extends State<HerdrSheet> {
     // Dismiss past a quarter of the sheet, or on a decisive flick. Two
     // conditions because a slow drag and a fast flick are different intents
     // that both mean "close this".
+    //
+    // AND ONLY WHEN THE POLICY ALLOWS IT. `maybePop` refuses on its own (the
+    // route answers `doNotPop`), but then the sheet would stay translated down
+    // by the drag with nothing left to close it: the offset is put back here in
+    // the same frame the gesture ends.
     final height = context.size?.height ?? 1;
     final flung = details.velocity.pixelsPerSecond.dy > 700;
-    if (_dragOffset > height / 4 || flung) {
+    if ((_dragOffset > height / 4 || flung) &&
+        (widget.dismissal?.allowed ?? true)) {
       Navigator.of(context).maybePop();
       return;
     }

@@ -247,10 +247,16 @@ class UpdateController extends Notifier<UpdateStatus> {
   }
 
   Future<UpdateCheckOutcome> _check() async {
-    final current = ref.read(appVersionProvider);
+    final current = await _installedVersion();
     if (current == null) {
-      // The platform has not answered about its own version yet. Retrying in a
-      // moment is right; inventing a version to compare against is not.
+      // The platform could not say what version this build is, so there is
+      // nothing to compare against — and saying so is the whole point. The
+      // first version of this method RETURNED without writing state at all,
+      // which is invisible: no spinner, no error, no retry, and the settings
+      // row still reading 「还没检查过」 while the switch was on.
+      state = state.copyWith(
+        phase: const UpdateFailed(reason: UpdateFailure.unknown),
+      );
       return UpdateCheckOutcome.failed;
     }
 
@@ -299,7 +305,15 @@ class UpdateController extends Notifier<UpdateStatus> {
       }
 
       state = UpdateStatus(
-        phase: UpdateAvailable(release: release, asset: asset),
+        phase: UpdateAvailable(
+          release: release,
+          asset: asset,
+          // A partial the daemon of a previous attempt left behind (a dropped
+          // connection, an app killed mid-transfer) is worth reporting here:
+          // the downloader resumes from it by itself, and the offer line says
+          // so. Cancel does NOT leave one — see [cancel].
+          partialBytes: await _partialBytesFor(asset),
+        ),
         latest: release.version,
         checkedAt: now,
       );
@@ -424,14 +438,30 @@ class UpdateController extends Notifier<UpdateStatus> {
         ),
       );
     } on UpdateException catch (error) {
-      if (error.failure == UpdateFailure.cancelled) {
-        state = state.copyWith(
-          phase: UpdateAvailable(
-            release: release,
-            asset: asset,
-            partialBytes: _partialBytes(staging, asset),
-          ),
-        );
+      // A CANCELLED TOKEN COUNTS EVEN WHEN THE FAILURE IS SOMETHING ELSE. A
+      // transfer parked on a socket that has gone quiet does not notice the
+      // cancel until the far end or the receive-timeout does — measured on the
+      // phone, behind a slow CDN, where the panel was reopened a minute later
+      // and still said 下载中. Whichever exception finally arrives, if the user
+      // pressed 取消 this is the cancelled path.
+      if (error.failure == UpdateFailure.cancelled || token.isCancelled) {
+        // CANCELLED MEANS DISCARDED. That is the promise the button makes now
+        // (it says 取消 and nothing else), and it is the opposite of what this
+        // branch used to do: keeping the `.part` so a later offer could resume
+        // from it. The user asked for the simpler contract on the phone —
+        // cancelling a 46 MB download should not leave 46 MB of it on disk
+        // waiting to be explained.
+        //
+        // AND ONLY IF THIS TRANSFER STILL OWNS THE FILE. `cancel` moves the
+        // state straight back to the offer, so the user can start another
+        // download before this one has finished unwinding; deleting "the"
+        // partial file then would delete the NEW transfer's bytes.
+        if (identical(_cancelToken, token)) {
+          await _discardPartial(staging, asset);
+          state = state.copyWith(
+            phase: UpdateAvailable(release: release, asset: asset),
+          );
+        }
         return;
       }
       state = state.copyWith(
@@ -452,13 +482,33 @@ class UpdateController extends Notifier<UpdateStatus> {
         ),
       );
     } finally {
-      _cancelToken = null;
+      // Only this transfer's own handle is cleared — see `cancel` for why the
+      // next one may already be running.
+      if (identical(_cancelToken, token)) _cancelToken = null;
     }
   }
 
-  /// Stops the transfer, keeping what has arrived.
+  /// Stops the transfer and throws away what has arrived.
+  ///
+  /// THE STATE MOVES HERE, NOT WHEN THE SOCKET NOTICES. Cancelling a token
+  /// reaches an in-flight request on dio's own schedule: a body that has
+  /// stopped arriving only ends when the server, the proxy or the 60-second
+  /// stall timer resolves it. Waiting for that left the panel offering 取消 for
+  /// a transfer the user had already cancelled — measured on the phone, where
+  /// the sheet was reopened a minute later and still read 下载中. The bytes are
+  /// still discarded where the transfer unwinds (see [download]); what happens
+  /// here is that the question "is something downloading?" gets the honest
+  /// answer immediately.
   void cancel() {
-    _cancelToken?.cancel();
+    final token = _cancelToken;
+    if (token == null) return;
+    token.cancel();
+    final phase = state.phase;
+    if (phase is UpdateDownloading) {
+      state = state.copyWith(
+        phase: UpdateAvailable(release: phase.release, asset: phase.asset),
+      );
+    }
   }
 
   /// Hands the downloaded APK to the system installer.
@@ -547,6 +597,32 @@ class UpdateController extends Notifier<UpdateStatus> {
     await ref.read(apkInstallTargetProvider)?.openUrl(url);
   }
 
+  /// This build's own version, waiting for the platform if it has to.
+  ///
+  /// THE COLD START IS THE CASE THIS EXISTS FOR. The launch check runs one
+  /// frame after the first build, and `PackageInfo.fromPlatform()` is a
+  /// platform round trip that usually has not answered yet — so a single read
+  /// of [appVersionProvider] sees `null`, and the first version of this method
+  /// treated that as "nothing to do" and gave up WITHOUT a state change and
+  /// WITHOUT a retry. On the phone, with the automatic check switched on, that
+  /// left the settings row saying 「还没检查过」 for the life of the process:
+  /// the one symptom the user reported as 「检查更新失效」.
+  ///
+  /// Awaiting the future is right rather than retrying later: the answer is
+  /// milliseconds away, the spinner is already up, and nothing else depends on
+  /// this call. A platform that cannot answer at all (a missing plugin) still
+  /// fails, but now it fails where the user can see it.
+  Future<AppVersion?> _installedVersion() async {
+    final known = ref.read(appVersionProvider);
+    if (known != null) return known;
+    try {
+      final info = await ref.read(packageInfoProvider.future);
+      return AppVersion.tryParse(info.version);
+    } on Object {
+      return null;
+    }
+  }
+
   /// Back to doing nothing, with what was remembered intact.
   void reset() {
     if (_cancelToken != null) return;
@@ -589,9 +665,22 @@ class UpdateController extends Notifier<UpdateStatus> {
     return DownloadedFile(file: file, bytes: bytes, sha256: digest);
   }
 
-  static int _partialBytes(Directory staging, ReleaseAsset asset) {
+  static int _partialBytes({required Directory staging, required ReleaseAsset asset}) {
     final part = File('${staging.path}/${asset.name}.part');
     return part.existsSync() ? part.lengthSync() : 0;
+  }
+
+  /// How much of [asset] is on disk as a `.part`, or zero.
+  Future<int> _partialBytesFor(ReleaseAsset asset) async {
+    final staging = await ref.read(apkInstallTargetProvider)?.stagingDirectory();
+    if (staging == null) return 0;
+    return _partialBytes(staging: staging, asset: asset);
+  }
+
+  /// Removes the half-arrived file a cancelled transfer left behind.
+  static Future<void> _discardPartial(Directory staging, ReleaseAsset asset) async {
+    final part = File('${staging.path}/${asset.name}.part');
+    if (part.existsSync()) await _delete(part);
   }
 
   /// The installed app's versionCode, as `PackageInfo` spells it.

@@ -189,6 +189,35 @@ void main() {
     );
   });
 
+  testWidgets(
+      'a frame shorter than the box keeps its last row above the key bar',
+      (tester) async {
+    // THE PHONE REPORT THIS PINS: 「键盘/聊天窗关闭后…下方似乎占着一段空白」.
+    // The pane is 12 rows and the box holds many more; before this, the frame
+    // was painted at the TOP of the box and everything under it was empty
+    // terminal — which is also exactly what closing the keyboard exposed, since
+    // a pane is shorter than the phone once the keyboard gives the rows back.
+    await pumpTerminal(tester, paneRows: 12);
+
+    final painter = surfacePainter(tester);
+    final visibleRows = boxRows(tester, painter);
+    expect(
+      visibleRows,
+      greaterThan(12),
+      reason: 'the test needs a box taller than the pane',
+    );
+    expect(
+      painter.topRow,
+      0,
+      reason: 'nothing is cropped in this direction',
+    );
+    expect(
+      painter.topPadding + 12,
+      visibleRows,
+      reason: "the pane's last row has to land on the box's last row",
+    );
+  });
+
   testWidgets("the buffer is the size the daemon rendered at, not xterm's default",
       (tester) async {
     // THE BUG THIS PINS. The model was resized only when a frame's declared
