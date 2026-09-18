@@ -4,9 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/remote_fs.dart';
+import 'package:herdr_pocket/domain/files/file_kind.dart';
 import 'package:herdr_pocket/domain/files/file_transfer.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/download_sheet.dart';
+import 'package:herdr_pocket/ui/components/file_actions_sheet.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/files/file_preview_page.dart';
@@ -105,6 +107,46 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
     );
   }
 
+  /// Everything else a file can do, behind a long press.
+  ///
+  /// THE LONG PRESS USED TO BE A SECOND COPY OF THE DOWNLOAD BUTTON, and it was
+  /// a poor copy: the same action, at a different size, on a gesture the user
+  /// had no way to discover. It is now a DOOR — the place the actions that are
+  /// not worth a permanent control live — which is what the pane rows and the
+  /// machine rows already do (AGENTS.md, Phase 11). The trailing button keeps
+  /// download one tap away, so the sheet's download row is for reachability
+  /// rather than for meaning, exactly as it was before.
+  Future<void> _more(RemoteDirEntry entry, {required bool canDownload}) async {
+    final path = _join(widget.path, entry.name);
+    final action = await showFileMoreActions(
+      context,
+      name: entry.name,
+      path: path,
+      markdownPreview: isMarkdownName(entry.name),
+      download: canDownload,
+    );
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case FileMoreAction.previewMarkdown:
+        await Navigator.of(context).push(
+          CupertinoPageRoute<void>(
+            builder: (_) => FilePreviewPage(
+              path: path,
+              mode: FilePreviewMode.markdown,
+            ),
+          ),
+        );
+      case FileMoreAction.info:
+        await showFileInfo(context, name: entry.name, path: path);
+      case FileMoreAction.download:
+        await _download(entry);
+      case FileMoreAction.viewText:
+        // Never offered here: tapping the row already opens the text.
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = HerdrTheme.of(context);
@@ -198,17 +240,29 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
         margin: const EdgeInsets.only(left: Space.xxl),
         color: colors.hairlineQuiet,
       ),
-      itemBuilder: (context, i) => _EntryRow(
-        entry: entries[i],
-        colors: colors,
-        onTap: () => unawaited(_open(entries[i])),
-        // Directories offer nothing here: `fileActionsFor` is the single place
+      itemBuilder: (context, i) {
+        final entry = entries[i];
+        // Directories offer no download: `fileActionsFor` is the single place
         // that decides, so the row cannot disagree with the sheet it opens.
-        onDownload: canDownload &&
-                fileActionsFor(isDirectory: entries[i].isDirectory).isNotEmpty
-            ? () => unawaited(_download(entries[i]))
-            : null,
-      ),
+        final canDownloadEntry =
+            canDownload &&
+            fileActionsFor(isDirectory: entry.isDirectory).isNotEmpty;
+        return _EntryRow(
+          entry: entry,
+          colors: colors,
+          onTap: () => unawaited(_open(entry)),
+          onDownload: canDownloadEntry
+              ? () => unawaited(_download(entry))
+              : null,
+          // A directory gets no sheet yet: every row it would hold is either
+          // about a file's bytes (size, preview, download) or about a listing
+          // this page already shows. `null` is the honest answer — a long press
+          // that opens an empty sheet teaches the user not to long press.
+          onMore: entry.isDirectory
+              ? null
+              : () => unawaited(_more(entry, canDownload: canDownloadEntry)),
+        );
+      },
     );
   }
 }
@@ -219,6 +273,7 @@ class _EntryRow extends StatelessWidget {
     required this.colors,
     required this.onTap,
     this.onDownload,
+    this.onMore,
   });
 
   final RemoteDirEntry entry;
@@ -229,16 +284,18 @@ class _EntryRow extends StatelessWidget {
   /// switched off.
   final VoidCallback? onDownload;
 
+  /// Null for a directory, which has no sheet to open. See [_more].
+  final VoidCallback? onMore;
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      // The SAME action as the trailing button, for the same reason the pane
-      // rows have a long press: the button is a small target in the corner of
-      // the screen that a thumb has to reach for, and the row is already a
-      // full-width target. Not a second meaning — a second size of the first.
-      onLongPress: onDownload,
+      // The row is already a full-width target, and this one opens a panel
+      // rather than performing anything — the same gesture the workspace tree
+      // and the machines list use for their actions.
+      onLongPress: onMore,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: Space.lg,

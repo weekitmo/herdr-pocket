@@ -465,6 +465,78 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get fileMoreActions => '更多操作';
+
+  @override
+  String get fileActionPreviewMarkdown => 'Markdown 预览';
+
+  @override
+  String get fileActionViewText => '查看原文';
+
+  @override
+  String get fileActionInfo => '查看文件信息';
+
+  @override
+  String get fileInfoSize => '大小';
+
+  @override
+  String get fileInfoModified => '修改时间';
+
+  @override
+  String get fileInfoCreated => '创建时间';
+
+  @override
+  String get fileInfoCreatedUnknown => '文件系统未记录';
+
+  @override
+  String get fileInfoKind => '类型';
+
+  @override
+  String get fileInfoKindFile => '文件';
+
+  @override
+  String get fileInfoKindDirectory => '文件夹';
+
+  @override
+  String get fileInfoKindLink => '符号链接';
+
+  @override
+  String get fileInfoKindOther => '其他';
+
+  @override
+  String get fileInfoPermissions => '权限';
+
+  @override
+  String get fileInfoOwner => '属主';
+
+  @override
+  String get fileInfoGroup => '用户组';
+
+  @override
+  String get fileInfoPath => '路径';
+
+  @override
+  String get fileInfoFailed => '读不到文件信息';
+
+  @override
+  String get markdownMermaidFailed => '这个图没画出来';
+
+  @override
+  String get markdownMermaidZoom => '点开可缩放';
+
+  @override
+  String get markdownCodeCopy => '复制代码';
+
+  @override
+  String get markdownCodeCopied => '代码已复制';
+
+  @override
+  String get markdownLinkCopied => '链接已复制';
+
+  @override
+  String get markdownImage => '图片';
+
+  @override
   String get gitTitle => 'Git 改动';
 
   @override

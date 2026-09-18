@@ -299,6 +299,12 @@ abstract final class TextSize {
   /// A page's large title.
   static const double largeTitle = 26;
 
+  /// A Markdown document's `##` heading — one step under [largeTitle], and the
+  /// only rung added by the preview rather than by the app's own chrome. A
+  /// document has six heading levels and needs a visible second step; without
+  /// it `##` and `###` land on the same size and the outline collapses.
+  static const double headline = 20;
+
   /// An inline navigation title, an empty-state headline, an avatar glyph.
   static const double title = 16;
 

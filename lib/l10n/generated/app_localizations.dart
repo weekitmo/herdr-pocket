@@ -962,6 +962,150 @@ abstract class AppLocalizations {
   /// **'{count} lines'**
   String filePreviewLines(int count);
 
+  /// No description provided for @fileMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get fileMoreActions;
+
+  /// No description provided for @fileActionPreviewMarkdown.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview Markdown'**
+  String get fileActionPreviewMarkdown;
+
+  /// No description provided for @fileActionViewText.
+  ///
+  /// In en, this message translates to:
+  /// **'View source'**
+  String get fileActionViewText;
+
+  /// No description provided for @fileActionInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'File info'**
+  String get fileActionInfo;
+
+  /// No description provided for @fileInfoSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get fileInfoSize;
+
+  /// No description provided for @fileInfoModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get fileInfoModified;
+
+  /// No description provided for @fileInfoCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get fileInfoCreated;
+
+  /// No description provided for @fileInfoCreatedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded by the file system'**
+  String get fileInfoCreatedUnknown;
+
+  /// No description provided for @fileInfoKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get fileInfoKind;
+
+  /// No description provided for @fileInfoKindFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get fileInfoKindFile;
+
+  /// No description provided for @fileInfoKindDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder'**
+  String get fileInfoKindDirectory;
+
+  /// No description provided for @fileInfoKindLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Symbolic link'**
+  String get fileInfoKindLink;
+
+  /// No description provided for @fileInfoKindOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get fileInfoKindOther;
+
+  /// No description provided for @fileInfoPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get fileInfoPermissions;
+
+  /// No description provided for @fileInfoOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get fileInfoOwner;
+
+  /// No description provided for @fileInfoGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Group'**
+  String get fileInfoGroup;
+
+  /// No description provided for @fileInfoPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Path'**
+  String get fileInfoPath;
+
+  /// No description provided for @fileInfoFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the file info'**
+  String get fileInfoFailed;
+
+  /// No description provided for @markdownMermaidFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not draw this diagram'**
+  String get markdownMermaidFailed;
+
+  /// No description provided for @markdownMermaidZoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to zoom'**
+  String get markdownMermaidZoom;
+
+  /// No description provided for @markdownCodeCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get markdownCodeCopy;
+
+  /// No description provided for @markdownCodeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Code copied'**
+  String get markdownCodeCopied;
+
+  /// No description provided for @markdownLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get markdownLinkCopied;
+
+  /// No description provided for @markdownImage.
+  ///
+  /// In en, this message translates to:
+  /// **'image'**
+  String get markdownImage;
+
   /// No description provided for @gitTitle.
   ///
   /// In en, this message translates to:

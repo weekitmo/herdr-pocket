@@ -1,11 +1,34 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/remote_fs.dart';
+import 'package:herdr_pocket/domain/files/file_kind.dart';
+import 'package:herdr_pocket/domain/files/file_transfer.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
+import 'package:herdr_pocket/ui/components/download_sheet.dart';
+import 'package:herdr_pocket/ui/components/file_actions_sheet.dart';
+import 'package:herdr_pocket/ui/components/toast.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
+import 'package:herdr_pocket/ui/markdown/markdown_view.dart';
+
+/// How one file is being shown.
+///
+/// Two modes rather than two pages, because everything except the body is the
+/// same: the same read, the same truncation notice, the same title and path,
+/// the same failure sentences. A second page would gradually grow its own copy
+/// of all of it, and the first symptom would be a `.md` file that reports a
+/// read failure differently depending on which view was open.
+enum FilePreviewMode {
+  /// The file's bytes, with a line-number gutter.
+  text,
+
+  /// A Markdown document, rendered.
+  markdown,
+}
 
 /// One file, read from the machine the daemon runs on.
 ///
@@ -19,10 +42,17 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 /// host-key sheet makes, for the same reason.
 class FilePreviewPage extends ConsumerStatefulWidget {
   /// Shows the file at [path], which must be absolute.
-  const FilePreviewPage({required this.path, super.key});
+  const FilePreviewPage({
+    required this.path,
+    this.mode = FilePreviewMode.text,
+    super.key,
+  });
 
   /// Absolute path on the far end.
   final String path;
+
+  /// How to render it. Defaults to the bytes themselves.
+  final FilePreviewMode mode;
 
   @override
   ConsumerState<FilePreviewPage> createState() => _FilePreviewPageState();
@@ -87,6 +117,13 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
         // bar is transparent and the file scrolls under it.
         obstructs: false,
         leading: HerdrBackButton(label: l10n.navBack),
+        actions: [
+          HerdrBarButton(
+            label: l10n.fileMoreActions,
+            onPressed: () => unawaited(_more(context)),
+            child: const Icon(CupertinoIcons.ellipsis),
+          ),
+        ],
         title: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -132,11 +169,25 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
       // exactly how much was read, which is what keeps it honest. It is the
       // list's FIRST ROW rather than a band above it: a band would pin the
       // notice to the screen and cut the code off below the bar.
-      RemoteFileContent(:final content, :final truncated) => _Code(
-          content: content,
-          colors: colors,
-          header: truncated ? _QuietNotice(_truncatedLabel(l10n, content)) : null,
-        ),
+      RemoteFileContent(:final content, :final truncated) => switch (widget.mode) {
+        FilePreviewMode.text => _Code(
+            content: content,
+            colors: colors,
+            header: truncated
+                ? _QuietNotice(_truncatedLabel(l10n, content))
+                : null,
+          ),
+        FilePreviewMode.markdown => MarkdownView(
+            source: content,
+            // The same notice, in the same place, for the same reason — a
+            // rendered document that silently stops halfway is worse than a
+            // text file that does, because the omission is invisible.
+            header: truncated
+                ? _QuietNotice(_truncatedLabel(l10n, content))
+                : null,
+            onLinkTap: (url) => _copyLink(url, l10n),
+          ),
+      },
       RemoteFileEmpty() => _Notice(
           colors: colors,
           message: l10n.filePreviewEmpty,
@@ -152,6 +203,67 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
         ),
       null => _Notice(colors: colors, message: l10n.filePreviewLoading),
     };
+  }
+
+  /// Opens the same sheet the file tree opens, with the rows this page can
+  /// actually offer.
+  ///
+  /// Switching between the two views REPLACES the page rather than pushing on
+  /// top of it. Both views are the same file seen two ways, and a back button
+  /// that undoes a view switch would make "go back" mean "I was in the wrong
+  /// view" — the back button is how you leave the file.
+  Future<void> _more(BuildContext context) async {
+    final name = _basename(widget.path);
+    final canDownload = ref.read(
+      settingsProvider.select((s) => s.fileTransferEnabled),
+    );
+
+    final action = await showFileMoreActions(
+      context,
+      name: name,
+      path: widget.path,
+      markdownPreview:
+          widget.mode == FilePreviewMode.text && isMarkdownName(name),
+      viewText: widget.mode == FilePreviewMode.markdown,
+      download: canDownload && fileActionsFor(isDirectory: false).isNotEmpty,
+    );
+    if (!context.mounted || action == null) return;
+
+    switch (action) {
+      case FileMoreAction.previewMarkdown:
+        _replaceMode(context, FilePreviewMode.markdown);
+      case FileMoreAction.viewText:
+        _replaceMode(context, FilePreviewMode.text);
+      case FileMoreAction.info:
+        await showFileInfo(context, name: name, path: widget.path);
+      case FileMoreAction.download:
+        await showDownloadSheet(
+          context,
+          remotePath: widget.path,
+          fileName: name,
+        );
+    }
+  }
+
+  void _replaceMode(BuildContext context, FilePreviewMode mode) {
+    if (mode == widget.mode) return;
+    Navigator.of(context).pushReplacement(
+      CupertinoPageRoute<void>(
+        builder: (_) => FilePreviewPage(path: widget.path, mode: mode),
+      ),
+    );
+  }
+
+  /// A link from a rendered document.
+  ///
+  /// COPIED, not opened. There is no browser in this app and no URL-launching
+  /// plugin, and the links in a README are usually one of two things: a project
+  /// URL the reader wants somewhere else, or a relative path that means nothing
+  /// outside the repository. Both are served by the system clipboard, which is
+  /// also the only one of the two that works with no network at all.
+  void _copyLink(String url, AppLocalizations l10n) {
+    unawaited(Clipboard.setData(ClipboardData(text: url)));
+    showHerdrToast(context, l10n.markdownLinkCopied);
   }
 }
 

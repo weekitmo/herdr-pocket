@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 
+import 'package:herdr_pocket/domain/files/file_meta.dart';
+
 /// The marker that separates a command's stdout from its exit code.
 ///
 /// The command passes the nine characters `\n§EXIT§` to `printf`, which turns
@@ -241,6 +243,67 @@ class RemoteFs {
       byteCount: fileBytes.length,
       fileEndsWithNewline: dropNewline,
     );
+  }
+
+  /// Reads one path's metadata: size, times, permissions, ownership.
+  ///
+  /// Throws [RemoteFsException] — like [list], and unlike [read] — because
+  /// there is no partial answer here: every row of the info sheet is a field of
+  /// one record, and half a record shown as a sheet is worse than a sentence
+  /// saying it could not be read.
+  ///
+  /// ## Why there are two `stat`s in one command
+  ///
+  /// `stat` is not one program. GNU coreutils takes `-c FORMAT`; the BSD/macOS
+  /// one takes `-f FORMAT`. This project's machines are Linux and macOS, so
+  /// both dialects occur, and the command tries GNU first and falls back.
+  ///
+  /// The ORDER IS LOAD-BEARING, and the reason is that on GNU `-f` is not an
+  /// error — it means "report the FILE SYSTEM", which SUCCEEDS and prints a
+  /// completely different record. Trying `-f` first on a Linux box would
+  /// therefore parse happily into nonsense instead of failing loudly; trying
+  /// `-c` first on macOS fails with "illegal option" and hands over cleanly.
+  ///
+  /// The fields are the same six in both dialects, in the same order:
+  ///
+  /// ```text
+  /// size   mtime   birth   permissions   owner   group
+  /// ```
+  ///
+  /// separated by a REAL tab. Not `\t`: measured on this machine, BSD `stat`
+  /// does not interpret backslash escapes in the format string, so `-f '%z\t%m'`
+  /// prints the two characters `\` `t` and the record parses as one field.
+  Future<RemoteFileMeta> stat(String absolutePath) async {
+    const sep = '\t';
+    final quoted = quoteRemotePath(absolutePath);
+    final out = await _runner.runCommand(
+      "stat -c '%s$sep%Y$sep%W$sep%A$sep%U$sep%G' -- $quoted 2>/dev/null "
+      "|| stat -f '%z$sep%m$sep%B$sep%Sp$sep%Su$sep%Sg' -- $quoted 2>/dev/null; "
+      "printf '$remoteExitMarkerEscape%s' \"\$?\"",
+    );
+
+    final (body, exitCode) = splitTrailingSentinel(out);
+    if (exitCode == null) {
+      throw const RemoteFsException(
+        RemoteReadFailure.unknown,
+        'the remote shell did not report an exit code',
+      );
+    }
+    if (exitCode != 0) {
+      throw RemoteFsException(
+        classifyRemoteFailure(exitCode),
+        'the remote shell exited $exitCode',
+      );
+    }
+
+    final meta = parseFileMeta(body);
+    if (meta == null) {
+      throw const RemoteFsException(
+        RemoteReadFailure.unknown,
+        'the remote shell printed no usable stat record',
+      );
+    }
+    return meta;
   }
 
   /// Lists one directory level.

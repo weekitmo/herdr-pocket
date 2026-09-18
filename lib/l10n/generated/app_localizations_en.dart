@@ -484,6 +484,78 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fileMoreActions => 'More actions';
+
+  @override
+  String get fileActionPreviewMarkdown => 'Preview Markdown';
+
+  @override
+  String get fileActionViewText => 'View source';
+
+  @override
+  String get fileActionInfo => 'File info';
+
+  @override
+  String get fileInfoSize => 'Size';
+
+  @override
+  String get fileInfoModified => 'Modified';
+
+  @override
+  String get fileInfoCreated => 'Created';
+
+  @override
+  String get fileInfoCreatedUnknown => 'Not recorded by the file system';
+
+  @override
+  String get fileInfoKind => 'Kind';
+
+  @override
+  String get fileInfoKindFile => 'File';
+
+  @override
+  String get fileInfoKindDirectory => 'Folder';
+
+  @override
+  String get fileInfoKindLink => 'Symbolic link';
+
+  @override
+  String get fileInfoKindOther => 'Other';
+
+  @override
+  String get fileInfoPermissions => 'Permissions';
+
+  @override
+  String get fileInfoOwner => 'Owner';
+
+  @override
+  String get fileInfoGroup => 'Group';
+
+  @override
+  String get fileInfoPath => 'Path';
+
+  @override
+  String get fileInfoFailed => 'Could not read the file info';
+
+  @override
+  String get markdownMermaidFailed => 'Could not draw this diagram';
+
+  @override
+  String get markdownMermaidZoom => 'Tap to zoom';
+
+  @override
+  String get markdownCodeCopy => 'Copy code';
+
+  @override
+  String get markdownCodeCopied => 'Code copied';
+
+  @override
+  String get markdownLinkCopied => 'Link copied';
+
+  @override
+  String get markdownImage => 'image';
+
+  @override
   String get gitTitle => 'Git changes';
 
   @override

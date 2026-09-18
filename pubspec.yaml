@@ -75,8 +75,34 @@ dependencies:
   # package: `flutter pub deps --style=compact | grep -i material` matches only
   # `material_color_utilities`, which the Flutter SDK itself depends on.
   flutter_svg: ^2.3.0
+
+  # Code blocks in a Markdown preview. The highlight.js grammar tables, ported
+  # to Dart: pure Dart, no Flutter, so a fenced ```dart block comes back as a
+  # node tree that we turn into TextSpans with our own colours (see
+  # ui/markdown/highlight_theme.dart).
+  highlight: ^0.7.0
+
   image_picker: ^1.2.3
   intl: ^0.20.3
+
+  # Markdown preview in the file browser. The Dart team's parser, and pure
+  # Dart: it turns the file's text into an AST and nothing else, so the LOOK of
+  # a heading, a table and a quote is ours to decide — which is the point in a
+  # no-Material app (ADR-004).
+  markdown: ^7.3.1
+
+  # Mermaid diagrams, rendered NATIVELY: pure-Dart parse + ELK layout in
+  # `mermaid_core`, and a TextPainter/CustomPainter backend in
+  # `mermaid_flutter`. No WebView, no bundled JavaScript, no network — which
+  # matters because these files live on someone else's machine and the phone is
+  # often on a flaky overlay network.
+  #
+  # Only `MermaidDiagram` is used; the package's interactive `MermaidView`
+  # carries its own Material-flavoured controller chrome, and this app builds
+  # its own (see ui/markdown/mermaid_block.dart).
+  mermaid_core: ^0.3.0
+  mermaid_flutter: ^0.3.0
+
   # Scanning the pairing code `hdp pair` prints.
   #
   # THE COST IS REAL AND WAS ACCEPTED DELIBERATELY. This is the one dependency
