@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/app/frame_phase.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 
 /// Holds this app's process alive while it is in the background.
@@ -121,14 +122,38 @@ class KeepAliveHolders extends Notifier<Set<String>> {
   @override
   Set<String> build() => const <String>{};
 
-  void hold(String id) {
-    if (state.contains(id)) return;
-    state = {...state, id};
-  }
+  void hold(String id) => _update(
+        (held) => held.contains(id) ? null : {...held, id},
+      );
 
-  void release(String id) {
-    if (!state.contains(id)) return;
-    state = {...state}..remove(id);
+  void release(String id) => _update(
+        (held) => held.contains(id) ? ({...held}..remove(id)) : null,
+      );
+
+  /// Writes the set, but never from inside a frame's callback phases.
+  ///
+  /// THE PAGE THAT HOLDS A SESSION RELEASES IT FROM `dispose`, and that runs in
+  /// the unmount pass at the end of a frame — see [runOutsideFrame]. Writing
+  /// this state from there does not merely do nothing: it sets the build
+  /// owner's "a frame is already scheduled" flag without asking for one, and
+  /// from then on nothing in the process can schedule a frame again. The app
+  /// still takes taps, still runs their callbacks, still changes its state, and
+  /// never repaints — found on the phone as "after closing the shell page the
+  /// board is dead to the touch".
+  ///
+  /// [next] returns null for "no change", which has to be decided at the
+  /// moment of the write rather than before it: the deferred write runs a frame
+  /// later, by which time the set may have moved on.
+  void _update(Set<String>? Function(Set<String> held) next) {
+    runOutsideFrame(() {
+      // The deferred write can outlive its container: a test tears the scope
+      // down the moment the page is gone, and a write to a provider that no
+      // longer exists is not a missing hold — it is nothing left to say.
+      if (!ref.mounted) return;
+      final updated = next(state);
+      if (updated == null) return;
+      state = updated;
+    });
   }
 }
 

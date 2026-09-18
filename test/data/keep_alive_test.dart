@@ -19,6 +19,14 @@ import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 ///     switch off — because a notification claiming to hold a connection that
 ///     no longer exists is worse than no notification.
 void main() {
+  // THE HOLDS ARE WRITTEN THROUGH THE SCHEDULER. `KeepAliveHolders` writes
+  // through `runOutsideFrame`, because a page releases its hold from
+  // `dispose` — inside the frame's unmount pass — and a widget-notifying write
+  // from there stops the whole app from ever scheduling another frame. Asking
+  // for the binding here is that dependency stated out loud; without it the
+  // scheduler has no phase to report and the getter throws.
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('the policy', () {
     test('held while connected, released when the user says so', () {
       expect(keepAliveWanted(enabled: true, status: _online()), isTrue);
