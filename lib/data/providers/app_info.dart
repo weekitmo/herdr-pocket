@@ -44,7 +44,10 @@ final deviceAbiProvider = Provider<String>((ref) => abiToken(Abi.current()));
 /// Unknown platforms fall back to `universal`, which is not a guess: the
 /// selection in `pickApkAsset` treats it as the second choice, so a build that
 /// only ships `-universal.apk` still resolves, and a release that ships only
-/// per-ABI files resolves to nothing rather than to the wrong one.
+/// per-ABI files resolves to nothing rather than to the wrong one. Releases from
+/// 0.3.4 on ship per-ABI files only, so the two tokens that matter are the
+/// Android ones; `universal` is the honest answer for a device the workflow has
+/// no file for.
 String abiToken(Abi abi) => switch (abi) {
       Abi.androidArm64 => 'arm64-v8a',
       Abi.androidArm => 'armeabi-v7a',

@@ -15,6 +15,11 @@
 #   tool/build_release.sh              # arm64 + armeabi-v7a, the usual case
 #   tool/build_release.sh --universal  # one fat APK, any device, ~3x the size
 #   tool/build_release.sh --skip-checks
+#
+# `--universal` is a LOCAL convenience only: the release workflow stopped
+# shipping that file on 2026-09-18 (it doubled the Android build time for a
+# 107 MB artifact nothing needed). The default here is already the shape the
+# release has.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

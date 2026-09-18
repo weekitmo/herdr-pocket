@@ -193,11 +193,16 @@ ReleaseInfo? pickAppRelease(Iterable<ReleaseInfo> releases) {
 /// from the version would break the day a tag has a suffix the tag parser
 /// tolerates and the file namer does not.
 ///
-/// Order: exact ABI, then `universal` (94 MB instead of 46 MB, and it installs
-/// on anything — the file you hand somebody who does not know what an ABI is),
-/// then the only APK if there is exactly one. Null when the choice is not
-/// obvious, because installing the wrong ABI fails at install time with a
-/// message about the package being invalid.
+/// Order: exact ABI, then `universal`, then the only APK if there is exactly
+/// one. Null when the choice is not obvious, because installing the wrong ABI
+/// fails at install time with a message about the package being invalid.
+///
+/// The `universal` step is KEPT although the release workflow stopped shipping
+/// that file on 2026-09-18: it costs nothing, it still resolves against the
+/// releases that do have one (v0.3.3 and older, which an update can come from),
+/// and a build that ships a single fat APK remains installable. What changed is
+/// only that a device with no matching token is now told there is no build for
+/// it rather than handed a 107 MB file — which is what the last step is for.
 ReleaseAsset? pickApkAsset(ReleaseInfo release, String abi) {
   final apks = release.apkAssets;
   if (apks.isEmpty) return null;

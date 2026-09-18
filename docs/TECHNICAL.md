@@ -278,12 +278,18 @@ CI（`.github/workflows/ci.yml`）在 `flutter analyze` 之外还有三道闸，
 
 | tag | 流水线 | 产出 |
 |---|---|---|
-| `v*` | `.github/workflows/release.yml` | 同一道测试门 + Android APK（split + universal）+ macOS `.dmg` + `checksums.txt` |
+| `v*` | `.github/workflows/release.yml` | 同一道测试门 + Android APK（**split：`arm64-v8a` / `armeabi-v7a`**）+ macOS `.dmg` + `checksums.txt` |
 | `hdp-v*` | `.github/workflows/hdp-release.yml` | `hdp` 的静态二进制（verify 里真跑一遍 `install.sh`，外加 `gofmt`） |
 
 - release 的正文**取自 [`CHANGELOG.md`](../CHANGELOG.md)**，不是从 commit 标题拼的：
   `sh tool/release_notes.sh <版本>` 把那段取出来，tag 没有对应条目就**发布失败**。
   ⇒ 顺序永远是：先写 CHANGELOG，再打 tag。CI 的闸 2 就是提前在分支上抓它。
+- **不再构建 universal APK（2026-09-18，用户拍板）**：它是第二次 Gradle 调用（Android 那半段
+  构建时间几乎翻倍），产物 107 MB，唯一用途是「不知道自己是哪个 CPU 的人」。而两个 split
+  覆盖了所有 Android 手机，安装说明和 in-app 更新器都会选对文件；没有匹配 token 的设备
+  （x86 模拟器）会得到「没有适配你的构建」—— 诚实且正确。
+  ⚠️ `pickApkAsset` 里的 `universal` 回退**保留**：更早的 release（≤ v0.3.3）仍然有那个文件，
+  而更新可以从任何旧版本发生。
 - **Android 签名**：配了那四个 secret 就用真 keystore，没配就用 Flutter 模板的 debug key，
   而且**任务会明说**。debug 签名的包能侧载、能覆盖安装，但不能分发，而且换 key 之后
   必须先卸载（等于删掉用户存的机器）。

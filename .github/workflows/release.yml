@@ -148,13 +148,20 @@ jobs:
       - name: build
         # ONE INVOCATION PER ABI SHAPE, because `--split-per-abi` writes
         # `app-<abi>-release.apk` and there is no way to ask for both shapes at
-        # once. The universal APK matters: it is the file you hand somebody who
-        # does not know what an ABI is.
+        # once.
+        #
+        # THE UNIVERSAL APK IS DELIBERATELY NOT BUILT (2026-09-18). It was a
+        # second Gradle invocation — the Android half of this job ran nearly
+        # twice as long — for a 107 MB file that existed only for a downloader
+        # who does not know their own CPU. Those two tokens now cover every
+        # Android phone that exists, the install note below says which one to
+        # take, and the in-app updater picks the file that matches the device.
+        # A device with neither token (an x86 emulator) is told there is no
+        # build for it rather than handed the wrong one.
         run: |
           set -eu
           args="--release --build-name=$VERSION --build-number=${GITHUB_RUN_NUMBER}"
           flutter build apk $args --split-per-abi
-          flutter build apk $args
           ls -lh build/app/outputs/flutter-apk/*.apk
 
       - name: name the artifacts after the release
@@ -164,7 +171,6 @@ jobs:
           mkdir -p dist
           cp "$out/app-arm64-v8a-release.apk"   "dist/HerdrPocket-${VERSION}-arm64-v8a.apk"
           cp "$out/app-armeabi-v7a-release.apk" "dist/HerdrPocket-${VERSION}-armeabi-v7a.apk"
-          cp "$out/app-release.apk"             "dist/HerdrPocket-${VERSION}-universal.apk"
           ls -lh dist
 
       - uses: actions/upload-artifact@v4
@@ -310,8 +316,8 @@ jobs:
             ### Installing
 
             **Android** — `adb install -r HerdrPocket-<version>-arm64-v8a.apk`
-            (use `armeabi-v7a` for a 32-bit device, or the `universal` APK if you
-            do not know which one you have).
+            (every phone from the last several years is `arm64-v8a`; use
+            `armeabi-v7a` for an older 32-bit device).
 
             **macOS** — open the `.dmg` and drag the app out. The build is
             **unsigned**, so the first launch needs either a right-click → Open,
