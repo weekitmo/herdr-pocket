@@ -1,7 +1,7 @@
 name: herdr_pocket
 description: "Herdr Pocket — a calm status board and live terminal for your coding agents"
 publish_to: 'none'
-version: 0.3.1+5
+version: 0.3.2+6
 
 environment:
   sdk: ^3.13.3

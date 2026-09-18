@@ -8,11 +8,85 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
 | [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
 | [0.3.0](#v030) | 2026-09-17 | 没有 herdr 的机器也能开终端；终端里可以整段说话，而且 `/` 和 `@` 菜单还在 |
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v032"></a>
+## [0.3.2] — 2026-09-18
+
+### 中文
+
+**修复**
+
+- **「检查更新」看起来没反应**。两个原因叠在一起：冷启动那次自动检查在拿到自己的版本号
+  之前就无声放弃（不写状态、不重试），而弹窗只在「什么都没发生过」的状态下才去问网络，
+  那个状态在进程里永远不会回来。现在冷启动会等版本号，「检查更新」每次打开都真的去查。
+- **发现新版本却几乎没提示**：原来只有一行几秒就消失的提示。现在冷启动发现新版本会**直接
+  弹出更新面板**，版本号、更新说明和下载按钮都在上面。
+- **下载中可以被打断**：返回键、点弹窗外面的遮罩、下拉，任一条都能把弹窗关掉，而 46 MB
+  还在跑。现在下载中只有「取消」能关，它同时取消传输并丢掉已经下好的部分
+  （按钮文案就是「取消」两个字）。
+- **卡住的传输点取消没反应**：取消一个停在半路的下载，原来要等它自己超时。现在立即生效。
+- **SSH shell 页的「更多」按键面板是全屏的**：现在和 herdr 终端页一致 —— 右下角的气泡、
+  点任意键收起、内容是完整键位表（不再只是工具栏上那几个）。
+- **聊天窗的 `/` 与 `@` 混用一个按钮**：现在分成两个 —— `/` 开技能与 MCP、`@` 开文件与文件夹，
+  普通 shell（没有 agent）不画 `/`。另外 `/` 的远端探测（27 个技能根目录 + 14 处 MCP 配置，
+  实测 0.4 s / 54 KB）原来每打开一次聊天窗就要重跑一遍，现在**按窗格缓存**，
+  离开终端再进来才重读。
+- **键盘/聊天窗收起后，终端下方留一条空白**：窗格只有 48 行而手机能放 ~66 行，
+  多出来的行原来空在画面和按键条之间。现在**铺满**：字号自动放大到「窗格自己那几行刚好
+  铺满整屏」为止（上限是指尖能到的最大字号），空行只在极短的窗格里出现，而且留在顶部。
+
+  > ⚠️ 由此**「终端字号」变成下限**：它会在此基础上继续放大；反过来缩到比铺满更小不会生效
+  > （捏合仍可临时调整）。
+
+- **「已回看 N 行」占一行版面**：滚动会把终端挤矮一点，画面在手指下跳一下。现在它**浮在
+  画面上**，终端尺寸不动。
+
+**已知限制**（记在这里，不在本轮修）：窗格持续输出时，herdr 会自己把 pane 的滚动位置归零，
+所以回看一个**正在干活**的窗格时可能被带回底部 —— 这发生在 daemon 一侧，客户端只能跟随。
+
+### English
+
+**Fixed**
+
+- **"Check for updates" looked dead.** Two causes stacked: the launch check gave up silently
+  while the platform still had not reported the app's own version (no state, no retry), and the
+  panel only asked GitHub from the idle state — a state nothing ever returned to. The launch
+  check waits for the version now, and the panel asks again every time it opens.
+- **A new release was announced in one line that expired.** A cold start that finds a newer
+  version now **opens the update panel**, with the version, the notes and the download button
+  already on it.
+- **A download could be interrupted by a gesture**: the back key, a tap outside, or a drag all
+  closed the panel while 46 MB kept arriving. Only 取消 closes it now, and that button also
+  cancels the transfer and discards what had arrived.
+- **Cancelling a stuck transfer did nothing** until the socket timed out. It is immediate now.
+- **The SSH shell page's "more keys" panel was a full-screen sheet.** It is the pane mirror's
+  bubble now — bottom-right, dismisses on any key, with the whole catalogue in it.
+- **The chat window's `/` and `@` shared one button.** They are two buttons now (`/` for skills
+  and MCP, `@` for files and folders), and a plain shell does not get a `/` at all. The remote
+  probe behind `/` (27 skill roots and 14 MCP configs, measured at 0.4 s / 54 KB) used to run on
+  every open; it is **cached per pane** for the visit.
+- **A band of empty terminal under the picture** once the keyboard or the chat window closed:
+  a 48-row pane on a phone that fits ~66 rows left the spare rows between the picture and the
+  key bar. The terminal **fills the screen** now — the text grows until the pane's own rows
+  cover the box — and any leftover rows (very short panes) go above the picture.
+
+  > ⚠️ The font size setting is a **floor** from here on: it can be raised further, but zooming
+  > below what fills the screen has no effect (a pinch still adjusts temporarily).
+
+- **The "N lines back" bar took a row of layout**, so scrolling shrank the terminal under the
+  finger reading it. It hovers over the picture now, and the grid does not move.
+
+**Known limitation** (recorded, not fixed here): herdr itself resets a pane's scroll position
+while that pane's program keeps drawing, so reading history on a *working* pane can be pulled
+back to the bottom. That happens on the daemon's side; the client can only follow.
 
 ---
 
