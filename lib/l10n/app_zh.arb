@@ -551,14 +551,6 @@
   "updateRowUpToDate": "已是最新",
   "updateRowFailed": "上次检查失败",
   "updateRowNever": "还没检查过",
-  "updateToast": "有新版本 {version}，可在设置里更新",
-  "@updateToast": {
-    "placeholders": {
-      "version": {
-        "type": "String"
-      }
-    }
-  },
   "updateUrlCopied": "链接已复制",
   "shellConnecting": "正在打开终端…",
   "shellConnectingBody": "正在通过 SSH 连接并申请一个终端。",

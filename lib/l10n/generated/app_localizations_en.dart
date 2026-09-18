@@ -1359,11 +1359,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateRowNever => 'Never checked';
 
   @override
-  String updateToast(String version) {
-    return 'Herdr Pocket $version is available — see Settings';
-  }
-
-  @override
   String get updateUrlCopied => 'Link copied';
 
   @override

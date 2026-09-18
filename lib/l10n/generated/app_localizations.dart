@@ -2498,12 +2498,6 @@ abstract class AppLocalizations {
   /// **'Never checked'**
   String get updateRowNever;
 
-  /// No description provided for @updateToast.
-  ///
-  /// In en, this message translates to:
-  /// **'Herdr Pocket {version} is available — see Settings'**
-  String updateToast(String version);
-
   /// No description provided for @updateUrlCopied.
   ///
   /// In en, this message translates to:

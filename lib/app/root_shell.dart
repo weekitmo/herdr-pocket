@@ -10,7 +10,7 @@ import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/update/update_controller.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
-import 'package:herdr_pocket/ui/components/toast.dart';
+import 'package:herdr_pocket/ui/components/update_sheet.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/board/board_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/settings_page.dart';
@@ -44,15 +44,24 @@ class _RootShellState extends ConsumerState<RootShell> {
     super.initState();
     // THE LAUNCH CHECK, and the only place it can live.
     //
-    // Below `CupertinoApp` (so there is an `Overlay` to toast into — the app
-    // root is above it and would find none), once per process (this state is
-    // created once), and after the first frame (so a check that fails instantly
-    // does not delay the board by a network round trip).
+    // Below `CupertinoApp` (so there is a `Navigator` to open the panel on —
+    // the app root is above it and would find none), once per process (this
+    // state is created once), and after the first frame (so a check that fails
+    // instantly does not delay the board by a network round trip).
+    //
+    // IT ANSWERS WITH THE PANEL, NOT A TOAST. The first version was one line
+    // that expired after a few seconds, which is easy to miss on a cold start
+    // — the phone reported exactly that: 「没提示有新版本」. The panel is the
+    // same answer the settings row gives, with the version, the notes and the
+    // download button already on it, so the finding is actionable without a
+    // second tap.
+    //
+    // `recheck: false` because this check IS the answer being shown: asking
+    // again would flip the panel to a spinner and back.
     //
     // SILENT ON FAILURE, ALWAYS. The user did not ask for this request; it is a
-    // setting they turned on. A toast saying "could not check for updates"
-    // would be the app reporting a background chore as if it were news. Only a
-    // find is worth speaking about, and even then it is one line that expires.
+    // setting they turned on. A sheet saying "could not check for updates"
+    // would be the app reporting a background chore as if it were news.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       if (!ref.read(settingsProvider).autoUpdateCheck) return;
@@ -60,9 +69,7 @@ class _RootShellState extends ConsumerState<RootShell> {
       final outcome =
           await ref.read(updateControllerProvider.notifier).check();
       if (!mounted || outcome != UpdateCheckOutcome.available) return;
-      final latest = ref.read(updateControllerProvider).latest;
-      if (latest == null) return;
-      showHerdrToast(context, AppLocalizations.of(context).updateToast(latest.toString()));
+      await showUpdateSheet(context, recheck: false);
     });
   }
 

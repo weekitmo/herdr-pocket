@@ -23,7 +23,7 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 /// question the user asked; splitting them across a page and two dialogs would
 /// mean the answer to "what happened to my download" depends on which screen
 /// the user happened to be on when it finished.
-Future<void> showUpdateSheet(BuildContext context) {
+Future<void> showUpdateSheet(BuildContext context, {bool recheck = true}) {
   final l10n = AppLocalizations.of(context);
   // ONE HOLDER, TWO READERS: the route consults it before any dismissal, and
   // the body writes it from the phase it is already rendering. See
@@ -33,15 +33,23 @@ Future<void> showUpdateSheet(BuildContext context) {
     context: context,
     title: l10n.updateSheetTitle,
     dismissal: dismissal,
-    builder: (_, _) => _UpdateSheetBody(dismissal: dismissal),
+    builder: (_, _) => _UpdateSheetBody(dismissal: dismissal, recheck: recheck),
   );
 }
 
 class _UpdateSheetBody extends ConsumerStatefulWidget {
-  const _UpdateSheetBody({required this.dismissal});
+  const _UpdateSheetBody({required this.dismissal, this.recheck = true});
 
   /// The gate the sheet's route reads. See [showUpdateSheet].
   final SheetDismissal dismissal;
+
+  /// Whether opening the panel should ask GitHub again.
+  ///
+  /// FALSE ONLY FOR THE LAUNCH CHECK, and that is not an optimisation: the
+  /// sheet the app shows when it found an update at startup IS the answer to a
+  /// question that was asked a moment ago, and asking again would make the
+  /// panel flicker from the offer to a spinner and back.
+  final bool recheck;
 
   @override
   ConsumerState<_UpdateSheetBody> createState() => _UpdateSheetBodyState();
@@ -72,6 +80,7 @@ class _UpdateSheetBodyState extends ConsumerState<_UpdateSheetBody>
     // for the installer, and a paused transfer.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (!widget.recheck) return;
       final phase = ref.read(updateControllerProvider).phase;
       if (phase is UpdateDownloading || phase is UpdateReady) return;
       if (phase is UpdateAvailable && phase.partialBytes > 0) return;

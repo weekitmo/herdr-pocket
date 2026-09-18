@@ -552,14 +552,6 @@
   "updateRowUpToDate": "Up to date",
   "updateRowFailed": "Last check failed",
   "updateRowNever": "Never checked",
-  "updateToast": "Herdr Pocket {version} is available — see Settings",
-  "@updateToast": {
-    "placeholders": {
-      "version": {
-        "type": "String"
-      }
-    }
-  },
   "updateUrlCopied": "Link copied",
   "shellConnecting": "Opening a terminal…",
   "shellConnectingBody": "Connecting over SSH and asking for a pty.",

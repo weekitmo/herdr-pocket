@@ -1275,11 +1275,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updateRowNever => '还没检查过';
 
   @override
-  String updateToast(String version) {
-    return '有新版本 $version，可在设置里更新';
-  }
-
-  @override
   String get updateUrlCopied => '链接已复制';
 
   @override
