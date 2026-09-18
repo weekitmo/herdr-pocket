@@ -9,6 +9,7 @@
 | 版本 | 日期 | 一句话 |
 |---|---|---|
 | [0.3.3](#v033) | 2026-09-18 | 从 shell 页返回后，界面不再假死 |
+| [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
 | [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
 | [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
 | [0.3.0](#v030) | 2026-09-17 | 没有 herdr 的机器也能开终端；终端里可以整段说话，而且 `/` 和 `@` 菜单还在 |
@@ -18,6 +19,55 @@
 
 ---
 
+<a id="v034"></a>
+## [0.3.4] — 2026-09-18
+
+### 中文
+
+**新功能**
+
+- **长按文件 = 这个文件的全部操作。** 以前长按和右下角那颗下载按钮是同一件事的两种尺寸；
+  现在它是一扇门：**Markdown 预览** / **查看文件信息** / 下载到手机（文件传输开着时才出现）。
+  信息面板给的是大小、修改时间、创建时间、权限、属主与用户组、完整路径 ——
+  机器没记录创建时间就明说「文件系统未记录」，不会画成 1970；目录不显示大小，
+  因为那是目录记录本身的大小，不是里面的内容。
+
+- **Markdown 预览**：标题、列表、任务列表（画出来的勾选框）、引用、**表格**（真网格，
+  按 `:--:` 对齐）、**代码块语法高亮**（24 种语言，右上角一键复制）、**Mermaid 图**。
+  代码块横向滚动而不折行 —— 折过的续行看起来就是下一条语句。图表渲染失败会**退回源码**
+  并说明原因，不会白屏。
+
+  > Mermaid 是**原生渲染**的（纯 Dart 移植的 mermaid.js + 布局引擎，28 种图型）：
+  > 没有 WebView、没有 JavaScript、不联网 —— 这些文件在别人机器上，而手机常在一条不稳的
+  > 网络上。点图进全屏可缩放。
+  >
+  > 两个诚实的取舍：渲染出来的**链接点了是复制**（这个应用没有浏览器），**图片显示为带名字的
+  > 占位块**（README 里的图通常是相对路径，手机上看不见，也不该假装看得见）。
+
+### English
+
+**New**
+
+- **A long press on a file is now everything you can do with it**: Markdown preview, file info,
+  and download (when file transfer is on). The long press used to be a second size of the
+  trailing download button. The info panel shows size, modified and created times, permissions,
+  owner, group and the full path — a filesystem that records no creation time says so rather
+  than showing 1970.
+
+- **Markdown preview**: headings, lists, task lists with drawn checkboxes, block quotes,
+  **tables** (a real grid, honouring `:--:` alignment), **syntax-highlighted code blocks**
+  (24 languages, one tap to copy) and **Mermaid diagrams**. Code scrolls sideways instead of
+  wrapping, and a diagram that does not parse falls back to its source with a note rather than
+  a blank box.
+
+  > Mermaid is rendered **natively** (a pure-Dart port of mermaid.js with its layout engine,
+  > 28 diagram types): no WebView, no JavaScript, no network. Tap a diagram to zoom.
+  >
+  > Two honest trade-offs: a link is **copied** (this app has no browser), and an image is a
+  > **named placeholder** — a README's images are usually relative paths that mean nothing
+  > outside the repository.
+
+---
 <a id="v033"></a>
 ## [0.3.3] — 2026-09-18
 
