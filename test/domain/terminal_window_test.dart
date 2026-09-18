@@ -31,6 +31,41 @@ void main() {
     });
   });
 
+  group('filling the screen', () {
+    test("a pane shorter than the box is scaled until its rows fill it", () {
+      // The measured case: 48 rows of desktop pane in a 66-row box.
+      // 1.375 would be the exact fit; the arithmetic deliberately aims a hair
+      // under it so the rounded row count cannot land one short. See `_fillSlack`.
+      final filled = filledZoom(zoom: 1, paneRows: 48, boxRows: 66, maxZoom: 1.8);
+      expect(filled, lessThan(1.375));
+      expect(filled, greaterThan(1.375 * 0.99));
+    });
+
+    test('a pane that already reaches the box is left alone', () {
+      // Equal, or taller than the box: the user's own size stands, and the
+      // frame is cropped instead (see `framePlacement`).
+      expect(filledZoom(zoom: 1, paneRows: 66, boxRows: 66, maxZoom: 1.8), 1);
+      expect(filledZoom(zoom: 1, paneRows: 80, boxRows: 66, maxZoom: 1.8), 1);
+    });
+
+    test("it never scales DOWN — the user's size is the floor", () {
+      // A pane taller than the screen is a crop, not a zoom-out; shrinking the
+      // text to fit would make the phone the authority on somebody's font size.
+      expect(filledZoom(zoom: 0.8, paneRows: 20, boxRows: 12, maxZoom: 1.8), 0.8);
+    });
+
+    test('a very short pane is capped, not blown up into a wall of text', () {
+      // 66 rows of box for a 4-row pane would want 16x. The cap is the pinch's
+      // own maximum, so the fill can never exceed what a hand can ask for.
+      expect(filledZoom(zoom: 1, paneRows: 4, boxRows: 66, maxZoom: 1.8), 1.8);
+    });
+
+    test("nonsense in, the user's zoom out", () {
+      expect(filledZoom(zoom: 1, paneRows: 0, boxRows: 66, maxZoom: 1.8), 1);
+      expect(filledZoom(zoom: 1, paneRows: 48, boxRows: 0, maxZoom: 1.8), 1);
+    });
+  });
+
   group('what to show', () {
     test('a frame shorter than the box gets its spare rows ABOVE it', () {
       // THE PHONE REPORT THIS PINS: 「键盘/聊天窗关闭后…下方似乎占着一段空白」.

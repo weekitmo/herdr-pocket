@@ -194,6 +194,16 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// screen.
   int _topRow = 0;
 
+  /// The surface height with the keyboard CLOSED — the reference the fill is
+  /// measured against.
+  ///
+  /// WHY IT IS NOT JUST `constraints.maxHeight`: the soft keyboard takes a
+  /// third of the screen, and a fill computed from the shrunken box would
+  /// rescale the text every time the keyboard opened — and re-request a new
+  /// grid from the daemon with it. Recorded whenever the keyboard is down (which
+  /// is when the constraints ARE the full height) and kept while it is up.
+  double _fullSurfaceHeight = 0;
+
   /// Which modifiers are armed on the key bar, and what that means for the next
   /// keystroke. Held on the PAGE rather than inside the bar so the soft
   /// keyboard can honour it too — see [KeyBarState.type].
@@ -1928,8 +1938,50 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     AppLocalizations l10n,
     double zoom,
   ) {
-    final fontSize = kTerminalBaseFontSize * zoom;
     const fontFamily = HerdrFonts.mono;
+
+    // THE FILL'S REFERENCE, and it must not move with the keyboard: see
+    // [_fullSurfaceHeight].
+    //
+    // READ THROUGH [_keyboardVisible], whose context is the PAGE's — above the
+    // `CupertinoPageScaffold`. Inside the body that widget CONSUMES the inset
+    // (`viewInsets.bottom` becomes zero and the space turns into padding), so a
+    // MediaQuery read down here reports "no keyboard" while the box is a third
+    // of a screen shorter. Found by the test that opens the keyboard: the fill
+    // silently vanished because the reference had become the shrunken box.
+    if (!_keyboardVisible) _fullSurfaceHeight = constraints.maxHeight;
+    final fullHeight =
+        _fullSurfaceHeight > 0 ? _fullSurfaceHeight : constraints.maxHeight;
+
+    // Measured at the USER'S zoom first, because that is the scale the fill is
+    // expressed in: how many rows the box holds at the size they asked for
+    // decides whether anything needs filling at all.
+    final baseMetrics = CellMetrics.measure(
+      text: '\u3000',
+      style: TextStyle(
+        fontFamily: fontFamily,
+        fontSize: kTerminalBaseFontSize * zoom,
+        height: 1,
+      ),
+    );
+
+    // 铺满 (asked for on the phone). A pane with fewer rows than the box would
+    // otherwise leave the spare rows as a band of empty terminal — under the
+    // picture before, above it once the frame was anchored to the key bar. The
+    // only way to use them is to make the text bigger until the pane's own rows
+    // fill the screen, which also means the font size setting now reads as a
+    // MINIMUM. A pinch is exempt: while the fingers are down the user is
+    // choosing a size and the fit must not fight the gesture.
+    final applied = _pinchingScale != null
+        ? zoom
+        : filledZoom(
+            zoom: zoom,
+            paneRows: _paneRows ?? 0,
+            boxRows: fullHeight / baseMetrics.height,
+            maxZoom: kTerminalMaxZoom,
+          );
+
+    final fontSize = kTerminalBaseFontSize * applied;
 
     final metrics = CellMetrics.measure(
       text: '\u3000',

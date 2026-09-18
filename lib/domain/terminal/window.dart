@@ -48,6 +48,44 @@ int rowsToRequest({required int paneRows, required int boxRows}) {
   return paneRows;
 }
 
+/// The zoom at which the pane's rows fill the box, never below [zoom].
+///
+/// THE OTHER HALF OF [rowsToRequest]. That function asks the daemon for the
+/// pane's own rows — a smaller request would crop the pane's bottom — which
+/// leaves the phone with more rows of screen than the pane has content: 48 rows
+/// of desktop pane in a box that fits 66, measured on the phone. The spare rows
+/// have to go somewhere, and both ends read as a bug (an empty band under the
+/// terminal, or above it).
+///
+/// So the text is scaled up instead, until the pane's own rows fill the box.
+/// The trade is horizontal: a bigger cell means fewer columns of a pane that is
+/// wider than the phone, so the user sees less of each line — which is why the
+/// fit is opt-in on the device (the user asked for 铺满), why it never scales
+/// DOWN ([zoom] is a floor), and why the cap keeps a very short pane (a 6-row
+/// spinner, say) from producing a wall of giant text.
+///
+/// [boxRows] is how many rows the box holds at [zoom], i.e. already in cells
+/// rather than pixels — the same unit as [paneRows].
+double filledZoom({
+  required double zoom,
+  required int paneRows,
+  required double boxRows,
+  required double maxZoom,
+}) {
+  if (paneRows <= 0 || boxRows <= paneRows) return zoom;
+  final filled = zoom * boxRows / paneRows * _fillSlack;
+  return filled > maxZoom ? maxZoom : filled;
+}
+
+/// A hair less than a perfect fit, as a fraction.
+///
+/// THE PERFECT FIT IS A KNIFE EDGE. `boxRows` is `height / cellHeight` as a
+/// double and the layout rounds it with `floor`, so a fill computed to land
+/// exactly on the box's edge is decided to be one row too tall by a floated
+/// pixel — and the first line of the pane is cropped for no reason. Half a
+/// percent is a twentieth of a logical pixel of text and takes the edge away.
+const double _fillSlack = 0.995;
+
 /// The first buffer row to draw at the top of the surface, and how many blank
 /// rows go above it.
 ///

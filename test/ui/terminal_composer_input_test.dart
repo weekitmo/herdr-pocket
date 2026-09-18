@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/domain/terminal/composer.dart';
+import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'terminal_harness.dart';
@@ -189,32 +190,72 @@ void main() {
     );
   });
 
-  testWidgets(
-      'a frame shorter than the box keeps its last row above the key bar',
+  testWidgets('a pane shorter than the box is scaled up until it fills it',
       (tester) async {
-    // THE PHONE REPORT THIS PINS: 「键盘/聊天窗关闭后…下方似乎占着一段空白」.
-    // The pane is 12 rows and the box holds many more; before this, the frame
-    // was painted at the TOP of the box and everything under it was empty
-    // terminal — which is also exactly what closing the keyboard exposed, since
-    // a pane is shorter than the phone once the keyboard gives the rows back.
-    await pumpTerminal(tester, paneRows: 12);
+    // 铺满, asked for on the phone. A 48-row pane in a 66-row box used to leave
+    // the spare rows as a band of empty terminal — below the picture, then above
+    // it once the frame was anchored to the key bar. Neither end is a terminal:
+    // the text grows until the pane's own rows are what the box holds.
+    await pumpTerminal(tester, paneRows: 30);
 
     final painter = surfacePainter(tester);
     final visibleRows = boxRows(tester, painter);
     expect(
-      visibleRows,
-      greaterThan(12),
-      reason: 'the test needs a box taller than the pane',
+      painter.fontSize,
+      greaterThan(kTerminalBaseFontSize),
+      reason: 'the fill is the text getting bigger, not the frame moving',
     );
+    expect(
+      visibleRows,
+      inInclusiveRange(29, 31),
+      reason: "the pane's own rows are what the box holds now — to within the "
+          "one row the font's own rounding can give or take",
+    );
+    expect(
+      painter.topRow <= 1 && painter.topPadding <= 1,
+      isTrue,
+      reason: 'and the slack is at most that one rounded row, not a band',
+    );
+  });
+
+  testWidgets('a pane too short for the cap still pads rather than crops',
+      (tester) async {
+    // The fill cannot exceed the pinch's own maximum (`kTerminalMaxZoom`), so a
+    // very short pane keeps some slack — and that slack is what `topPadding` is
+    // for: above the frame, never between the picture and the key bar.
+    await pumpTerminal(tester, paneRows: 5);
+
+    final painter = surfacePainter(tester);
+    expect(
+      painter.topPadding,
+      greaterThan(0),
+      reason: 'the cap left rows over',
+    );
+    expect(
+      painter.topPadding + 5,
+      boxRows(tester, painter),
+      reason: "and the pane's last row still lands on the box's last row",
+    );
+  });
+
+  testWidgets('opening the keyboard does not rescale the fill', (tester) async {
+    // The fill is measured against the KEYBOARD-CLOSED height. Measured against
+    // the shrunken box it would shrink the text on every keyboard — and request
+    // a different grid from the daemon with it, which is a re-render of
+    // somebody's terminal for a keyboard animation.
+    await pumpTerminal(tester, paneRows: 30);
+    final before = surfacePainter(tester).fontSize;
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpAndSettle();
+
+    final painter = surfacePainter(tester);
+    expect(painter.fontSize, before);
     expect(
       painter.topRow,
-      0,
-      reason: 'nothing is cropped in this direction',
-    );
-    expect(
-      painter.topPadding + 12,
-      visibleRows,
-      reason: "the pane's last row has to land on the box's last row",
+      greaterThan(0),
+      reason: "the pane's bottom stays above the key bar",
     );
   });
 
