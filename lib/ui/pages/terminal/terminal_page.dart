@@ -1533,28 +1533,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
           children: [
             Column(
               children: [
-                if (_selection != null && !_selection!.isEmpty)
-                  _SelectionBar(
-                    l10n: l10n,
-                    palette: palette,
-                    onCopy: () => unawaited(_copySelection()),
-                    onCancel: _clearSelection,
-                  )
-                else if (!_following)
-                  _ScrollBackBar(
-                    offset: _scrollOffset,
-                    // AT THE OLDEST LINE, the bar says so. This is the one
-                    // state the user cannot read off the number: 382 and 382 do
-                    // not look different, and without the word the reader keeps
-                    // swiping at a wall. `max` is the daemon's, so it is true
-                    // even when the mirror is behind it.
-                    atOldest: _scrollMax != null &&
-                        _scrollMax! > 0 &&
-                        _scrollOffset >= _scrollMax!,
-                    palette: palette,
-                    l10n: l10n,
-                    onJump: _jumpToBottom,
-                  ),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) => _buildSurface(
@@ -1644,6 +1622,45 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                   ),
               ],
             ),
+            // THE BARS HOVER OVER THE TERMINAL; they are not a row of chrome
+            // above it. They used to be children of the Column, which meant a
+            // scroll back SHRANK the terminal by the bar's height — the grid
+            // jumped under the finger that was reading it, and (with the grid
+            // fitted to the box) the fill recomputed with it. The bar is an
+            // answer to "where am I", and nothing about it should move the
+            // thing it is answering about.
+            if (_selection != null && !_selection!.isEmpty)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: _SelectionBar(
+                  l10n: l10n,
+                  palette: palette,
+                  onCopy: () => unawaited(_copySelection()),
+                  onCancel: _clearSelection,
+                ),
+              )
+            else if (!_following)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                child: _ScrollBackBar(
+                  offset: _scrollOffset,
+                  // AT THE OLDEST LINE, the bar says so. This is the one
+                  // state the user cannot read off the number: 382 and 382 do
+                  // not look different, and without the word the reader keeps
+                  // swiping at a wall. `max` is the daemon's, so it is true
+                  // even when the mirror is behind it.
+                  atOldest: _scrollMax != null &&
+                      _scrollMax! > 0 &&
+                      _scrollOffset >= _scrollMax!,
+                  palette: palette,
+                  l10n: l10n,
+                  onJump: _jumpToBottom,
+                ),
+              ),
             // Everything the expanded key panel needs, drawn OVER the terminal
             // rather than under it. A panel that took layout space would resize
             // the grid — and the daemon renders at the size we report, so
@@ -1949,7 +1966,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     // MediaQuery read down here reports "no keyboard" while the box is a third
     // of a screen shorter. Found by the test that opens the keyboard: the fill
     // silently vanished because the reference had become the shrunken box.
-    if (!_keyboardVisible) _fullSurfaceHeight = constraints.maxHeight;
+    if (!_keyboardVisible && constraints.maxHeight > _fullSurfaceHeight) {
+      _fullSurfaceHeight = constraints.maxHeight;
+    }
     final fullHeight =
         _fullSurfaceHeight > 0 ? _fullSurfaceHeight : constraints.maxHeight;
 
@@ -1991,11 +2010,31 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         height: 1,
       ),
     );
+
+    // FILLING THE LAST ROW, EXACTLY. The fill's own arithmetic aims a hair under
+    // the box (see `_fillSlack`) and its reference can be a hair small — the
+    // keyboard may still have been animating when the page first laid out — and
+    // either leaves one or two rows over, which showed up on the phone as a thin
+    // band above the terminal. The CELL takes up that slack: the glyphs keep the
+    // filled size and the row pitch stretches to cover the box exactly.
+    //
+    // CAPPED, because a stretch is also how line spacing would break a TUI: a
+    // `│` is drawn to touch its cell's edges, and a large gap between rows turns
+    // every box-drawing border into a dashed line. A few percent is invisible; a
+    // reference further out than that is a bug to find, not to paper over.
+    const maxStretch = 1.08;
+    var cellHeight = metrics.height;
+    final paneRows = _paneRows ?? 0;
+    if (applied > zoom && paneRows > 0) {
+      final wanted = constraints.maxHeight / paneRows;
+      if (wanted > cellHeight && wanted <= cellHeight * maxStretch) {
+        cellHeight = wanted;
+      }
+    }
     // A cell must be wide enough for the widest thing it can hold. The
     // ideographic space above gives the full-width advance; the Latin cell is
     // half of it by definition of a monospace CJK font.
     final cellWidth = metrics.width / 2;
-    final cellHeight = metrics.height;
 
     final fitsCols = (constraints.maxWidth / cellWidth).floor().clamp(20, 400);
     final fitsRows = (constraints.maxHeight / cellHeight).floor().clamp(5, 400);
@@ -2006,7 +2045,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     // made an agent's input box disappear the moment the soft keyboard opened.
     // Columns stay the box's: a pane wider than the phone is cropped on purpose.
     final cols = fitsCols;
-    final rows = rowsToRequest(paneRows: _paneRows ?? 0, boxRows: fitsRows);
+    final rows = rowsToRequest(paneRows: paneRows, boxRows: fitsRows);
 
     // How the frame sits in the box. The grid above is fixed, so a keyboard
     // that takes a third of the screen moves THIS instead of triggering a

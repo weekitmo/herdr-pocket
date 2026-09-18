@@ -111,6 +111,29 @@ void main() {
     expect(find.textContaining('120 lines back'), findsOneWidget);
   });
 
+  testWidgets('the bar hovers: it does not resize the grid it reports on',
+      (tester) async {
+    // FOUND ON THE PHONE, by the user: the bar was a child of the page's
+    // Column, so pulling history into view SHRANK the terminal by the bar's
+    // height — the grid moved under the finger that was reading it, and with
+    // the grid fitted to the box the fit recomputed with it. The bar answers
+    // "where am I"; nothing about it should move what it is answering about.
+    final daemon = FakeTerminalDaemon(paneRows: 46, scrollMax: 400);
+    await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
+    daemon.emitFrame(data: 'live\r\n');
+    await tester.pump();
+
+    final before = tester.getSize(surface);
+    await dragBack(tester);
+
+    expect(find.textContaining('lines back'), findsOneWidget);
+    expect(
+      tester.getSize(surface),
+      before,
+      reason: 'the terminal keeps every row it had while the bar is up',
+    );
+  });
+
   testWidgets('the count stops at the end of the buffer instead of climbing',
       (tester) async {
     final daemon = await pumpTerminalPage(
