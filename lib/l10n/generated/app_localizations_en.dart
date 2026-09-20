@@ -688,6 +688,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get lockUseBiometrics => 'Use fingerprint';
 
   @override
+  String get lockKeypadDelete => 'Delete';
+
+  @override
   String get lockBiometricReason => 'Unlock Herdr Pocket';
 
   @override

@@ -1358,6 +1358,12 @@ abstract class AppLocalizations {
   /// **'Use fingerprint'**
   String get lockUseBiometrics;
 
+  /// No description provided for @lockKeypadDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get lockKeypadDelete;
+
   /// No description provided for @lockBiometricReason.
   ///
   /// In en, this message translates to:

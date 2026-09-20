@@ -201,6 +201,21 @@ class _RootState extends ConsumerState<_Root> {
                       // phone nobody has opened is exactly the hole the lock is
                       // for. The question waits.
                       if (!locked) const HostKeySheet(),
+                      // THE LOCK COVERS THE SCREEN; THIS COVERS THE TREE.
+                      // An overlay hides pixels, not semantics: with the board
+                      // still painted underneath, its rows stay in the
+                      // accessibility tree, so a screen reader (or any client
+                      // that activates nodes rather than tapping coordinates)
+                      // could read and reach the very screen the lock is
+                      // hiding. `BlockSemantics` is the widget for exactly this
+                      // — it blocks the semantics of everything painted before
+                      // it in the same Stack, and is the reason the lock is a
+                      // sibling here rather than a route: a route's own subtree
+                      // could not block what it was pushed over.
+                      //
+                      // Found by dumping the tree on the phone while the lock
+                      // was up and reading the board's node bounds out of it.
+                      if (locked) const BlockSemantics(),
                       const LockGate(),
                     ],
                   ),

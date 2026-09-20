@@ -667,6 +667,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lockUseBiometrics => '使用指纹';
 
   @override
+  String get lockKeypadDelete => '删除';
+
+  @override
   String get lockBiometricReason => '解锁 Herdr Pocket';
 
   @override

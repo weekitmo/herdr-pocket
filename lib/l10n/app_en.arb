@@ -298,6 +298,7 @@
   "lockWrongPin": "Wrong PIN",
   "lockMismatch": "The two entries did not match",
   "lockUseBiometrics": "Use fingerprint",
+  "lockKeypadDelete": "Delete",
   "lockBiometricReason": "Unlock Herdr Pocket",
   "lockRemoveTitle": "Turn off the app lock?",
   "lockRemoveBody": "The PIN is deleted, and the app opens without asking again.",

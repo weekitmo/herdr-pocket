@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 
 /// The dots that show how much of a four-digit PIN has been typed.
@@ -271,10 +272,17 @@ class _Keypad extends StatelessWidget {
               colors: colors,
               enabled: enabled,
               onTap: onDelete,
-              child: Icon(
-                CupertinoIcons.delete_left,
-                size: 22,
-                color: colors.textDim,
+              // Labelled, because an icon is not a word: seen through
+              // `uiautomator` this key is otherwise a button with no name at
+              // all, which is what a screen reader would announce.
+              child: Semantics(
+                label: AppLocalizations.of(context).lockKeypadDelete,
+                button: true,
+                child: Icon(
+                  CupertinoIcons.delete_left,
+                  size: 22,
+                  color: colors.textDim,
+                ),
               ),
             ),
           ],

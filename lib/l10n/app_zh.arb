@@ -297,6 +297,7 @@
   "lockWrongPin": "密码不对",
   "lockMismatch": "两次输入不一致",
   "lockUseBiometrics": "使用指纹",
+  "lockKeypadDelete": "删除",
   "lockBiometricReason": "解锁 Herdr Pocket",
   "lockRemoveTitle": "关闭应用锁？",
   "lockRemoveBody": "密码会被删除，之后打开应用不再需要解锁。",
