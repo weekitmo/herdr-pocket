@@ -85,6 +85,22 @@ dependencies:
   image_picker: ^1.2.3
   intl: ^0.20.3
 
+  # The device's own biometric prompt, for the app lock.
+  #
+  # WHY A PACKAGE AND NOT A HAND-WRITTEN CHANNEL. `BiometricPrompt` has to be
+  # hosted by a `FragmentActivity`, so either route forces `MainActivity` to
+  # extend `FlutterFragmentActivity` — after which the only thing left to write
+  # by hand is the Kotlin that calls `authenticate()`, its lifecycle handling,
+  # the availability/capability matrix, and three platform implementations.
+  # This is the Flutter team's plugin, it renders NOTHING (the dialog is the
+  # system's own, so there is no Material to leak into the app), and it is the
+  # one part of this feature that cannot be tested on a phone in CI.
+  #
+  # It also adds no permission the user has to grant: `USE_BIOMETRIC` in the
+  # manifest is enough, and the fingerprint that proves who they are never
+  # leaves the secure element.
+  local_auth: ^3.0.2
+
   # Markdown preview in the file browser. The Dart team's parser, and pure
   # Dart: it turns the file's text into an AST and nothing else, so the LOOK of
   # a heading, a table and a quote is ours to decide — which is the point in a

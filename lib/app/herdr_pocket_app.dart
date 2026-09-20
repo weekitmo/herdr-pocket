@@ -5,12 +5,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/root_shell.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/providers/app_lock.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/host_key_sheet.dart';
 import 'package:herdr_pocket/ui/design/safety_inset.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
+import 'package:herdr_pocket/ui/pages/lock/lock_gate.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
 
 /// The application root.
@@ -70,6 +72,12 @@ class _RootState extends ConsumerState<_Root> {
           theme: theme,
           platformBrightness: platformBrightness,
         );
+        // A LOCKED APP DOES NOT ASK ABOUT HOST KEYS. The sheet below sits above
+        // the navigator — deliberately, so a blocked handshake can be answered
+        // from any screen — and that puts it above the lock screen too, which
+        // would let somebody approve a machine's key on a phone they cannot
+        // open. The question keeps until the app is unlocked.
+        final locked = ref.watch(appLockProvider).value?.locked ?? false;
 
         return HerdrTheme(
           colors: colors,
@@ -171,13 +179,38 @@ class _RootState extends ConsumerState<_Root> {
                     fontFamily: HerdrFonts.app,
                     fontFamilyFallback: HerdrFonts.monoFallback,
                   ),
+                  // THREE LAYERS, and the order is the security model:
+                  //
+                  //   1. the navigator — every screen the app can push;
+                  //   2. the host-key sheet — a blocked handshake has to be
+                  //      answerable from whatever screen the user is on;
+                  //   3. the app lock, ON TOP OF BOTH.
+                  //
+                  // THE LOCK IS AN OVERLAY RATHER THAN A ROUTE, and that is not
+                  // a layout preference. A notification tap or a deep link
+                  // pushes a route onto the navigator, and a lock that lives
+                  // INSIDE the navigator — as its `home`, which is where this
+                  // started — would be covered by whatever the app pushed over
+                  // it. Here nothing the app can navigate to is above it, and
+                  // the terminal a notification asked for is simply waiting
+                  // underneath once the PIN is in.
                   child: Stack(
-                    children: [?child, const HostKeySheet()],
+                    children: [
+                      ?child,
+                      // Hidden while locked: approving a machine's key on a
+                      // phone nobody has opened is exactly the hole the lock is
+                      // for. The question waits.
+                      if (!locked) const HostKeySheet(),
+                      const LockGate(),
+                    ],
                   ),
                 ),
                 ),
               );
             },
+            // NOT the lock: it lives in the builder above, over the top of the
+            // navigator. See the comment there for why a lock INSIDE the
+            // navigator is not a lock.
             home: const RootShell(),
           ),
         );

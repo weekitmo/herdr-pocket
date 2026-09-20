@@ -1274,6 +1274,114 @@ abstract class AppLocalizations {
   /// **'Behaviour'**
   String get settingsBehaviour;
 
+  /// No description provided for @settingsSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get settingsSecurity;
+
+  /// No description provided for @settingsAppLock.
+  ///
+  /// In en, this message translates to:
+  /// **'App lock'**
+  String get settingsAppLock;
+
+  /// No description provided for @settingsAppLockNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask for a 4-digit PIN when the app opens. Unlocking once works for 5 minutes in the background.'**
+  String get settingsAppLockNote;
+
+  /// No description provided for @settingsAppLockBiometrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock with fingerprint'**
+  String get settingsAppLockBiometrics;
+
+  /// No description provided for @settingsAppLockNeedsPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Set a PIN first.'**
+  String get settingsAppLockNeedsPin;
+
+  /// No description provided for @settingsAppLockNoBiometrics.
+  ///
+  /// In en, this message translates to:
+  /// **'This device has no fingerprint enrolled.'**
+  String get settingsAppLockNoBiometrics;
+
+  /// No description provided for @settingsAppLockChangePin.
+  ///
+  /// In en, this message translates to:
+  /// **'Change PIN'**
+  String get settingsAppLockChangePin;
+
+  /// No description provided for @lockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your PIN'**
+  String get lockTitle;
+
+  /// No description provided for @lockSetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a 4-digit PIN'**
+  String get lockSetTitle;
+
+  /// No description provided for @lockConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Type it once more'**
+  String get lockConfirmTitle;
+
+  /// No description provided for @lockCurrentTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the current PIN'**
+  String get lockCurrentTitle;
+
+  /// No description provided for @lockWrongPin.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrong PIN'**
+  String get lockWrongPin;
+
+  /// No description provided for @lockMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The two entries did not match'**
+  String get lockMismatch;
+
+  /// No description provided for @lockUseBiometrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Use fingerprint'**
+  String get lockUseBiometrics;
+
+  /// No description provided for @lockBiometricReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlock Herdr Pocket'**
+  String get lockBiometricReason;
+
+  /// No description provided for @lockRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off the app lock?'**
+  String get lockRemoveTitle;
+
+  /// No description provided for @lockRemoveBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The PIN is deleted, and the app opens without asking again.'**
+  String get lockRemoveBody;
+
+  /// No description provided for @lockRemoveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off'**
+  String get lockRemoveAction;
+
   /// No description provided for @settingsTextSizeApp.
   ///
   /// In en, this message translates to:

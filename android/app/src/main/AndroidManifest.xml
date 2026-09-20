@@ -43,6 +43,20 @@
          Settings was flipping a feature that could never fire. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- THE FINGERPRINT THE USER UNLOCKS THE APP WITH.
+
+         Declared for the app lock: one 4-digit PIN, plus — when the user turns
+         it on — the device's own biometric prompt. `normal` protection level,
+         so there is no runtime prompt and nothing to grant; the platform's
+         `BiometricPrompt` is what actually asks, and the fingerprint itself
+         never leaves the secure element.
+
+         ⚠️ `local_auth_android` ALSO requires the activity that hosts the
+         prompt to be a `FragmentActivity` — see MainActivity, which extends
+         `FlutterFragmentActivity` for exactly this reason. Declaring the
+         permission without that change gives a prompt that never appears. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+
     <!-- KEEPING THE CONNECTION ALIVE WHILE THE APP IS IN THE BACKGROUND.
 
          Android freezes a backgrounded app's process, and a frozen process

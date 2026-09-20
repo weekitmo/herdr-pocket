@@ -283,6 +283,7 @@ class SettingsSwitchRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.note,
+    this.enabled = true,
     super.key,
   });
 
@@ -294,6 +295,15 @@ class SettingsSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// False for a switch that cannot do anything yet.
+  ///
+  /// A GREYED SWITCH RATHER THAN A MISSING ROW, and the difference matters:
+  /// a row that is absent says nothing about why it is absent, while a dimmed
+  /// one with a [note] says what has to happen first. The note is NOT dimmed —
+  /// it is the explanation, and explaining something in the faintest ink in the
+  /// card is the same as not explaining it.
+  final bool enabled;
+
   @override
   Widget build(BuildContext context) {
     final colors = HerdrTheme.of(context);
@@ -303,30 +313,36 @@ class SettingsSwitchRow extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: toggle,
+      onTap: enabled ? toggle : null,
       // Opaque, so the gaps between the label and the control are part of the
       // target too. Without it the row only responds where it has painted text.
       behavior: HitTestBehavior.opaque,
       child: SettingsRow(
         label: label,
         note: note,
+        labelColor: enabled ? null : colors.textFaint,
         trailing: Transform.scale(
           scale: switchScale,
           // Anchored right, because the switch's column is sized for the
           // UNSCALED switch: scaling about the centre would pull it away from
           // the card's trailing edge by half the difference.
           alignment: Alignment.centerRight,
-          child: CupertinoSwitch(
-            value: value,
-            // ACCENT, not the status green. `colors.done` means "this agent
-            // finished" everywhere else in the app, and a switch that borrowed
-            // it would be saying a status word while meaning a setting — the one
-            // thing the palette is not allowed to do.
-            activeTrackColor: colors.accent,
-            onChanged: (v) {
-              unawaited(HapticFeedback.selectionClick());
-              onChanged(v);
-            },
+          child: Opacity(
+            opacity: enabled ? 1 : 0.45,
+            child: CupertinoSwitch(
+              value: value,
+              // ACCENT, not the status green. `colors.done` means "this agent
+              // finished" everywhere else in the app, and a switch that borrowed
+              // it would be saying a status word while meaning a setting — the one
+              // thing the palette is not allowed to do.
+              activeTrackColor: colors.accent,
+              onChanged: enabled
+                  ? (v) {
+                      unawaited(HapticFeedback.selectionClick());
+                      onChanged(v);
+                    }
+                  : null,
+            ),
           ),
         ),
       ),

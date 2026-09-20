@@ -625,6 +625,60 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsBehaviour => '行为';
 
   @override
+  String get settingsSecurity => '安全';
+
+  @override
+  String get settingsAppLock => '应用锁';
+
+  @override
+  String get settingsAppLockNote => '打开应用时要求输入 4 位密码；后台 5 分钟内回来不需要再解锁。';
+
+  @override
+  String get settingsAppLockBiometrics => '用指纹解锁';
+
+  @override
+  String get settingsAppLockNeedsPin => '请先设置密码。';
+
+  @override
+  String get settingsAppLockNoBiometrics => '这台设备没有已录入的指纹。';
+
+  @override
+  String get settingsAppLockChangePin => '修改密码';
+
+  @override
+  String get lockTitle => '输入密码';
+
+  @override
+  String get lockSetTitle => '设置 4 位密码';
+
+  @override
+  String get lockConfirmTitle => '再输入一次';
+
+  @override
+  String get lockCurrentTitle => '输入当前密码';
+
+  @override
+  String get lockWrongPin => '密码不对';
+
+  @override
+  String get lockMismatch => '两次输入不一致';
+
+  @override
+  String get lockUseBiometrics => '使用指纹';
+
+  @override
+  String get lockBiometricReason => '解锁 Herdr Pocket';
+
+  @override
+  String get lockRemoveTitle => '关闭应用锁？';
+
+  @override
+  String get lockRemoveBody => '密码会被删除，之后打开应用不再需要解锁。';
+
+  @override
+  String get lockRemoveAction => '关闭';
+
+  @override
   String get settingsTextSizeApp => '界面文字';
 
   @override

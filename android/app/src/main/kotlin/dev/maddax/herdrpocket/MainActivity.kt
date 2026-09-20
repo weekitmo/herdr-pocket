@@ -14,7 +14,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -38,8 +38,21 @@ import java.util.concurrent.atomic.AtomicInteger
  * certificate to catch an install that would fail and demand an uninstall — has
  * no package at all. Once that is written, FileProvider and
  * `canRequestPackageInstalls` are twenty more lines beside it.
+ *
+ * WHY THIS ACTIVITY IS A `FlutterFragmentActivity` RATHER THAN A
+ * `FlutterActivity`. It is one line of inheritance that nothing here uses, and
+ * it is not optional: `androidx.biometric`'s `BiometricPrompt` is hosted by a
+ * `FragmentActivity`, and the app lock's fingerprint prompt is the system's own
+ * dialog drawn over this activity. `local_auth_android` says so in its README;
+ * the failure mode without it is a prompt that simply never appears.
+ *
+ * WHAT THAT COSTS: `FlutterFragmentActivity` extends `FragmentActivity`, which
+ * is what `startActivityForResult` and `configureFlutterEngine` below already
+ * work with — the SAF picker, the proxy reader, the APK installer and the
+ * keep-alive service are unaffected. It is also the reason this class declares
+ * no `android:configChanges` of its own: the manifest already does.
  */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
         const val CHANNEL = "dev.maddax.herdrpocket/download_dir"

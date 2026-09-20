@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/local/download_target.dart';
 import 'package:herdr_pocket/data/providers/app_info.dart';
+import 'package:herdr_pocket/data/providers/app_lock.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/themes.dart';
@@ -20,6 +21,7 @@ import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/components/update_sheet.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
+import 'package:herdr_pocket/ui/pages/lock/pin_setup_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/icons_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/key_bar_page.dart';
 import 'package:herdr_pocket/ui/pages/settings/shell_command_page.dart';
@@ -65,6 +67,10 @@ class SettingsPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    // The lock's own state, WATCHED: the two switches below are drawn from it,
+    // so turning the lock on has to redraw this page.
+    final lock = ref.watch(appLockProvider).value ?? const AppLockState();
+    final biometrics = ref.watch(biometricAvailableProvider).value ?? false;
 
     return CupertinoPageScaffold(
       backgroundColor: colors.ground,
@@ -190,6 +196,62 @@ class SettingsPage extends ConsumerWidget {
                     value: settings.safetyInset,
                     onChanged: notifier.setSafetyInset,
                   ),
+                ],
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: SettingsGroup(
+                title: l10n.settingsSecurity,
+                rows: [
+                  SettingsSwitchRow(
+                    label: l10n.settingsAppLock,
+                    // The one row in this group that carries a note, and it
+                    // earns it: the switch spends something the label does not
+                    // name — a PIN on every cold start, and the five minutes of
+                    // grace that come with it.
+                    note: l10n.settingsAppLockNote,
+                    value: lock.pinSet,
+                    onChanged: (on) => on
+                        ? _openPinSetup(context, PinSetupMode.create)
+                        : unawaited(_confirmRemoveLock(context)),
+                  ),
+                  SettingsSwitchRow(
+                    label: l10n.settingsAppLockBiometrics,
+                    value: lock.biometricsEnabled,
+                    // DISABLED, WITH THE REASON, rather than hidden: the row is
+                    // where the user learns that the fingerprint needs a PIN
+                    // first — and that a phone without a sensor cannot offer it
+                    // at all.
+                    enabled: lock.pinSet && biometrics,
+                    note: !lock.pinSet
+                        ? l10n.settingsAppLockNeedsPin
+                        : (biometrics
+                              ? null
+                              : l10n.settingsAppLockNoBiometrics),
+                    onChanged: (on) => unawaited(
+                      ref
+                          .read(appLockProvider.notifier)
+                          .setBiometricsEnabled(enabled: on),
+                    ),
+                  ),
+                  if (lock.pinSet)
+                    // A GestureDetector around the row rather than a tap
+                    // handler on it: `SettingsRow` draws, it does not act —
+                    // see `_ThemeRow` above, which opens the picker the same
+                    // way.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _openPinSetup(context, PinSetupMode.change),
+                      child: SettingsRow(
+                        label: l10n.settingsAppLockChangePin,
+                        trailing: Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: 14,
+                          color: colors.textFaint,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -428,6 +490,49 @@ class SettingsPage extends ConsumerWidget {
   static String _shortHost(WidgetRef ref) {
     final host = ref.watch(currentHostProvider);
     return host == null ? '—' : '${host.host}:${host.port}';
+  }
+
+  /// Opens the screen that asks for four digits.
+  ///
+  /// [PinSetupMode.create] is the switch being turned on; the other two both
+  /// begin by proving the current PIN — see [PinSetupPage] for why a lock that
+  /// can be switched off by whoever is holding the phone is not a lock.
+  void _openPinSetup(BuildContext context, PinSetupMode mode) {
+    unawaited(HapticFeedback.selectionClick());
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(builder: (_) => PinSetupPage(mode: mode)),
+    );
+  }
+
+  /// Asks before turning the lock off, then asks for the PIN.
+  ///
+  /// TWO STEPS ON PURPOSE. The dialog explains what is about to be lost — a
+  /// switch that flips silently is a switch nobody trusts — and the PIN screen
+  /// after it is the part that matters: without it, this row is a way for
+  /// somebody holding an unlocked phone to remove the lock and keep it.
+  Future<void> _confirmRemoveLock(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(l10n.lockRemoveTitle),
+        content: Text(l10n.lockRemoveBody),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: actionSheetLabel(l10n.actionCancel),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: actionSheetLabel(l10n.lockRemoveAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    if (!context.mounted) return;
+    _openPinSetup(context, PinSetupMode.remove);
   }
 }
 

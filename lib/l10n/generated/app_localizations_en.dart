@@ -644,6 +644,63 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsBehaviour => 'Behaviour';
 
   @override
+  String get settingsSecurity => 'Security';
+
+  @override
+  String get settingsAppLock => 'App lock';
+
+  @override
+  String get settingsAppLockNote =>
+      'Ask for a 4-digit PIN when the app opens. Unlocking once works for 5 minutes in the background.';
+
+  @override
+  String get settingsAppLockBiometrics => 'Unlock with fingerprint';
+
+  @override
+  String get settingsAppLockNeedsPin => 'Set a PIN first.';
+
+  @override
+  String get settingsAppLockNoBiometrics =>
+      'This device has no fingerprint enrolled.';
+
+  @override
+  String get settingsAppLockChangePin => 'Change PIN';
+
+  @override
+  String get lockTitle => 'Enter your PIN';
+
+  @override
+  String get lockSetTitle => 'Choose a 4-digit PIN';
+
+  @override
+  String get lockConfirmTitle => 'Type it once more';
+
+  @override
+  String get lockCurrentTitle => 'Enter the current PIN';
+
+  @override
+  String get lockWrongPin => 'Wrong PIN';
+
+  @override
+  String get lockMismatch => 'The two entries did not match';
+
+  @override
+  String get lockUseBiometrics => 'Use fingerprint';
+
+  @override
+  String get lockBiometricReason => 'Unlock Herdr Pocket';
+
+  @override
+  String get lockRemoveTitle => 'Turn off the app lock?';
+
+  @override
+  String get lockRemoveBody =>
+      'The PIN is deleted, and the app opens without asking again.';
+
+  @override
+  String get lockRemoveAction => 'Turn off';
+
+  @override
   String get settingsTextSizeApp => 'App text';
 
   @override
