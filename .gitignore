@@ -80,3 +80,4 @@ build/app/reports/
 # (the workspace root is not a git repo), so this entry is a guard: if anyone ever
 # runs git from a directory where plannings/ IS reachable, it must not be added.
 plannings/
+.pi/tasks
