@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/remote_capabilities.dart';
 import 'package:herdr_pocket/data/remote_fs.dart';
+import 'package:herdr_pocket/domain/agent/agent_info.dart';
+import 'package:herdr_pocket/domain/agent/agent_list.dart';
 import 'package:herdr_pocket/domain/terminal/submission.dart';
 import 'package:herdr_pocket/ui/pages/terminal/chat_composer.dart';
 import 'package:herdr_pocket/ui/pages/terminal/menu_panel.dart';
@@ -599,40 +601,92 @@ void main() {
       );
     });
 
-    testWidgets('the / button appears when the pane census arrives LATE',
+    testWidgets('the / button is drawn while the pane is still being read',
         (tester) async {
       // FOUND ON THE PHONE, after the buttons were split: the chat window
       // showed `+` and `@` but no `/`, on a pane the board calls a π agent.
       // The pane census is re-read when the composer opens, and when that read
-      // has not answered yet the menu is built with no `agent` — so the button
-      // is hidden. It has to appear when the answer lands, which means the
-      // card has to listen to the MENU as well as to the draft.
+      // has not answered yet the menu is built with no `agent`.
+      //
+      // THE FIX IS NOT JUST "make it appear later". A control that is absent
+      // and a control that is loading look identical on a phone, and the user
+      // reads the second one as "the app is slow" — which it was. So the button
+      // is now DRAWN and INERT until the answer lands, which is what this test
+      // pins: present, not tappable, and live the moment the census arrives.
       final daemon = FakeTerminalDaemon(paneRows: 46);
       await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
 
       // The tree provider is auto-dispose and nothing is listening to it once
       // the page has seeded itself, so the read that the composer makes is a
-      // FRESH one — which is the state the phone was in when the button was
-      // missing. Hold that read so the "not yet" state is stable enough to
-      // assert on.
+      // FRESH one. Hold it so the "not yet" state is stable enough to assert
+      // on.
       await tester.pump(const Duration(seconds: 1));
       daemon.treeGate = Completer<void>();
 
       await openComposer(tester);
       expect(
         find.byKey(composerSlashKey),
-        findsNothing,
-        reason: 'nothing knows this pane runs an agent yet',
+        findsOneWidget,
+        reason: 'drawn while the answer is in flight, rather than missing',
       );
       expect(find.byKey(composerMentionKey), findsOneWidget);
+
+      // And INERT: the trigger rule may not guess, because guessing wrong pops
+      // a skills menu over `/usr/local` in a shell.
+      await tester.tap(find.byKey(composerSlashKey));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(composerMenuKey),
+        findsNothing,
+        reason: 'nothing is known about this pane yet, so nothing opens',
+      );
 
       daemon.treeGate!.complete();
       await tester.pumpAndSettle();
 
+      await tester.tap(find.byKey(composerSlashKey));
+      await tester.pumpAndSettle();
       expect(
-        find.byKey(composerSlashKey),
+        find.byKey(composerMenuKey),
         findsOneWidget,
         reason: "the late census has to reach the button, not only the menus",
+      );
+    });
+
+    testWidgets('the BOARD can answer before the census does', (tester) async {
+      // THE OPTIMISATION, and on a slow link it is the one that matters: the
+      // row the board already holds carries the pane's `agent`, and the board
+      // is usually where the user just came from. Reading it costs nothing and
+      // replaces three socket requests with a lookup — so the button is live on
+      // the first frame instead of a few seconds later.
+      final daemon = FakeTerminalDaemon(paneRows: 46);
+      await pumpTerminalPage(
+        tester,
+        prefs: prefs,
+        daemon: daemon,
+        board: AgentList(
+          agents: [
+            AgentInfo.fromJson({
+              'pane_id': kTestPaneId,
+              'agent': 'claude',
+              'agent_status': 'working',
+              'cwd': '/home/u/proj',
+            }),
+          ],
+        ),
+      );
+
+      // Hold the census for the whole test: anything the composer learns here
+      // it learned from the board.
+      daemon.treeGate = Completer<void>();
+      await openComposer(tester);
+
+      await tester.tap(find.byKey(composerSlashKey));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(composerMenuKey),
+        findsOneWidget,
+        reason: 'the board already knew, so no request was needed',
       );
     });
   });

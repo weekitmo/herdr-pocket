@@ -9,6 +9,7 @@ import 'package:herdr_pocket/data/herdr_client.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/domain/agent/agent_list.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
@@ -30,6 +31,7 @@ Future<FakeTerminalDaemon> pumpTerminalPage(
   int paneRows = 46,
   Locale locale = const Locale('en'),
   FakeTerminalDaemon? daemon,
+  AgentList? board,
 }) async {
   final machine = daemon ?? FakeTerminalDaemon(paneRows: paneRows);
   await tester.pumpWidget(
@@ -45,6 +47,12 @@ Future<FakeTerminalDaemon> pumpTerminalPage(
             ),
           ),
         ),
+        // A board that is already in memory, for the questions that are about
+        // what the screen does with an answer it already has rather than about
+        // how the answer arrives. Without this the page's own read of
+        // `boardProvider` would go to the fake daemon, which answers nothing
+        // about agents — a real state, but not the one under test.
+        if (board != null) boardProvider.overrideWith(() => _FixedBoard(board)),
       ],
       child: HerdrTheme(
         colors: HerdrColors.dark,
@@ -347,4 +355,17 @@ class FixedConnection extends ConnectionNotifier {
 
   @override
   Future<ConnectionStatus> build() async => _status;
+}
+
+/// A board the screen already has, with no read behind it.
+class _FixedBoard extends BoardNotifier {
+  _FixedBoard(this.board);
+
+  final AgentList board;
+
+  @override
+  Future<AgentList> build() async => board;
+
+  @override
+  Future<void> refresh() async {}
 }

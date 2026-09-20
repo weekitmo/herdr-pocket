@@ -19,6 +19,30 @@ const Key composerSlashKey = ValueKey('terminal.composer.slash');
 /// The `@` button — files and folders to mention.
 const Key composerMentionKey = ValueKey('terminal.composer.mention');
 
+/// What the chat window can say about this pane's `/` menu.
+///
+/// THREE STATES, AND THE THIRD ONE IS THE POINT. `absent` and `ready` are facts
+/// about the pane; `pending` is a fact about the PHONE — the census that answers
+/// "which pane runs an agent" is three socket requests, and on a slow link the
+/// chat window is open long before they land. With a bool the only available
+/// answer was "no button", so the control appeared out of nowhere a few seconds
+/// after the window did, which reads as a glitch rather than as loading.
+///
+/// Drawn dimmed and inert instead: nothing is promised, nothing is hidden, and
+/// when the answer arrives the button either lights up ([ready]) or leaves
+/// ([absent] — a plain shell has no skills, and its `/` is a path separator).
+enum SlashAvailability {
+  /// A plain shell. The button is not drawn at all: there is no menu behind it,
+  /// and a button that opens nothing is a worse lie than an absent one.
+  absent,
+
+  /// Nobody knows yet. Drawn, dimmed, not tappable.
+  pending,
+
+  /// An agent is running here.
+  ready,
+}
+
 /// The chat window: type a whole message on the phone, send it in one go.
 ///
 /// ## What it is FOR
@@ -67,6 +91,10 @@ const Key composerMentionKey = ValueKey('terminal.composer.mention');
 ///     skills, and a `/` there is a path separator — a button that opened an
 ///     empty menu would be a worse lie than an absent one. `@` stays, because a
 ///     file reference is useful in a shell too.
+///   * **And while nobody knows yet, it is drawn DIM.** The answer comes from a
+///     three-request census of the machine, so there is a real window on a slow
+///     link where the truth is "not yet" — see [SlashAvailability]. That window
+///     used to be rendered as "no button", which then appeared by itself.
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
     required this.controller,
@@ -79,7 +107,7 @@ class ChatComposer extends StatelessWidget {
     required this.onSlash,
     required this.onMention,
     required this.onChanged,
-    this.slashEnabled = true,
+    this.slash = SlashAvailability.ready,
     this.canSend = true,
     this.uploading = false,
     this.attachments = const [],
@@ -106,10 +134,12 @@ class ChatComposer extends StatelessWidget {
   /// Types `@` and opens the files-and-folders menu for this pane.
   final VoidCallback onMention;
 
-  /// Whether the pane has an agent at all. False hides the `/` button rather
-  /// than disabling it: a shell cannot run a skill, so there is no menu behind
-  /// the button on that pane.
-  final bool slashEnabled;
+  /// Whether the pane has an agent at all, and whether that is known yet.
+  ///
+  /// See [SlashAvailability]: `absent` hides the button rather than disabling
+  /// it (a shell cannot run a skill, so there is no menu behind it), while
+  /// `pending` draws it inert so that its arrival is not a layout surprise.
+  final SlashAvailability slash;
 
   /// Fires on every edit AND every caret move — the menu trigger lives on the
   /// caret, so a tap that moves it has to be heard too.
@@ -192,11 +222,15 @@ class ChatComposer extends StatelessWidget {
                     buttonKey: composerAttachKey,
                   ),
                 const SizedBox(width: Space.sm),
-                if (slashEnabled) ...[
+                if (slash != SlashAvailability.absent) ...[
                   _glyph(
                     glyph: '/',
                     label: l10n.composerCommands,
-                    onTap: onSlash,
+                    // Inert while the pane is still being read: the trigger
+                    // character is a path separator in a shell, and a menu that
+                    // opened over `/usr/local` because we guessed would be the
+                    // bug this button's three states exist to avoid.
+                    onTap: slash == SlashAvailability.ready ? onSlash : null,
                     buttonKey: composerSlashKey,
                   ),
                   const SizedBox(width: Space.sm),
@@ -403,8 +437,7 @@ class ChatComposer extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
     Key? buttonKey,
-  }) {
-    return _button(
+  }) {    return _button(
       buttonKey: buttonKey,
       label: label,
       onTap: onTap,
@@ -417,12 +450,17 @@ class ChatComposer extends StatelessWidget {
   /// The monospace face is the point: `/` and `@` are shown as the terminal
   /// shows them, and the two buttons read as a pair because they are drawn in
   /// the same voice.
+  ///
+  /// A NULL [onTap] MEANS "NOT YET", not "never" — the glyph stays in place,
+  /// drawn in the faintest ink, so that the answer arriving changes its colour
+  /// rather than its existence.
   Widget _glyph({
     required String glyph,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     Key? buttonKey,
   }) {
+    final enabled = onTap != null;
     return _button(
       buttonKey: buttonKey,
       label: label,
@@ -430,7 +468,7 @@ class ChatComposer extends StatelessWidget {
       child: Text(
         glyph,
         style: TextStyle(
-          color: colors.textDim,
+          color: enabled ? colors.textDim : colors.textFaint,
           fontSize: 19,
           height: 1,
           fontFamily: HerdrFonts.mono,
@@ -443,7 +481,7 @@ class ChatComposer extends StatelessWidget {
   Widget _button({
     required Key? buttonKey,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     required Widget child,
   }) {
     return CupertinoButton(
@@ -454,6 +492,7 @@ class ChatComposer extends StatelessWidget {
       child: Semantics(
         label: label,
         button: true,
+        enabled: onTap != null,
         child: Container(
           width: _buttonSize,
           height: _buttonSize,

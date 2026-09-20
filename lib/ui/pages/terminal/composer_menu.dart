@@ -93,8 +93,21 @@ class ComposerMenuController extends ChangeNotifier {
   ///
   /// `pane.list` leaves `agent` empty for a plain shell, which is the difference
   /// between a pane whose `/` opens a menu and one whose `/` is a path
-  /// separator.
+  /// separator. A pane that has not been read yet answers `false` here ON
+  /// PURPOSE: the trigger rule must not guess, because guessing wrong pops a
+  /// skills menu over `/usr/local`. See [agentPane] for what the button draws.
   bool get hasAgent => (agent ?? '').trim().isNotEmpty;
+
+  /// Whether this pane runs an agent — or whether that is not known YET.
+  ///
+  /// THREE ANSWERS, NOT TWO, and the third one is a fix rather than a state for
+  /// its own sake. `null` means nobody has told us: this pane's census is three
+  /// socket requests (`workspace.list` + `tab.list` + `pane.list`), and on a
+  /// slow SSH link the chat window opens long before they answer. The `/`
+  /// button used to simply not exist until then — which the user reported as
+  /// "the `/` appears late". A control that is MISSING and a control that is
+  /// still FINDING OUT look identical on a phone, and only one of them is true.
+  bool? get agentPane => agent == null ? null : hasAgent;
 
   MenuToken? get token => _token;
   bool get isOpen => _token != null;

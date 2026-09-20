@@ -17,6 +17,7 @@ import 'package:herdr_pocket/data/remote_upload.dart';
 import 'package:herdr_pocket/data/terminal/terminal_control.dart';
 import 'package:herdr_pocket/data/terminal/terminal_selection.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
+import 'package:herdr_pocket/domain/agent/agent_list.dart';
 import 'package:herdr_pocket/domain/agent/attachment.dart';
 import 'package:herdr_pocket/domain/terminal/key_bar.dart';
 import 'package:herdr_pocket/domain/terminal/menu.dart';
@@ -763,6 +764,25 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     );
 
     if (pane != null) return;
+
+    // WHAT THE BOARD ALREADY KNOWS, before anything is asked of the machine.
+    //
+    // The census is three socket requests, and this screen is usually reached
+    // FROM the board, whose rows are already in memory and carry the same two
+    // facts: the pane's `agent` and its `cwd`. Seeding from them is what makes
+    // the `/` button light up on the frame the chat window opens rather than a
+    // few seconds later — on exactly the link where a few seconds is the whole
+    // complaint.
+    //
+    // It is a HINT, not the answer: `agent.list` only ever lists AGENT panes,
+    // so a missing row says nothing about a shell, and the census below still
+    // runs and still overwrites. What it buys is the common case, not the
+    // question.
+    final known = _boardPane();
+    if (known != null) {
+      _menu?.updateContext(cwd: known.cwd, agent: known.agent);
+    }
+
     // The tree is usually already in memory (the page reads it to size the
     // pane), and a first read after the fact would otherwise leave the menus
     // permanently blind to a directory they could have had.
@@ -777,6 +797,20 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         // to the user-scoped entries, which is a real list.
       }),
     );
+  }
+
+  /// This pane's own facts as the BOARD already has them, if it has them.
+  ///
+  /// Null covers two different situations on purpose, and both fall back to the
+  /// census: the board has not been read at all, and the board is a list of
+  /// agent panes in which this pane does not appear.
+  ({String? cwd, String agent})? _boardPane() {
+    final rows = ref.read(boardProvider).value?.rows ?? const <AgentRow>[];
+    for (final row in rows) {
+      final info = row.info;
+      if (info.paneId == _paneId) return (cwd: info.cwd, agent: info.agent);
+    }
+    return null;
   }
 
   /// Puts a picked row into the field.
@@ -1912,8 +1946,14 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       onSlash: _openSlashMenu,
       onMention: _openMentionMenu,
       // A shell has no skills; its `/` is a path separator. The button is
-      // absent there rather than present and empty — see `ChatComposer`.
-      slashEnabled: _menu?.hasAgent ?? false,
+      // absent there rather than present and empty — and while the pane's own
+      // row has not been read, it is present and INERT rather than absent: see
+      // [SlashAvailability].
+      slash: switch (_menu?.agentPane) {
+        null => SlashAvailability.pending,
+        true => SlashAvailability.ready,
+        false => SlashAvailability.absent,
+      },
       onChanged: _onDraftChanged,
     );
   }
