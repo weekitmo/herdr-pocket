@@ -470,6 +470,42 @@ abstract class AppLocalizations {
   /// **'Verifying…'**
   String get connectionStageVerifying;
 
+  /// No description provided for @connectionStepResolving.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolving the address…'**
+  String get connectionStepResolving;
+
+  /// No description provided for @connectionStepHandshake.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting over SSH…'**
+  String get connectionStepHandshake;
+
+  /// No description provided for @connectionStepHostKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the host key decision…'**
+  String get connectionStepHostKey;
+
+  /// No description provided for @connectionStepLocating.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding herdr on the machine…'**
+  String get connectionStepLocating;
+
+  /// No description provided for @connectionStepDaemon.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the herdr daemon…'**
+  String get connectionStepDaemon;
+
+  /// No description provided for @boardLoadingAgents.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the agent list…'**
+  String get boardLoadingAgents;
+
   /// No description provided for @connectionStageLastAttempt.
   ///
   /// In en, this message translates to:

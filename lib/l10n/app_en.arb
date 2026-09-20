@@ -70,6 +70,12 @@
   "settingsDiagnostics": "Diagnostics",
   "connectionStageConnecting": "Connecting…",
   "connectionStageVerifying": "Verifying…",
+  "connectionStepResolving": "Resolving the address…",
+  "connectionStepHandshake": "Connecting over SSH…",
+  "connectionStepHostKey": "Waiting for the host key decision…",
+  "connectionStepLocating": "Finding herdr on the machine…",
+  "connectionStepDaemon": "Checking the herdr daemon…",
+  "boardLoadingAgents": "Reading the agent list…",
   "connectionStageLastAttempt": "One last attempt…",
   "connectionRetryAttempt": "Retrying {attempt}/{max}…",
   "@connectionRetryAttempt": {

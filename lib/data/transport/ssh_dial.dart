@@ -185,7 +185,13 @@ class SshDialer {
   /// every way this can go wrong, because the UI has different screens for
   /// "cannot reach the machine" and "the machine said no" and classifying by
   /// matching on error text is how that erodes.
-  Future<SSHClient> dial() async {
+  ///
+  /// [onStage] is how the screen learns which of those things is happening
+  /// right now. Optional because a caller that has nothing to narrate (a
+  /// throwaway connection opened to measure latency) should not have to pass
+  /// one.
+  Future<SSHClient> dial({void Function(DialStage)? onStage}) async {
+    onStage?.call(DialStage.resolving);
     final socket = await SSHSocket.connect(
       credentials.host,
       credentials.port,
@@ -197,6 +203,10 @@ class SshDialer {
         cause: e,
       );
     });
+
+    // The socket is up; everything from here to `authenticated` is the
+    // handshake, and on a slow link it is where most of the wait lives.
+    onStage?.call(DialStage.dialling);
 
     final client = SSHClient(
       socket,
@@ -210,6 +220,12 @@ class SshDialer {
       // difference between usable and not.
       algorithms: herdrSshAlgorithms,
       onVerifyHostKey: (keyType, fingerprint) async {
+        // Two stages around one await, and both are honest: the first is "a
+        // human is being asked" (the verifier only shows a sheet for a key it
+        // does not already trust), the second is "the handshake resumed".
+        // A pinned host passes through here in milliseconds, which is why a
+        // stage is a report rather than a promise about how long it lasts.
+        onStage?.call(DialStage.hostKey);
         final verdict = await verifyHostKey(
           HostKeyPrompt(
             host: credentials.host,
@@ -223,6 +239,7 @@ class SshDialer {
             isNewHost: false,
           ),
         );
+        onStage?.call(DialStage.dialling);
         return verdict == HostKeyVerdict.trust;
       },
       // Keepalive uses dartssh2's 10 s default deliberately: an idle session
@@ -249,6 +266,12 @@ class SshDialer {
         cause: e,
       );
     }
+
+    // AUTHENTICATED: the transport is up and whatever happens next is the
+    // daemon's turn. Reported HERE rather than by the caller because the caller
+    // cannot see this moment — the session is opened lazily, by the first
+    // request it makes.
+    onStage?.call(DialStage.verifying);
 
     return client;
   }

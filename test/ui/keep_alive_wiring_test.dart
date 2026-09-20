@@ -121,8 +121,10 @@ class _OnlineConnector extends HostConnector {
 
   @override
   Future<({HerdrClientBundle bundle, String socketPath})> connect(
-    HostProfile profile,
-  ) async {
+    HostProfile profile, {
+    void Function(DialStage stage)? onStage,
+  }) async {
+    onStage?.call(DialStage.verifying);
     const path = '/home/dev/.config/herdr/herdr.sock';
     return (
       bundle: HerdrClientBundle(transport: _PingingTransport(), socketPath: path),

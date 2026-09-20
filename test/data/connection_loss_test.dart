@@ -288,8 +288,9 @@ class _ScriptedConnector extends HostConnector {
 
   @override
   Future<({HerdrClientBundle bundle, String socketPath})> connect(
-    HostProfile profile,
-  ) async {
+    HostProfile profile, {
+    void Function(DialStage stage)? onStage,
+  }) async {
     final index = _dials++;
     if (failAlways || (failAfterFirst && index > 0)) {
       throw HerdrTransportException(
@@ -297,6 +298,10 @@ class _ScriptedConnector extends HostConnector {
         'no route to host',
       );
     }
+
+    // The same last stage the real connector reports once the transport is up:
+    // what is left to prove is that the daemon answers.
+    onStage?.call(DialStage.verifying);
 
     const path = '/home/dev/.config/herdr/herdr.sock';
     final transport = _FakeTransport();

@@ -69,6 +69,12 @@
   "settingsDiagnostics": "诊断",
   "connectionStageConnecting": "正在连接…",
   "connectionStageVerifying": "正在检验…",
+  "connectionStepResolving": "正在解析地址…",
+  "connectionStepHandshake": "正在建立 SSH 连接…",
+  "connectionStepHostKey": "等待确认主机密钥…",
+  "connectionStepLocating": "正在查找 herdr…",
+  "connectionStepDaemon": "正在检查 herdr 服务…",
+  "boardLoadingAgents": "正在读取 agent 列表…",
   "connectionStageLastAttempt": "正在做最后的尝试…",
   "connectionRetryAttempt": "正在重试 {attempt}/{max}…",
   "@connectionRetryAttempt": {

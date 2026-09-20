@@ -12,6 +12,7 @@ import 'package:herdr_pocket/domain/agent/agent_info.dart';
 import 'package:herdr_pocket/domain/agent/agent_list.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/agent_visuals.dart';
+import 'package:herdr_pocket/ui/components/connection_status_line.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/pages/board/board_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,14 +79,36 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  group('the connection, as a line', () {
-    testWidgets('a dial in flight is narrated, stage by stage', (tester) async {
+  group('the first load', () {
+    test('every stage has words of its own', () async {
+      // THE MAPPING IS THE FEATURE. Five stages exist so that "it is working on
+      // it" can be told from "it is stuck" — and that only works if no two of
+      // them read the same. A pure test because the alternative — pumping the
+      // board once per stage — cannot work in one test: a `ProviderScope`
+      // keeps the overrides it was created with, so the second pump would
+      // still be showing the first stage.
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final words = [
+        for (final stage in DialStage.values) connectionStageStep(l10n, stage),
+      ];
+
+      expect(words.toSet(), hasLength(DialStage.values.length));
+      expect(words.every((w) => w.trim().isNotEmpty), isTrue);
+    });
+
+    testWidgets('is a centred wait, and it names the step it is on',
+        (tester) async {
       await pumpBoard(tester, const Connecting());
 
       expect(find.text('Connecting…'), findsWidgets);
-      // The ring is the "thinking" mark the rest of the app uses; the card this
-      // replaced had none, because a card is a statement and this is a wait.
-      expect(find.byType(WorkingRing), findsWidgets);
+      // THE SENTENCE THAT DID NOT EXIST. The screen said "connecting" from the
+      // first frame to the last, however long the handshake took; the step now
+      // comes from the transport, which is the only layer that knows which part
+      // of the wait this is.
+      expect(find.text('Connecting over SSH…'), findsOneWidget);
+      // A spinner rather than the ring the inline line uses: this block IS the
+      // screen, not a mark beside a few words on it.
+      expect(find.byType(CupertinoActivityIndicator), findsWidgets);
       expect(
         find.text('Connect'),
         findsNothing,
@@ -94,6 +117,29 @@ void main() {
       );
     });
 
+    testWidgets('keeps the rows it already has while it dials again',
+        (tester) async {
+      // THE LIE THIS AVOIDS: a reconnect that blanks the board says "your
+      // agents are gone", when what is gone is the connection. With rows on
+      // screen the connection stays a LINE above them.
+      await pumpBoard(
+        tester,
+        const Connecting(),
+        board: AgentList(agents: [_agent('w1:p1', 'idle')]),
+      );
+
+      expect(find.text('pi'), findsWidgets, reason: 'the cached row stays');
+      expect(
+        find.byType(CupertinoActivityIndicator),
+        findsNothing,
+        reason: 'with something to show, the wait is not the whole screen',
+      );
+    });
+  });
+
+  // The line, for every state where there IS something to show — or where the
+  // connection is the only thing on the screen.
+  group('the connection, as a line', () {
     testWidgets('reaching the machine reads differently from leaving the phone',
         (tester) async {
       await pumpBoard(tester, const Connecting(stage: ConnectStage.verifying));

@@ -23,6 +23,7 @@ import 'package:herdr_pocket/ui/components/ui_icon.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/board/ask_page.dart';
+import 'package:herdr_pocket/ui/pages/board/board_loading.dart';
 import 'package:herdr_pocket/ui/pages/hosts/hosts_page.dart';
 import 'package:herdr_pocket/ui/pages/shell/shell_entry.dart';
 import 'package:herdr_pocket/ui/pages/terminal/jump_sheet.dart';
@@ -76,87 +77,120 @@ class _BoardPageState extends ConsumerState<BoardPage> {
     final idle = status is Disconnected;
 
     final body = <Widget>[];
-    // The connection's own state, as a LINE rather than a card — for every
-    // state that is not "online". See [ConnectionStatusLine] for why: a card
-    // here competes with the agents, which are the only thing on this screen
-    // that is actually a card.
-    //
-    // "Not connected yet" is not a failure and does not get the failure
-    // wording; it gets the same line with a different button, because the
-    // difference between "nothing is wrong, ask me to dial" and "it tried and
-    // could not" is a difference in the ACTION, not in the layout.
-    if (dialling || failure != null || idle) {
-      body.add(
-        SliverToBoxAdapter(
-          child: ConnectionStatusLine(
-            status: status,
-            colors: colors,
-            loading: dialling,
-            detail: idle && host != null ? host.displayTarget : null,
-            action: _connectionAction(
-              l10n,
-              host,
-              dialling: dialling,
-              failure: failure,
-            ),
-          ),
-        ),
-      );
-    }
-    // The state of the world, before any row. One line that answers "is
-    // anything wrong?" without reading a card — which is what the board is
-    // for, and what a screen of plain rows does not do.
-    //
-    // SHOWN WHENEVER WE HAVE AN ANSWER, including the answer "zero of
-    // everything". It used to be hidden when every group was empty, on the
-    // grounds that the empty state below said it better; that made "no agents"
-    // and "no WORKING agents" the same picture, which is the one question this
-    // strip exists to settle.
-    if (!idle && failure == null && !dialling) {
-      body.add(
-        SliverToBoxAdapter(
-          child: _SummaryStrip(
-            key: boardSummaryKey,
-            counts: agents.groupCounts,
-            colors: colors,
-          ),
-        ),
-      );
-    }
-    if (agents.rows.isEmpty && failure == null && !idle && !dialling) {
+
+    // NOTHING TO SHOW YET: the first dial, or the first board read that follows
+    // it. This is the one state that gets the centred block instead of the
+    // line — see [BoardLoading] — and the reason it is conditional on there
+    // being no rows is that a RECONNECT must keep the board it already has.
+    // Blanking that board says "your agents are gone", which is the lie Phase
+    // 26 removed; with rows on screen the line stays exactly where it was.
+    final awaitingFirstBoard =
+        (dialling || (status is Online && board.isLoading)) &&
+            agents.rows.isEmpty;
+
+    if (awaitingFirstBoard) {
+      // TWO WAITS, SAID DIFFERENTLY. Before `Online`, the question is how the
+      // dial is going. After it, the transport is fine and the board itself is
+      // being read — which the old wording could not express at all, so the
+      // last thing the user saw before the first agent appeared was an
+      // unchanged "connecting…".
+      final reading = status is Online;
       body.add(
         SliverFillRemaining(
           hasScrollBody: false,
-          child: _EmptyState(
-            title: l10n.boardEmptyTitle,
-            body: l10n.boardEmptyBody,
+          child: BoardLoading(
+            title: reading
+                ? l10n.boardLoadingAgents
+                : connectionStatusLabel(l10n, status, loading: dialling),
+            step: reading ? null : boardLoadingStep(l10n, status),
+            target: reading ? null : host?.displayTarget,
             colors: colors,
           ),
         ),
       );
     } else {
-      // WHICH SECTIONS ARE OPEN is not computed here — see
-      // `boardSectionsProvider`, which remembers the user's own answer per
-      // machine. All this does is draw what that says.
-      for (final section in agents.sections) {
-        body.addAll(_sectionSlivers(section, colors, l10n));
+      // The connection's own state, as a LINE rather than a card — for every
+      // state that is not "online". See [ConnectionStatusLine] for why: a card
+      // here competes with the agents, which are the only thing on this screen
+      // that is actually a card.
+      //
+      // "Not connected yet" is not a failure and does not get the failure
+      // wording; it gets the same line with a different button, because the
+      // difference between "nothing is wrong, ask me to dial" and "it tried and
+      // could not" is a difference in the ACTION, not in the layout.
+      if (dialling || failure != null || idle) {
+        body.add(
+          SliverToBoxAdapter(
+            child: ConnectionStatusLine(
+              status: status,
+              colors: colors,
+              loading: dialling,
+              detail: idle && host != null ? host.displayTarget : null,
+              action: _connectionAction(
+                l10n,
+                host,
+                dialling: dialling,
+                failure: failure,
+              ),
+            ),
+          ),
+        );
       }
-      // THERE IS DELIBERATELY NOTHING HERE FOR "nothing needs you".
+      // The state of the world, before any row. One line that answers "is
+      // anything wrong?" without reading a card — which is what the board is
+      // for, and what a screen of plain rows does not do.
       //
-      // An earlier version filled this space with an all-clear block. The
-      // argument for it was that the board exists to answer one question, and
-      // when the answer is "no" it should say so rather than leaving the user
-      // to infer it from silence. The argument against it, which won: the
-      // summary strip above already answers the question with counts, and a
-      // second, larger statement of the same thing spends a third of the
-      // screen restating what the user can already see. Empty space is not a
-      // missing answer — it is the answer, written in the only way that does
-      // not repeat itself.
-      //
-      // The genuinely-empty case (no agents at all) still gets its own state,
-      // because there the absence is ambiguous: no rows could mean "nothing is
-      // running" or "the daemon is not talking to me", and only one of those is
-      // fine to walk away from.
+      // SHOWN WHENEVER WE HAVE AN ANSWER, including the answer "zero of
+      // everything". It used to be hidden when every group was empty, on the
+      // grounds that the empty state below said it better; that made "no agents"
+      // and "no WORKING agents" the same picture, which is the one question this
+      // strip exists to settle.
+      if (!idle && failure == null && !dialling) {
+        body.add(
+          SliverToBoxAdapter(
+            child: _SummaryStrip(
+              key: boardSummaryKey,
+              counts: agents.groupCounts,
+              colors: colors,
+            ),
+          ),
+        );
+      }
+      if (agents.rows.isEmpty && failure == null && !idle && !dialling) {
+        body.add(
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(
+              title: l10n.boardEmptyTitle,
+              body: l10n.boardEmptyBody,
+              colors: colors,
+            ),
+          ),
+        );
+      } else {
+        // WHICH SECTIONS ARE OPEN is no longer computed here — see
+        // `boardSectionsProvider`, which remembers the user's own answer per
+        // machine. All this does is draw what that says.
+        for (final section in agents.sections) {
+          body.addAll(_sectionSlivers(section, colors, l10n));
+        }
+        // THERE IS DELIBERATELY NOTHING HERE FOR "nothing needs you".
+        //
+        // An earlier version filled this space with an all-clear block. The
+        // argument for it was that the board exists to answer one question, and
+        // when the answer is "no" it should say so rather than leaving the user
+        // to infer it from silence. The argument against it, which won: the
+        // summary strip above already answers the question with counts, and a
+        // second, larger statement of the same thing spends a third of the
+        // screen restating what the user can already see. Empty space is not a
+        // missing answer — it is the answer, written in the only way that does
+        // not repeat itself.
+        //
+        // The genuinely-empty case (no agents at all) still gets its own state,
+        // because there the absence is ambiguous: no rows could mean "nothing is
+        // running" or "the daemon is not talking to me", and only one of those is
+        // fine to walk away from.
+      }
     }
 
     // NO GLASS STRIP BEHIND THE BAR, and that was a decision rather than an

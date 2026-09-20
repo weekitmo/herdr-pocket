@@ -177,10 +177,15 @@ class HostConnector {
   final Duration connectTimeout;
 
   Future<({HerdrClientBundle bundle, String socketPath})> connect(
-    HostProfile profile,
-  ) async {
+    HostProfile profile, {
+    void Function(DialStage stage)? onStage,
+  }) async {
     if (profile.isLocal) {
       final path = profile.socketPath ?? _defaultLocalSocketPath();
+      // Nothing to dial — a Unix socket opens with the request — so the next
+      // thing that actually happens is proving the daemon answers. Said here
+      // because NOBODY ELSE WILL: the transport has no dial to report from.
+      onStage?.call(DialStage.verifying);
       return (
         bundle: HerdrClientBundle(
           transport: UnixSocketTransport(socketPath: path),
@@ -211,10 +216,15 @@ class HostConnector {
       socketPath: profile.socketPath ?? '',
       verifyHostKey: verifyHostKey,
       connectTimeout: connectTimeout,
+      // NOT on the throwaway connection below. The first transport exists to
+      // answer one question about the machine's home directory and is then
+      // closed; narrating its handshake would show the user the same
+      // "connecting over SSH" twice for one tap.
     );
 
     var path = profile.socketPath;
     if (path == null || path.isEmpty) {
+      onStage?.call(DialStage.locating);
       final resolver = SocketPathResolver(ssh);
       path = await resolver.resolve(profile);
       await ssh.close();
@@ -226,6 +236,7 @@ class HostConnector {
         socketPath: path,
         verifyHostKey: verifyHostKey,
         connectTimeout: connectTimeout,
+        onStage: onStage,
       );
       return (
         bundle: HerdrClientBundle(transport: resolved, socketPath: path),

@@ -198,6 +198,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get connectionStageVerifying => '正在检验…';
 
   @override
+  String get connectionStepResolving => '正在解析地址…';
+
+  @override
+  String get connectionStepHandshake => '正在建立 SSH 连接…';
+
+  @override
+  String get connectionStepHostKey => '等待确认主机密钥…';
+
+  @override
+  String get connectionStepLocating => '正在查找 herdr…';
+
+  @override
+  String get connectionStepDaemon => '正在检查 herdr 服务…';
+
+  @override
+  String get boardLoadingAgents => '正在读取 agent 列表…';
+
+  @override
   String get connectionStageLastAttempt => '正在做最后的尝试…';
 
   @override

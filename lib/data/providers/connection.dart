@@ -28,17 +28,19 @@ class Disconnected extends ConnectionStatus {
 
 /// How far one dial has got.
 ///
-/// Two stages, because the two failures they produce are different sentences:
-/// "your phone cannot reach that machine" and "the machine answered but herdr
-/// did not". Without the split, a dial that has already succeeded at the SSH
-/// layer looks identical to one that never left the phone.
-enum ConnectStage {
-  /// Opening the transport — DNS, TCP, the SSH handshake, host-key approval.
-  dialling,
-
-  /// The transport is up; we are proving the daemon answers on it.
-  verifying,
-}
+/// WAS TWO STAGES, and the two are still the ones that matter — the failures
+/// they produce are different sentences:
+///
+///  * "your phone cannot reach that machine" — nothing ever opened;
+///  * "the machine answered but herdr did not" — the transport is up.
+///
+/// What changed is that the stages in between are now REAL rather than implied:
+/// the enum lives in the transport layer ([DialStage]) because only the dialler
+/// knows when the socket is up, when the host key is being asked about, and
+/// when the daemon is being probed. This alias keeps the name the connection's
+/// own API has always used, so nothing above it had to be renamed to gain the
+/// finer narration.
+typedef ConnectStage = DialStage;
 
 /// A dial in flight, and how many have already failed.
 ///
@@ -487,7 +489,18 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       HerdrTransport? opened;
       try {
         final connector = ref.read(hostConnectorProvider);
-        final connected = await connector.connect(host);
+        // Every stage the transport reports while this dial runs, published as
+        // it happens. The guard inside `_publish` is what keeps a superseded
+        // run's late report off the screen it no longer owns.
+        void report(DialStage stage) => _publish(
+              generation,
+              Connecting(
+                attempt: attempt,
+                stage: stage,
+                afterLoss: afterLoss,
+              ),
+            );
+        final connected = await connector.connect(host, onStage: report);
         opened = connected.bundle.transport;
 
         // THE DIAL MAY HAVE TAKEN A MINUTE, and the user may have spent it
@@ -500,18 +513,12 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
           return const Disconnected();
         }
 
-        // The transport is up. The daemon has still said nothing, and saying
-        // so is the difference between "connecting" and "verifying" for
-        // somebody watching a screen that has not changed in ten seconds.
-        _publish(
-          generation,
-          Connecting(
-            attempt: attempt,
-            stage: ConnectStage.verifying,
-            afterLoss: afterLoss,
-          ),
-        );
-
+        // THE STAGE FROM HERE ON IS THE TRANSPORT'S TO REPORT, and it does: a
+        // lazily-dialled SSH session reports `resolving`/`dialling`/`hostKey`
+        // while this `ping` is what opens it, then `verifying` the moment
+        // authentication succeeds. Publishing "verifying" here instead was
+        // what made the old narration jump backwards — the screen said the
+        // daemon was being probed while the handshake had not started.
         final client = HerdrClient(connected.bundle.transport);
         final hello = await client.ping();
         if (generation != _generation || !_stillWanted(host)) {

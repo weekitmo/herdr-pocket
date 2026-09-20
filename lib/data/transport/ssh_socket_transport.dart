@@ -36,6 +36,7 @@ class SshSocketTransport
     required this.credentials,
     required this.socketPath,
     required this.verifyHostKey,
+    this.onStage,
     this.connectTimeout = const Duration(seconds: 15),
     this.replyTimeout = const Duration(seconds: 15),
   });
@@ -47,6 +48,15 @@ class SshSocketTransport
   final String socketPath;
 
   final HostKeyVerifier verifyHostKey;
+
+  /// Where the dial's own progress goes, if anyone is watching.
+  ///
+  /// Handed to the dialler rather than guessed at by the caller: this transport
+  /// dials LAZILY — the first request is what opens the session — so a caller
+  /// that published "verifying" before its first request would be narrating
+  /// the handshake as if it had already finished.
+  final void Function(DialStage stage)? onStage;
+
   final Duration connectTimeout;
   final Duration replyTimeout;
 
@@ -191,7 +201,7 @@ class SshSocketTransport
         'the SSH connection to ${credentials.host} is gone',
       );
 
-  Future<SSHClient> _connect() => _dialer.dial();
+  Future<SSHClient> _connect() => _dialer.dial(onStage: onStage);
 
   /// The dial itself lives in `ssh_dial.dart`, because the shell transport
   /// opens the same connection for a completely different purpose. Each

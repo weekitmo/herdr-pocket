@@ -53,8 +53,12 @@ String connectionStatusLabel(
       );
     }
     return switch (connecting.stage) {
+      // The badge stays COARSE while the loading screen goes fine-grained:
+      // next to a status dot there is no room for "connecting over SSH", and
+      // the two shapes have coexisted since before the extra stages arrived.
       ConnectStage.dialling => l10n.connectionStageConnecting,
       ConnectStage.verifying => l10n.connectionStageVerifying,
+      _ => l10n.connectionStageConnecting,
     };
   }
 
@@ -65,6 +69,27 @@ String connectionStatusLabel(
     _ => l10n.connectionStateOffline,
   };
 }
+
+/// The dial's current STEP, as a sentence for the loading screen.
+///
+/// SEPARATE FROM [connectionStatusLabel] ON PURPOSE, and the two are not
+/// duplicates: that one is a BADGE — a few words that have to sit beside a
+/// status dot — while this is the line under a centred spinner, where there is
+/// room to say WHICH PART of the wait this is. "Connecting over SSH" and
+/// "checking the daemon" are the same state to the badge and two very different
+/// waits to a person watching them: one is the phone's network, the other is the
+/// machine's.
+///
+/// Both read the same enum, so the coarse wording and the fine one cannot
+/// disagree about what is happening.
+String connectionStageStep(AppLocalizations l10n, ConnectStage stage) =>
+    switch (stage) {
+      ConnectStage.resolving => l10n.connectionStepResolving,
+      ConnectStage.dialling => l10n.connectionStepHandshake,
+      ConnectStage.hostKey => l10n.connectionStepHostKey,
+      ConnectStage.locating => l10n.connectionStepLocating,
+      ConnectStage.verifying => l10n.connectionStepDaemon,
+    };
 
 /// The one-line reason a failure is worth reading, or null.
 ///

@@ -53,6 +53,40 @@ enum TransportFailure {
   unknown,
 }
 
+/// How far one dial has got, as reported BY THE LAYER DOING THE WORK.
+///
+/// WHY A DIAL NEEDS MORE THAN TWO WORDS. The connection's own state machine
+/// narrated progress with a single phrase — "connecting" — until the transport
+/// was up, and then "verifying". That is the right granularity for a badge and
+/// the wrong one for a screen the user is staring at, because the interesting
+/// part is the one that takes ten seconds on a bad link: the SSH handshake.
+/// A phone on an overlay network spent that time reading "connecting" and could
+/// not tell "it is working on it" from "it is stuck", which is exactly the
+/// complaint this enum exists to answer.
+///
+/// REPORTED, NEVER INFERRED. Only the dialler knows when the socket is up, when
+/// the far side is being asked to prove its key, and when a human has to
+/// answer — and a stage guessed at from a timer would eventually describe
+/// something that is not happening.
+enum DialStage {
+  /// Resolving the address and opening the TCP connection.
+  resolving,
+
+  /// The SSH handshake and authentication. The long one.
+  dialling,
+
+  /// Blocked on a person: the host-key sheet is up and the handshake is waiting
+  /// for the answer.
+  hostKey,
+
+  /// Asking the machine where its home directory is, so the daemon's socket
+  /// path can be resolved.
+  locating,
+
+  /// The transport is up; proving that the daemon answers on it.
+  verifying,
+}
+
 class HerdrTransportException implements Exception {
   HerdrTransportException(
     this.failure,

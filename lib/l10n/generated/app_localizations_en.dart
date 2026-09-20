@@ -208,6 +208,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectionStageVerifying => 'Verifying…';
 
   @override
+  String get connectionStepResolving => 'Resolving the address…';
+
+  @override
+  String get connectionStepHandshake => 'Connecting over SSH…';
+
+  @override
+  String get connectionStepHostKey => 'Waiting for the host key decision…';
+
+  @override
+  String get connectionStepLocating => 'Finding herdr on the machine…';
+
+  @override
+  String get connectionStepDaemon => 'Checking the herdr daemon…';
+
+  @override
+  String get boardLoadingAgents => 'Reading the agent list…';
+
+  @override
   String get connectionStageLastAttempt => 'One last attempt…';
 
   @override

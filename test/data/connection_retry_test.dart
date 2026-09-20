@@ -211,6 +211,23 @@ void main() {
     ]);
     expect(run.seen.whereType<Online>().single.hello.version, '0.9.0');
   });
+
+  test('a local machine narrates the one step it actually has', () async {
+    // Nothing is dialled for a Unix socket — it opens with the request — so the
+    // only honest stage is the one that says what is left: proving the daemon
+    // answers. Reported by the CONNECTOR rather than the transport, because the
+    // transport has no dial to report from, and a screen that stayed on
+    // "resolving the address" for a local socket would be inventing a wait.
+    final stages = <DialStage>[];
+    final connector = HostConnector(
+      credentialsFor: (_) async => null,
+      verifyHostKey: (_) async => HostKeyVerdict.trust,
+    );
+
+    await connector.connect(HostStore.localProfile, onStage: stages.add);
+
+    expect(stages, [DialStage.verifying]);
+  });
 }
 
 /// One test's container, its scripted connector and everything it published.
@@ -339,13 +356,27 @@ class ScriptedConnector extends HostConnector {
 
   @override
   Future<({HerdrClientBundle bundle, String socketPath})> connect(
-    HostProfile profile,
-  ) async {
+    HostProfile profile, {
+    void Function(DialStage stage)? onStage,
+  }) async {
     final step = dials < script.length ? script[dials] : script.last;
     dials++;
     final waiting = gate;
     if (waiting != null) await waiting.future;
     if (step != null) throw step;
+
+    // ACROSS A TICK, not in the same synchronous run as the call. The real
+    // connector awaits the keystore before it can dial at all (and then the
+    // SSH handshake), so its stage reports land after the caller has yielded.
+    // A scripted dial that reported synchronously would collapse the whole
+    // narration into one state write, and a listener attached during the
+    // provider's own initialization would only ever see the last one — which is
+    // a property of the fake, not of the thing being tested.
+    //
+    // What this reports is the real connector's last stage: the transport is up
+    // and what is left is proving that the daemon answers.
+    await Future<void>.delayed(Duration.zero);
+    onStage?.call(DialStage.verifying);
 
     const path = '/home/dev/.config/herdr/herdr.sock';
     return (
