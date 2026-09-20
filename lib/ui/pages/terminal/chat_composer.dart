@@ -437,7 +437,8 @@ class ChatComposer extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
     Key? buttonKey,
-  }) {    return _button(
+  }) {
+    return _button(
       buttonKey: buttonKey,
       label: label,
       onTap: onTap,

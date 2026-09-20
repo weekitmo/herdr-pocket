@@ -456,7 +456,14 @@ class _LatencyReadout extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final latency = ref.watch(hostLatencyProvider)[hostId];
+    // SELECTED, not the whole map: measuring the machine at the top of the list
+    // must not rebuild every other row. One reading per machine is a small map,
+    // so this is cheap either way — but a row that rebuilds on somebody else's
+    // news is the kind of thing that quietly becomes a problem when the list
+    // grows.
+    final latency = ref.watch(
+      hostLatencyProvider.select((readings) => readings[hostId]),
+    );
     if (latency == null) return const SizedBox.shrink();
 
     if (latency.measuring) {

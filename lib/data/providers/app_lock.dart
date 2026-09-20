@@ -165,7 +165,8 @@ class AppLockNotifier extends AsyncNotifier<AppLockState> {
   }
 
   /// Stores [pin] and turns the lock on.
-  Future<void> setPin(String pin) async {    final salt = newSalt();
+  Future<void> setPin(String pin) async {
+    final salt = newSalt();
     final record = AppLockRecord(
       salt: salt,
       pinHash: hashPin(pin, salt),

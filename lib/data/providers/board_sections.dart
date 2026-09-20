@@ -59,13 +59,20 @@ class BoardSectionsNotifier extends Notifier<Set<AgentGroup>> {
 
   /// Opens a closed section, or closes an open one.
   Future<void> toggle(AgentGroup group) async {
+    // THE HOST IS READ ONCE, BEFORE THE SET IS BUILT, so the state change and
+    // the write that remembers it are about the same machine. Resolving it
+    // again at the bottom would be a second read of a value that can move
+    // underneath — the user can switch machines between the tap and the write —
+    // and the failure mode is a preference stored under the wrong machine's
+    // name, which is invisible until the user goes back to the first one.
+    final hostId = _hostId;
     final next = {...state};
     // `remove` returns false when it was not there, which is the "open it" case
     // — one branch instead of a `contains` test followed by a branch, so the
     // set is read once.
     if (!next.remove(group)) next.add(group);
     state = next;
-    await _write(_hostId, next);
+    await _write(hostId, next);
   }
 
   /// Whether [group] should be drawn closed.
