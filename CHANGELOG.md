@@ -8,6 +8,7 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.4.0](#v040) | 2026-09-20 | 应用锁（PIN + 指纹）；机器延迟；看板默认全展开并记住折叠；慢链路上的三步引导 |
 | [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
 | [0.3.3](#v033) | 2026-09-18 | 从 shell 页返回后，界面不再假死 |
 | [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
@@ -16,6 +17,95 @@
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v040"></a>
+## [0.4.0] — 2026-09-20
+
+### 中文
+
+**新功能**
+
+- **应用锁：4 位密码 + 手机自己的指纹。** 设置 → 安全里打开（由你决定，默认关）。
+  冷启动一定问，**后台 5 分钟内回来不问** —— 去别的应用复制一行命令再回来，不该被拦一次。
+  指纹是**另一条路**而不是替代品：没设密码时那个开关是灰的并写明原因，关锁和改密码都要先输
+  当前密码（否则捡到一台已解锁手机的人可以直接把它关掉）。
+
+  > 它是一道**门**，不是加密：密码守的是「谁在用这个应用」，你的密钥仍然由系统密钥库保护。
+  > 这样写下来是因为锁屏很容易让人以为它在保护数据，而 belief 会改变人的决定。
+
+- **每台机器的延迟。** 机器卡片上直接显示 `119 ms`，长按 →「测试延迟」立刻重测。
+  量的是**一次真实往返**（走的是终端用的同一条 SSH 通道，不是 ICMP），因为那才是你能感觉到
+  的数字。没测过就什么都不显示 —— 空白是「不知道」，`0 ms` 是谎话。
+
+- **看板默认展开所有分组**，你折叠过的分组**按机器记住**（换机器是另一块看板）。
+  以前只展开「进行中」，想看两个分组只能自己点开、而且离开设置页再回来就忘了。
+
+- **慢 SSH 链路下的三处体验**：
+
+  - 聊天窗的 `/` 按钮**先画出来、暂时是灰的**，等窗格信息一到就亮（以前它根本不在，
+    几秒后才「凭空出现」）。而且优先用**看板已经拿到的那一行**去点亮它，而不是先问机器。
+  - 终端右上角 `...` 的菜单**立刻展开**，你要看的文件/Git 面板自己转圈加载 ——
+    以前点它要先等三个往返。
+  - 连接过程**一步一步说在做什么**：`正在建立 SSH 连接…` → `正在查找 herdr…` →
+    `正在检查 herdr 服务…` → `正在读取 agent 列表…`，并且居中显示。
+    文字来自真正干活的层，不是猜的。
+
+**修复**
+
+- **关掉聊天窗会把刚收起的键盘又弹出来。** 你按「收起键盘」再关聊天窗，键盘会自己回来 ——
+  现在是：键盘在屏幕上就交接（不闪），不在就不开。
+
+- **锁屏漏了一棵树。** 遮罩只挡住画面，没挡住**无障碍语义树**：锁着的时候看板每一行仍然
+  能被屏幕阅读器读到、被节点操作点到。现在锁屏时那棵树里只剩锁自己。
+  同一轮里，PIN 键盘的「删除」键也终于有了名字（以前是个无名的图标按钮）。
+
+### English
+
+**New**
+
+- **App lock: a 4-digit PIN, plus the phone's own fingerprint.** Off by default; turn it on in
+  Settings → Security. It asks on every cold start, and **not** when you come back from
+  another app within five minutes — switching away to copy a command should not cost an
+  unlock. The fingerprint is an *alternative* entry, never the only one: the switch is greyed
+  out until a PIN exists (with the reason written on the row), and turning the lock off or
+  changing the PIN both require the current one.
+
+  > It is a **door**, not encryption: the PIN decides who is using the app, and the keystore
+  > still protects the keys. Written down because a lock screen invites exactly the wrong
+  > assumption, and that changes decisions.
+
+- **Per-machine latency.** The card shows `119 ms`, and a press-and-hold offers *Test latency*
+  to measure again. It is one real round trip over the same SSH channel the terminal uses —
+  not ICMP — because that is the number you can feel. Nothing has been measured, nothing is
+  shown: a blank slot is "not known", and `0 ms` would be a claim.
+
+- **The board opens every section**, and remembers what you closed **per machine** (two
+  machines, two boards). It used to open only *working*, and the choice did not even survive
+  a trip to Settings.
+
+- **Three things that were bad on a slow SSH link:**
+
+  - The composer's `/` button is drawn **dimmed and inert** while the pane is still being
+    read, and lights up when the answer lands. It used to be absent and then appear out of
+    nowhere. It is also seeded from what the board already knows, instead of asking the
+    machine first.
+  - The terminal's `...` menu opens **immediately**; the file/Git screen behind it loads on
+    its own. It used to wait for three round trips before drawing anything.
+  - The connection **narrates its steps**: connecting over SSH → finding herdr → checking the
+    daemon → reading the agent list, centred on the screen. The words come from the layer
+    doing the work, not from a guess.
+
+**Fixed**
+
+- **Closing the chat window brought back a keyboard you had just put away.** With the
+  keyboard on screen the handover still keeps it up (no blink); with it down, nothing opens one.
+
+- **The lock leaked a tree.** An overlay hides pixels, not the **accessibility tree**: with the
+  lock up, every row of the board was still readable and reachable by anything that works on
+  nodes rather than taps. Now the tree contains only the lock. In the same pass, the PIN
+  keypad's delete key finally has a name.
 
 ---
 
