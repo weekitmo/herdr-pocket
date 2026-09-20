@@ -1298,10 +1298,28 @@ abstract class AppLocalizations {
   /// **'Current'**
   String get hostCurrent;
 
+  /// No description provided for @hostLatencyTest.
+  ///
+  /// In en, this message translates to:
+  /// **'Test latency'**
+  String get hostLatencyTest;
+
+  /// No description provided for @hostLatencyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'No answer'**
+  String get hostLatencyFailed;
+
+  /// No description provided for @hostLatencyMs.
+  ///
+  /// In en, this message translates to:
+  /// **'{millis} ms'**
+  String hostLatencyMs(int millis);
+
   /// No description provided for @hostsFooter.
   ///
   /// In en, this message translates to:
-  /// **'Tap to switch to a machine. Press and hold to edit or delete.'**
+  /// **'Tap to switch to a machine. Press and hold to test latency, edit or delete.'**
   String get hostsFooter;
 
   /// No description provided for @settingsKeys.

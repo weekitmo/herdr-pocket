@@ -288,7 +288,17 @@
   "settingsDaemon": "Daemon",
   "settingsAppVersion": "App version",
   "hostCurrent": "Current",
-  "hostsFooter": "Tap to switch to a machine. Press and hold to edit or delete.",
+  "hostLatencyTest": "Test latency",
+  "hostLatencyFailed": "No answer",
+  "hostLatencyMs": "{millis} ms",
+  "@hostLatencyMs": {
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "hostsFooter": "Tap to switch to a machine. Press and hold to test latency, edit or delete.",
   "settingsKeys": "Key bar",
   "settingsComposer": "Terminal composer",
   "settingsComposerNote": "Show the composer at the bottom of the terminal.",

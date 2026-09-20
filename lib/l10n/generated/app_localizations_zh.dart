@@ -637,7 +637,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hostCurrent => '当前';
 
   @override
-  String get hostsFooter => '点按切换到这台机器；长按可编辑或删除。';
+  String get hostLatencyTest => '测试延迟';
+
+  @override
+  String get hostLatencyFailed => '没有响应';
+
+  @override
+  String hostLatencyMs(int millis) {
+    return '$millis ms';
+  }
+
+  @override
+  String get hostsFooter => '点按切换到这台机器；长按可测试延迟、编辑或删除。';
 
   @override
   String get settingsKeys => '快捷按键';

@@ -9,6 +9,7 @@ import 'package:herdr_pocket/data/host_profile.dart';
 import 'package:herdr_pocket/data/notifications/agent_notifier.dart';
 import 'package:herdr_pocket/data/notifications/attention_tracker.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
+import 'package:herdr_pocket/data/providers/latency.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/domain/agent/agent_list.dart';
 
@@ -349,6 +350,18 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
       // own end.
       _slowRounds = 0;
       _watchForLoss(status.client, host, generation);
+      // AND MEASURE IT, without being asked. One warm round trip (the wait that
+      // would otherwise be the connection's own ping is already paid for) gives
+      // the machines list a number to show instead of an empty slot that only
+      // fills if the user thinks to long-press. Fire and forget: a stopwatch
+      // must never turn a successful dial into a failure report.
+      if (ref.mounted) {
+        unawaited(
+          ref
+              .read(hostLatencyProvider.notifier)
+              .measure(host, live: status.client),
+        );
+      }
     }
     return status;
   }

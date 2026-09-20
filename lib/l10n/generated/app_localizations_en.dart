@@ -656,8 +656,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hostCurrent => 'Current';
 
   @override
+  String get hostLatencyTest => 'Test latency';
+
+  @override
+  String get hostLatencyFailed => 'No answer';
+
+  @override
+  String hostLatencyMs(int millis) {
+    return '$millis ms';
+  }
+
+  @override
   String get hostsFooter =>
-      'Tap to switch to a machine. Press and hold to edit or delete.';
+      'Tap to switch to a machine. Press and hold to test latency, edit or delete.';
 
   @override
   String get settingsKeys => 'Key bar';

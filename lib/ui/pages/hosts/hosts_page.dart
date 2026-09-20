@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
+import 'package:herdr_pocket/data/providers/latency.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/agent_visuals.dart';
@@ -189,6 +190,13 @@ class HostsPage extends ConsumerWidget {
           ),
         ),
         actions: [
+          // FIRST, because it is the harmless one and the one a user asked for
+          // most often: a reading about the link, with nothing changed on the
+          // machine or in the list.
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheetContext).pop(_HostAction.latency),
+            child: actionSheetLabel(l10n.hostLatencyTest),
+          ),
           if (!host.isLocal)
             CupertinoActionSheetAction(
               onPressed: () => Navigator.of(sheetContext).pop(_HostAction.edit),
@@ -212,6 +220,12 @@ class HostsPage extends ConsumerWidget {
 
     if (!context.mounted || action == null) return;
     switch (action) {
+      case _HostAction.latency:
+        // NOTHING TO WAIT ON HERE. The row itself carries the spinner and then
+        // the number, so this returns at once and the answer appears where the
+        // user is already looking — a dialog with a spinner in it would be a
+        // second place to look for the same fact.
+        unawaited(ref.read(hostLatencyProvider.notifier).measure(host));
       case _HostAction.edit:
         await _openEditor(context, ref, existing: host);
       case _HostAction.delete:
@@ -249,7 +263,7 @@ class HostsPage extends ConsumerWidget {
   }
 }
 
-enum _HostAction { edit, delete }
+enum _HostAction { latency, edit, delete }
 
 /// One saved machine, and how it is doing.
 ///
@@ -377,17 +391,22 @@ class _HostRow extends ConsumerWidget {
             ),
             // Only the machine in use gets a badge. A "not current" badge on
             // every other row would be four fifths noise.
-            if (isCurrent) ...[
-              const SizedBox(width: Space.sm),
-              Text(
-                l10n.hostCurrent,
-                style: TextStyle(
-                  color: colors.accent,
-                  fontSize: TextSize.note,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+            const SizedBox(width: Space.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (isCurrent)
+                  Text(
+                    l10n.hostCurrent,
+                    style: TextStyle(
+                      color: colors.accent,
+                      fontSize: TextSize.note,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                _LatencyReadout(hostId: host.id, colors: colors),
+              ],
+            ),
           ],
         ),
       ),
@@ -416,6 +435,57 @@ class _HostRow extends ConsumerWidget {
       TransportFailure.connectFailed => l10n.connectionFailed,
       _ => l10n.connectionFailed,
     };
+  }
+}
+
+/// One machine's round-trip time, as a right-aligned readout.
+///
+/// EMPTY WHEN THERE IS NOTHING TO SAY — never "0 ms", and never a placeholder.
+/// The number only appears once something has actually answered, because a
+/// blank slot is honest about not knowing and a zero is a claim.
+///
+/// MONO WITH TABULAR FIGURES, like every other number in this app: `42 ms` and
+/// `9 ms` are compared by eye in a list, and proportional digits make them
+/// wobble.
+class _LatencyReadout extends ConsumerWidget {
+  const _LatencyReadout({required this.hostId, required this.colors});
+
+  final String hostId;
+  final HerdrColors colors;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final latency = ref.watch(hostLatencyProvider)[hostId];
+    if (latency == null) return const SizedBox.shrink();
+
+    if (latency.measuring) {
+      // A dot rather than a spinner: this sits under a word in a row, and a
+      // rotating arc in that slot reads as an icon that changed meaning.
+      return Padding(
+        padding: const EdgeInsets.only(top: 5),
+        child: Text(
+          '…',
+          style: TextStyle(color: colors.textFaint, fontSize: TextSize.micro),
+        ),
+      );
+    }
+
+    final millis = latency.millis;
+    if (millis == null && !latency.failed) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        latency.failed ? l10n.hostLatencyFailed : l10n.hostLatencyMs(millis!),
+        style: TextStyle(
+          color: latency.failed ? colors.statusTextDied : colors.textFaint,
+          fontSize: TextSize.micro,
+          fontFamily: HerdrFonts.mono,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
   }
 }
 

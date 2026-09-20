@@ -287,7 +287,17 @@
   "settingsDaemon": "守护进程",
   "settingsAppVersion": "应用版本",
   "hostCurrent": "当前",
-  "hostsFooter": "点按切换到这台机器；长按可编辑或删除。",
+  "hostLatencyTest": "测试延迟",
+  "hostLatencyFailed": "没有响应",
+  "hostLatencyMs": "{millis} ms",
+  "@hostLatencyMs": {
+    "placeholders": {
+      "millis": {
+        "type": "int"
+      }
+    }
+  },
+  "hostsFooter": "点按切换到这台机器；长按可测试延迟、编辑或删除。",
   "settingsKeys": "快捷按键",
   "settingsComposer": "终端聊天窗",
   "settingsComposerNote": "在终端底部显示聊天窗。",
