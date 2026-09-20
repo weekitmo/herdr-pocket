@@ -238,6 +238,70 @@ void main() {
     );
   });
 
+  testWidgets('closing the chat window leaves a dismissed keyboard dismissed',
+      (tester) async {
+    // REPORTED FROM THE PHONE: 「当手动关闭键盘，且然后关闭聊天窗时，键盘会被主动
+    // 开启」 — the user put the keyboard away, closed the chat window, and the
+    // keyboard came back up under a finger that had just dismissed it.
+    //
+    // The cause is structural: closing the chat window swaps the chat field for
+    // the terminal's own invisible one, and that field autofocuses. So the swap
+    // has to look at what the user asked for, which is exactly what
+    // `_keyboardVisible` answers.
+    await pumpTerminal(tester);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Composer'));
+    await tester.pumpAndSettle();
+
+    // The visible way a user puts the keyboard away.
+    await tester.tap(find.bySemanticsLabel('Hide keyboard'));
+    tester.view.viewInsets = FakeViewPadding.zero;
+    await tester.pumpAndSettle();
+    expect(
+      tester.testTextInput.hasAnyClients,
+      isFalse,
+      reason: 'the keyboard is gone, and so is every client that could raise it',
+    );
+
+    // And now the chat window closes.
+    await tester.tap(find.bySemanticsLabel('Composer'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.testTextInput.hasAnyClients,
+      isFalse,
+      reason: 'a window closing is not a request for a keyboard — the user '
+          'asked for this one to stay down',
+    );
+  });
+
+  testWidgets('closing the chat window hands the keyboard over when it is up',
+      (tester) async {
+    // The other half of the same rule, and the half that makes the swap
+    // invisible: with the keyboard already up, it must STAY up — otherwise
+    // every close would blink the IME off and on.
+    await pumpTerminal(tester);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Composer'));
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+
+    await tester.tap(find.bySemanticsLabel('Composer'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.testTextInput.hasAnyClients,
+      isTrue,
+      reason: 'the terminal field takes over the keyboard that was already up',
+    );
+  });
+
   testWidgets('opening the keyboard does not rescale the fill', (tester) async {
     // The fill is measured against the KEYBOARD-CLOSED height. Measured against
     // the shrunken box it would shrink the text on every keyboard — and request

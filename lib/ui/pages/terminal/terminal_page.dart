@@ -720,6 +720,21 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   }
 
   void _closeComposer() {
+    // THE KEYBOARD HANDOVER, and it is a decision the user has already made.
+    //
+    // Closing the chat window swaps the chat field for the terminal's own
+    // invisible one, and THAT field autofocuses — so a rebuild brought the
+    // keyboard back up for a user who had just put it away, which is the
+    // opposite of what they said. Found on the phone: 「当手动关闭键盘，且然后
+    // 关闭聊天窗时，键盘会被主动开启」.
+    //
+    // So the handover happens only when the keyboard is on screen at this
+    // moment: with it up, closing the window passes it from one field to the
+    // other without a blink (which is what makes the swap invisible); with it
+    // down, nothing opens one. Anything that WANTS the keyboard asks for it
+    // explicitly — a tap on the grid, or the key bar's own button — and that
+    // path is unaffected.
+    _directKeyboard = _keyboardVisible;
     _stashDraft();
     _menu?.close();
     _composerFocus.unfocus();
@@ -1655,6 +1670,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                     // Reuses the key bar's own Enter, so an armed Ctrl applies to
                     // the keyboard's return exactly as it does to the bar's.
                     onEnter: () => _onKeyTap(SoftKey.enter),
+                    // See [_directKeyboard]: the field raises the keyboard on
+                    // its own, but only when the user has not just asked for it
+                    // to stay down.
+                    autofocus: _directKeyboard,
                   ),
               ],
             ),
@@ -1752,6 +1771,14 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     _onKeyTap(key);
     if (_fanOpen && !keyPanelStaysOpen(key)) _closeFan();
   }
+
+  /// Whether the terminal's OWN (invisible) field should raise the keyboard
+  /// the next time it is built.
+  ///
+  /// STARTS TRUE: opening a terminal gives you a keyboard, which is what a
+  /// terminal is for. From then on it follows what the user asked for — see
+  /// [_closeComposer], which is the one place that rebuilds this field.
+  bool _directKeyboard = true;
 
   /// Raises the keyboard, or puts it away if it is already up.
   ///
