@@ -41,6 +41,10 @@ abstract final class UiId {
   static const openMachines = 'open-machines';
   static const openJump = 'open-jump';
 
+  /// The terminal's overflow (`...`), whose menu is asked for by the device
+  /// checks and by the tests that pin "the rows appear before the tree does".
+  static const terminalMore = 'terminal-more';
+
   /// The machines screen.
   static const addMachine = 'add-machine';
 

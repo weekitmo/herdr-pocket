@@ -37,6 +37,7 @@ import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/components/ui_icon.dart';
 import 'package:herdr_pocket/ui/design/glass.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
+import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/files/file_tree_page.dart';
 import 'package:herdr_pocket/ui/pages/git/git_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/chat_composer.dart';
@@ -1544,6 +1545,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
           // see [showHerdrMenu] for why a GlobalKey in a navbar is a trap.
           Builder(
             builder: (buttonContext) => HerdrBarButton(
+              identifier: UiId.terminalMore,
               label: l10n.terminalMore,
               onPressed: () => _openMore(buttonContext),
               child: _toolbarGlyph(
@@ -1846,29 +1848,31 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   /// asked at a different moment. Four icons plus a status dot is where a
   /// phone navbar stops being readable at a glance.
   ///
-  /// The rows are built from the pane the app already has, so a row that is
-  /// shown always leads somewhere: no "Git changes" on a pane whose directory
-  /// has not arrived yet, which would open a page that can only say it has
-  /// nothing to read.
+  /// THE MENU APPEARS BEFORE THE TREE DOES, and that is the report this method
+  /// answers: it used to open with `await ref.read(navTreeProvider.future)` —
+  /// three socket requests — so on a slow link a tap on `...` produced nothing
+  /// at all until they landed. The only thing the tree has that the menu needs
+  /// is the pane's DIRECTORY, and that is not needed when the question is asked:
+  /// it is needed when a row is PICKED. So the rows are built from what is
+  /// already in memory, and the directory is resolved behind the tap, where the
+  /// destination screen is loading anyway.
   Future<void> _openMore(BuildContext anchor) async {
     final l10n = AppLocalizations.of(context);
     // Measured before the first await: the button is a live widget now and a
     // Rect is a value, so nothing is read off a possibly-disposed element later.
     final anchorRect = menuAnchorRect(anchor);
-    // Waits for a first read rather than refusing: a tap a second after the
-    // terminal opened is a perfectly normal thing to do, and answering it with
-    // "not yet" would be the app blaming the user for its own loading state.
-    final tree = await ref.read(navTreeProvider.future);
-    if (!mounted) return;
-    final pane = tree.paneById(_paneId);
-    if (pane == null) {
-      // The tree is the only place the cwd and the focus flag come from, and
-      // guessing at either would be worse than saying so. Reaching here means
-      // the pane is genuinely gone — closed on the desktop since the tree was
-      // read — rather than merely not loaded.
-      showHerdrToast(context, l10n.morePaneUnknown, isError: true);
-      return;
-    }
+    final pane = ref.read(navTreeProvider).value?.paneById(_paneId);
+
+    // A pane in memory says exactly which rows lead somewhere. Without one, the
+    // three are offered anyway: the directory is looked up on the way to the
+    // screen that needs it, and a row that turns out to lead nowhere says so
+    // when it is tried — which is a better answer than a missing row on a menu
+    // that cannot yet know the answer.
+    final candidates = pane == null
+        ? const [PaneAction.browseFiles, PaneAction.git, PaneAction.focus]
+        : paneActionsFor(pane);
+    // Nothing this pane can carry out: the menu would be an empty box.
+    if (candidates.isEmpty) return;
 
     // A menu hanging off the button, not a sheet rising from the bottom edge:
     // the question is asked at the top of the screen and the answer belongs
@@ -1880,7 +1884,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
           ref.read(settingsProvider.select((s) => s.iconSet)) ==
           AppIconSet.themed,
       items: [
-        for (final candidate in paneActionsFor(pane))
+        for (final candidate in candidates)
           HerdrMenuItem(
             value: candidate,
             label: labelForPaneAction(candidate, l10n),
@@ -1892,16 +1896,20 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     if (!mounted || action == null) return;
     switch (action) {
-      case PaneAction.browseFiles:
-        _push(FileTreePage(path: pane.cwd!));
-      case PaneAction.git:
-        _push(GitPage(cwd: pane.cwd!));
+      case PaneAction.browseFiles || PaneAction.git:
+        final cwd = await _directoryForAction(l10n);
+        if (!mounted || cwd == null) return;
+        if (action == PaneAction.git) {
+          _push(GitPage(cwd: cwd));
+        } else {
+          _push(FileTreePage(path: cwd));
+        }
       case PaneAction.focus:
         // Moving the desktop focus is reported either way: on failure the user
         // is left staring at their own screen wondering whether the tap
         // registered, and the pane may have closed in the meantime.
         try {
-          await ref.read(navTreeProvider.notifier).focusPane(pane.paneId);
+          await ref.read(navTreeProvider.notifier).focusPane(_paneId);
           if (mounted) {
             showHerdrToast(context, l10n.workspacesFocusDone);
           }
@@ -1915,6 +1923,36 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       case PaneAction.open:
         break;
     }
+  }
+
+  /// The pane's directory, from whatever already knows it.
+  ///
+  /// THE ORDER IS THE POINT, and it is the same order the composer's menus use:
+  /// the board's row is already in memory (this screen is usually opened FROM
+  /// the board) and the census is the authority behind it. Only when neither
+  /// answers does this wait for the tree — and by then the menu has closed, so
+  /// the wait lands behind the tap whose loading state the user asked for,
+  /// rather than in front of the menu.
+  ///
+  /// Null comes with a word about it: for an AGENT pane the board always has the
+  /// row, so reaching the toast means the pane is genuinely unknown — a failed
+  /// read, or a pane closed on the desktop since.
+  Future<String?> _directoryForAction(AppLocalizations l10n) async {
+    final known = _boardPane()?.cwd;
+    if (known != null && known.isNotEmpty) return known;
+
+    try {
+      final tree = await ref.read(navTreeProvider.future);
+      if (!mounted) return null;
+      final cwd = tree.paneById(_paneId)?.cwd;
+      if (cwd != null && cwd.isNotEmpty) return cwd;
+    } on Object {
+      // Falls through to the toast: a tree that cannot be read is not a crash,
+      // it is an answer of "not now", and it belongs on the screen.
+    }
+
+    if (mounted) showHerdrToast(context, l10n.morePaneUnknown, isError: true);
+    return null;
   }
 
   /// The chat window, wired to this page's draft and its machine.
