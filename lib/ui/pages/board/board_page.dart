@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
+import 'package:herdr_pocket/data/providers/board_sections.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/refresh.dart';
@@ -41,17 +42,13 @@ class BoardPage extends ConsumerStatefulWidget {
 }
 
 class _BoardPageState extends ConsumerState<BoardPage> {
-  /// Sections the user has opened or closed, overriding the default.
-  ///
-  /// Held here rather than in a provider on purpose: it is a property of this
-  /// screen's scroll position, not of the machine, and it should reset when the
-  /// app does. The default comes from [defaultExpandedGroup] — working, else
-  /// approvals, else idle — which is what keeps six quiet agents from burying
-  /// the one that is stuck.
-  final _expanded = <AgentGroup>{};
-
-  /// Sections the user has explicitly closed, overriding the default.
-  final _collapsed = <AgentGroup>{};
+  // WHICH SECTIONS ARE OPEN IS NO LONGER HELD HERE.
+  //
+  // It was two `Set`s on this State — with a comment explaining that the choice
+  // "should reset when the app does" — and it did not even manage that: every
+  // rebuild of the root shell (a trip to Settings and back is enough) threw the
+  // user's answer away. The memory now lives on disk, per machine, and the
+  // default is "everything open". See `boardSectionsProvider`.
 
   @override
   Widget build(BuildContext context) {
@@ -138,22 +135,11 @@ class _BoardPageState extends ConsumerState<BoardPage> {
         ),
       );
     } else {
-      // ONE section is open by default, chosen from what is actually on the
-      // board: working first, else approvals, else idle. Computed once, here,
-      // rather than per section — a rule that each section evaluated for itself
-      // could not see what the others hold.
-      final defaultOpen = defaultExpandedGroup(
-        agents.sections.map((s) => s.group),
-      );
+      // WHICH SECTIONS ARE OPEN is not computed here — see
+      // `boardSectionsProvider`, which remembers the user's own answer per
+      // machine. All this does is draw what that says.
       for (final section in agents.sections) {
-        body.addAll(
-          _sectionSlivers(
-            section,
-            colors,
-            l10n,
-            defaultOpen: defaultOpen,
-          ),
-        );
+        body.addAll(_sectionSlivers(section, colors, l10n));
       }
       // THERE IS DELIBERATELY NOTHING HERE FOR "nothing needs you".
       //
@@ -362,14 +348,19 @@ class _BoardPageState extends ConsumerState<BoardPage> {
   List<Widget> _sectionSlivers(
     ({AgentGroup group, List<AgentRow> rows}) section,
     HerdrColors colors,
-    AppLocalizations l10n, {
-    required AgentGroup? defaultOpen,
-  }) {
+    AppLocalizations l10n,
+  ) {
     final heading = groupHeading(l10n, section.group);
-    // An explicit tap beats the default, and the default only applies to a
-    // section the user has never touched.
-    final collapsed = !_expanded.contains(section.group) &&
-        (_collapsed.contains(section.group) || section.group != defaultOpen);
+    // THE USER'S OWN ANSWER, for this machine. Watched rather than read: this
+    // is what makes a tap on a heading redraw the list.
+    //
+    // AND IT CANNOT GO STALE. The sections drawn are always the live ones from
+    // `AgentList` — the caller iterates exactly what the daemon just reported —
+    // so an agent (or a whole tab) closed on the remote machine disappears from
+    // the board immediately. The remembered state is only consulted for groups
+    // that are present right now, which is what keeps a preference recorded on
+    // Tuesday from drawing a heading with nothing under it on Wednesday.
+    final collapsed = ref.watch(boardSectionsProvider).contains(section.group);
     return [
       SliverToBoxAdapter(
         child: Padding(
@@ -381,15 +372,9 @@ class _BoardPageState extends ConsumerState<BoardPage> {
           ),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => setState(() {
-              if (collapsed) {
-                _expanded.add(section.group);
-                _collapsed.remove(section.group);
-              } else {
-                _collapsed.add(section.group);
-                _expanded.remove(section.group);
-              }
-            }),
+            onTap: () => ref
+                .read(boardSectionsProvider.notifier)
+                .toggle(section.group),
             child: Row(
               children: [
                 AnimatedRotation(

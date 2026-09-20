@@ -38,50 +38,24 @@ enum AgentGroup {
   /// this, because `toUpperCase()` is a no-op on Han characters and the
   /// English section-heading style does not transfer to zh-Hans (ADR-007).
   final String label;
-
-  /// Whether the section starts collapsed.
-  ///
-  /// NO LONGER THE ANSWER ON ITS OWN — see [defaultExpandedGroup]. Which
-  /// section is open depends on what is ON the board, and a property of the
-  /// enum cannot see the board. This is kept for the one thing it can still
-  /// say honestly: a section that only ever holds finished or broken things
-  /// (idle, stopped) has nothing to say by default.
-  bool get startsCollapsed =>
-      this == AgentGroup.idle || this == AgentGroup.stopped;
 }
 
-/// The sections the board prefers to have open, best first.
-///
-/// WORKING BEFORE NEEDS-YOU, and that ordering is deliberate rather than a
-/// rank-order repeat: approvals sort to the TOP of the page, so an open
-/// approvals section cannot be missed — while working is the thing the user is
-/// watching when they pick the phone up, and leaving it closed hides the one
-/// live thing on the screen behind a heading.
-const _openByPreference = <AgentGroup>[
-  AgentGroup.working,
-  AgentGroup.needsYou,
-  AgentGroup.idle,
-];
-
-/// Which section the board opens when the user has not touched it.
-///
-/// Exactly ONE section is open by default. A board that opened everything is a
-/// board where a fleet of idle agents buries the one that is stuck; a board
-/// that opened nothing is a list of headings. The rule is "open the thing you
-/// came to see, collapse the rest", and the caller applies it to the user's own
-/// choices: an explicit tap always wins over this.
-///
-/// The fallback covers a board holding ONLY stopped or unrecognised rows: it
-/// opens the loudest of what is there, because a screen of nothing but headings
-/// reads as broken rather than as quiet.
-AgentGroup? defaultExpandedGroup(Iterable<AgentGroup> present) {
-  final groups = present.toSet();
-  if (groups.isEmpty) return null;
-  for (final group in _openByPreference) {
-    if (groups.contains(group)) return group;
-  }
-  return groups.reduce((a, b) => a.rank <= b.rank ? a : b);
-}
+// WHICH SECTIONS ARE OPEN IS NOT DECIDED HERE ANY MORE, and the two things that
+// used to decide it are gone: `startsCollapsed` (idle and stopped closed by
+// default) and `defaultExpandedGroup()` (exactly one section opened by
+// preference — working, else approvals, else idle).
+//
+// The rule they encoded was not silly, only superseded, and the reason is worth
+// keeping: the ranking above ALREADY puts what needs attention at the top, so
+// the row that wants the user is never below the fold — "a fleet of idle agents
+// buries the one that is stuck" describes a problem the order had solved. What
+// was left was a guess about which ONE section the user came to see, and it is
+// wrong the moment they wanted two.
+//
+// The default is now "everything open", and the only state is what the user has
+// explicitly closed — remembered per machine. See
+// `data/providers/board_sections.dart`, which is where that lives and where the
+// reasoning for the set-of-closed-groups shape is written down.
 
 /// Inputs the grouping decision depends on.
 ///
