@@ -614,14 +614,17 @@ void main() {
       // is now DRAWN and INERT until the answer lands, which is what this test
       // pins: present, not tappable, and live the moment the census arrives.
       final daemon = FakeTerminalDaemon(paneRows: 46);
-      await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
 
-      // The tree provider is auto-dispose and nothing is listening to it once
-      // the page has seeded itself, so the read that the composer makes is a
-      // FRESH one. Hold it so the "not yet" state is stable enough to assert
-      // on.
-      await tester.pump(const Duration(seconds: 1));
+      // HOLD THE CENSUS FROM THE FIRST FRAME. The tree that was read once is
+      // REMEMBERED across the page's disposal (so a page reopened on a dropped
+      // link still knows its workspaces), which means a gate installed after
+      // the page has settled is gated in name only: the composer would already
+      // have the answer from memory. Holding the read before anything has read
+      // it is the only way to reach the state this test is about — a pane
+      // nothing has described yet.
       daemon.treeGate = Completer<void>();
+      await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
+      await tester.pump(const Duration(seconds: 1));
 
       await openComposer(tester);
       expect(

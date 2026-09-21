@@ -30,13 +30,18 @@ void main() {
 
   testWidgets('the rows are there before the census answers', (tester) async {
     final daemon = FakeTerminalDaemon(paneRows: 46);
-    await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
 
     // Let the page settle, then HOLD the census. A read that is never allowed
     // to finish is the worst case of the slow link, and it is also the only way
     // to tell "the menu did not wait" from "the menu waited and it was fast".
-    await tester.pump(const Duration(seconds: 1));
+    //
+    // HELD FROM THE FIRST FRAME, because the tree that has been read is now
+    // remembered across the page's disposal: a gate installed after the page
+    // settled would be gated in name only, and the menu would answer from
+    // memory instead of from the fallback this test is about.
     daemon.treeGate = Completer<void>();
+    await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
+    await tester.pump(const Duration(seconds: 1));
 
     await tapMore(tester);
 
@@ -55,10 +60,14 @@ void main() {
     // where the destination screen shows its own loading state — which is
     // exactly where the user asked for it.
     final daemon = FakeTerminalDaemon(paneRows: 46);
+
+    // Held from the first frame: nothing about this pane is in memory, so the
+    // directory is genuinely unresolved when the row is picked. See the first
+    // test for why the gate cannot be installed later any more.
+    daemon.treeGate = Completer<void>();
     await pumpTerminalPage(tester, prefs: prefs, daemon: daemon);
 
     await tester.pump(const Duration(seconds: 1));
-    daemon.treeGate = Completer<void>();
     await tapMore(tester);
 
     await tester.tap(find.text('Files'));

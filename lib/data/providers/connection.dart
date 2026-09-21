@@ -764,8 +764,20 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
     final connection = ref.read(connectionProvider).value;
     if (connection is! Online) return;
 
+    // Read BEFORE the request, so the board and the machine it is filed under
+    // cannot disagree if the host changes while the read is in flight.
+    final hostId = ref.read(currentHostProvider)?.id ?? '';
     try {
       final board = await _readBoard(connection.client);
+      // REMEMBERED HERE TOO, and not only in `build()`.
+      //
+      // Events are the normal way a board arrives — the safety net and every
+      // burst go through this method — so a session whose first read failed and
+      // whose next one succeeded (a link that hiccuped, a daemon that was still
+      // starting) had rows on screen and NOTHING in the memory that the next
+      // rebuild falls back to. When the link then dropped, the board blanked:
+      // exactly the lie this cache was added to prevent.
+      _lastBoard = (hostId: hostId, board: board);
       state = AsyncValue.data(board);
       unawaited(_maybeNotify(board));
     } on Object catch (e, st) {
