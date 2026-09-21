@@ -167,6 +167,7 @@
   "navWorkspaces": "Workspaces",
   "navSettings": "Settings",
   "workspacesTitle": "Workspaces",
+  "workspacesLoading": "Reading workspaces…",
   "workspacesEmptyTitle": "No workspaces",
   "workspacesEmptyBody": "Create a workspace in herdr on your machine and it will show up here.",
   "workspacesCounts": "{tabs} tabs · {panes} panes",

@@ -1,24 +1,23 @@
 import 'package:flutter/cupertino.dart';
-import 'package:herdr_pocket/data/providers/connection.dart';
-import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
-import 'package:herdr_pocket/ui/components/connection_status_line.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 
-/// The board's loading state, in the middle of the screen.
+/// The centred wait block, for a screen that has nothing to show yet.
 ///
-/// WHY CENTRED, AND WHY ONLY HERE. The connection's status is normally a LINE
-/// at the top of the board — see [ConnectionStatusLine] for why it is not a
-/// card — and that is the right shape when there is a board underneath it to
-/// belong to: a reconnect over cached rows must not blank the screen (Phase 26
-/// removed exactly that lie). But the FIRST dial has no rows to belong to. The
-/// line then sat alone in the top-left corner of an empty page, which is what
-/// the user reported: it read as a stray label rather than as the screen being
-/// busy, and it never said which part of the wait they were in.
+/// WHY CENTRED, AND WHY ONLY WHEN THERE IS NOTHING. When a list does have rows,
+/// the connection's own state belongs in a LINE above them — see
+/// `ConnectionStatusLine` for why it is not a card — and a reconnect over rows
+/// must not blank the screen (Phase 26 removed exactly that lie). But a screen
+/// with NO rows has nothing for a line to belong to: the line sat alone in the
+/// top-left corner of an empty page and read as a stray label rather than as
+/// the screen being busy, which is what the user reported about the board. The
+/// workspaces page then inherited the same shape from the other end: on a
+/// machine that is being read for the first time, or one the user just switched
+/// to, "no workspaces" is a claim about the machine and the truth is "we have
+/// not asked yet".
 ///
-/// So: nothing to show ⇒ centred, with the step spelled out. Something to show
-/// ⇒ the line, unchanged.
-class BoardLoading extends StatelessWidget {
-  const BoardLoading({
+/// So: nothing to show ⇒ centred, with the step and the machine spelled out.
+class LoadingBlock extends StatelessWidget {
+  const LoadingBlock({
     required this.title,
     required this.colors,
     this.step,
@@ -26,16 +25,16 @@ class BoardLoading extends StatelessWidget {
     super.key,
   });
 
-  /// The state in a few words: "Connecting…", "Retrying 2/3…".
+  /// The state in a few words: "Connecting…", "Retrying 2/3…", "Reading…".
   ///
-  /// Built by [connectionStatusLabel] at the call site, so this screen and the
+  /// Built by [connectionStatusLabel] at the call site, so a screen and the
   /// top-right badge cannot describe the same dial differently.
   final String title;
 
   /// Which part of the wait this is, when the transport has said.
   final String? step;
 
-  /// The machine being dialled, so the screen answers "to where?" as well.
+  /// The machine being waited on, so the screen answers "to where?" as well.
   final String? target;
 
   final HerdrColors colors;
@@ -93,14 +92,4 @@ class BoardLoading extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The step the centred block should name for [status], if any.
-///
-/// A free function rather than logic inside the widget so the board page's
-/// decision (is this dial worth the centred block?) and the widget's wording
-/// come from the same reading of the same state.
-String? boardLoadingStep(AppLocalizations l10n, ConnectionStatus? status) {
-  if (status is! Connecting) return null;
-  return connectionStageStep(l10n, status.stage);
 }

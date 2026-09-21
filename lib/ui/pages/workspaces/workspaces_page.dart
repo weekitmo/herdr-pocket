@@ -1,6 +1,7 @@
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/nav_tree.dart';
 import 'package:herdr_pocket/data/providers/refresh.dart';
 import 'package:herdr_pocket/domain/agent/agent_group.dart';
@@ -12,6 +13,7 @@ import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/agent_icon.dart';
 import 'package:herdr_pocket/ui/components/agent_visuals.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
+import 'package:herdr_pocket/ui/components/loading_block.dart';
 import 'package:herdr_pocket/ui/components/pane_actions_sheet.dart';
 import 'package:herdr_pocket/ui/components/refresh/herdr_refresh.dart';
 import 'package:herdr_pocket/ui/components/toast.dart';
@@ -44,8 +46,18 @@ class WorkspacesPage extends ConsumerWidget {
     final colors = HerdrTheme.of(context);
     final l10n = AppLocalizations.of(context);
     final tree = ref.watch(navTreeProvider);
+    final host = ref.watch(currentHostProvider);
 
-    final value = tree.value ?? WorkspaceTree.empty();
+    // WHAT THIS MACHINE HAS ACTUALLY ANSWERED — not what the provider happens
+    // to be holding. A rebuild keeps the previous value on purpose (that is
+    // what makes a reconnect quiet), so for as long as a machine switch takes,
+    // `tree.value` can still be the machine the user just left, and those
+    // workspaces are not these workspaces: a tap on one of them would open a
+    // terminal for a pane that does not exist here. The cache is keyed by
+    // machine, so asking it for THIS machine cannot answer with another one's.
+    final remembered = ref.read(navTreeCacheProvider).forHost(host?.id ?? '');
+
+    final value = remembered ?? WorkspaceTree.empty();
 
     // NO GLASS STRIP BEHIND THE BAR — see the board for the measurement that
     // removed it: a half-transparent panel across the top of a page is a BAND,
@@ -97,11 +109,23 @@ class WorkspacesPage extends ConsumerWidget {
               if (value.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
-                  child: _Empty(
-                    title: l10n.workspacesEmptyTitle,
-                    body: l10n.workspacesEmptyBody,
-                    colors: colors,
-                  ),
+                  // NOT READ YET IS NOT THE SAME AS NOTHING THERE. The empty
+                  // state below is a claim about the machine ("there is nothing
+                  // to show"), and it is only true once the machine has
+                  // answered with nothing — which is exactly what the cache
+                  // records. Until then the screen says what it is doing, and
+                  // to which machine.
+                  child: remembered == null && !tree.hasError
+                      ? LoadingBlock(
+                          title: l10n.workspacesLoading,
+                          target: host?.displayTarget,
+                          colors: colors,
+                        )
+                      : _Empty(
+                          title: l10n.workspacesEmptyTitle,
+                          body: l10n.workspacesEmptyBody,
+                          colors: colors,
+                        ),
                 )
               else
                 for (final node in value.workspaces)

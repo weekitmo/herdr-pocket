@@ -80,11 +80,26 @@ class Connecting extends ConnectionStatus {
 }
 
 class Online extends ConnectionStatus {
-  const Online({required this.client, required this.hello, required this.socketPath});
+  const Online({
+    required this.client,
+    required this.hello,
+    required this.socketPath,
+    required this.hostId,
+  });
 
   final HerdrClient client;
   final HerdrHello hello;
   final String socketPath;
+
+  /// WHICH MACHINE THIS CONNECTION IS TO.
+  ///
+  /// Carried on the value rather than looked up from the selection, because the
+  /// two can disagree for the whole length of a dial: while the next connection
+  /// is being made, the state still holds the previous one. Anything that reads
+  /// over a connection — and anything that files the answer away — has to be
+  /// able to say which machine the bytes came from, or a switch between
+  /// machines is exactly when a cache starts lying.
+  final String hostId;
 
   String get label => 'herdr ${hello.version}';
 }
@@ -543,6 +558,7 @@ class ConnectionNotifier extends AsyncNotifier<ConnectionStatus> {
           client: client,
           hello: hello,
           socketPath: connected.socketPath,
+          hostId: host.id,
         );
       } on Object catch (e) {
         lastError = e;
@@ -643,6 +659,36 @@ final connectionProvider =
 ///
 /// The ordering — subscribe, THEN read — is what makes events trustworthy here.
 /// See [BoardSync] for why doing it the other way round loses changes silently.
+/// The last board one machine reported, kept OUTSIDE the notifier that read it.
+///
+/// THE CACHE IS ALSO THE ANSWER TO "HAS THIS MACHINE BEEN READ?", which is what
+/// a page needs to tell "this machine has no agents" from "we have not asked
+/// it yet" — two states that look identical on screen and mean opposite things.
+/// A board this class has never held for a machine is not that machine's
+/// answer, however empty the screen is.
+///
+/// KEYED BY MACHINE, because a stale list must never be shown for a different
+/// host: switching machines is exactly when a board full of the previous one's
+/// agents would look right and be wrong.
+class BoardCache {
+  ({String hostId, AgentList board})? _entry;
+
+  /// The board [hostId] last reported, or null if it has never answered.
+  ///
+  /// An EMPTY board is a real answer and is returned: a machine with nothing
+  /// running on it has said something, and saying it is not the same as not
+  /// having asked.
+  AgentList? forHost(String hostId) =>
+      _entry?.hostId == hostId ? _entry!.board : null;
+
+  void store(String hostId, AgentList board) =>
+      _entry = (hostId: hostId, board: board);
+}
+
+/// Alive for the whole app session, deliberately: a cache the pages could
+/// dispose would be empty in exactly the case it exists for.
+final boardCacheProvider = Provider<BoardCache>((ref) => BoardCache());
+
 class BoardNotifier extends AsyncNotifier<AgentList> {
   final _attention = AttentionTracker();
   BoardSync? _sync;
@@ -662,22 +708,15 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
   /// How long to wait before rebuilding a subscription that ended.
   static const resubscribeDelay = Duration(seconds: 3);
 
-  /// The last board actually read, and the machine it came from.
+  /// The machine the board currently on screen was read from.
   ///
-  /// KEPT ACROSS A RECONNECT, because the alternative is a board that blanks
-  /// itself. A rebuild during a recovery — and there is always one, the
-  /// connection state changes — used to return [AgentList.empty], so an app
-  /// that had just lost its link showed the user "no agents" for as long as the
-  /// re-dial took. Blank is the one answer that is a lie: it says the agents
-  /// are gone when what is gone is the connection, and `refresh()` has said the
-  /// opposite in its own comment since the beginning ("keeps the previous value
-  /// on failure instead of flashing an error").
-  ///
-  /// Keyed by MACHINE, because the other half of the rule is that a stale list
-  /// must never be shown for a different host: switching machines is exactly
-  /// when a board full of the previous one's agents would look right and be
-  /// wrong.
-  ({String hostId, AgentList board})? _lastBoard;
+  /// NOT THE SAME THING AS `_lastBoard`, and not the same as the selection
+  /// either. A rebuild keeps the previous value on purpose — that is what makes
+  /// a reconnect quiet — and that is exactly what must NOT happen when the
+  /// machine changes: those rows are another machine's agents. So the machine
+  /// this state belongs to is remembered, and a build for a different one
+  /// clears the board before it reads.
+  String? _shownHostId;
 
   @override
   Future<AgentList> build() async {
@@ -688,17 +727,44 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
       unawaited(_sync?.close());
     });
 
-    final hostId = ref.watch(currentHostProvider)?.id ?? '';
+    // WATCHED, not read: this list is ABOUT this machine, so a switch of
+    // machines has to rebuild it even if the connection has not caught up yet.
+    // (The connection rebuilds on the same change, and the guard below makes
+    // sure a board is never read over the previous machine's link.)
+    final hostId = ref.watch(
+      currentHostProvider.select((host) => host?.id ?? ''),
+    );
+
+    // SWITCHING MACHINES STARTS FROM NOTHING. See [_shownHostId].
+    //
+    // ⚠️ NOT `AsyncValue.loading()`. Riverpod re-attaches the previous value to
+    // a loading state (`copyWithPrevious`, the same "seamless reload" that makes
+    // a reconnect quiet), so writing `loading` here would put the OTHER
+    // machine's agents straight back on screen. The only write that really
+    // replaces the value is a real one, and an empty board is the honest
+    // placeholder: the page waits (the dial's narration while it connects, the
+    // "reading" block once the link is up) instead of drawing a board it cannot
+    // attribute to this machine.
+    if (_shownHostId != null && _shownHostId != hostId) {
+      state = AsyncValue.data(AgentList.empty());
+      _shownHostId = null;
+    }
+
     final connection = await ref.watch(connectionProvider.future);
-    if (connection is! Online) {
-      final cached = _lastBoard;
-      if (cached != null && cached.hostId == hostId) return cached.board;
-      return AgentList.empty();
+    // `hostId` as well, and not only "is it Online": while a switch is in
+    // flight the connection on hand is still the PREVIOUS machine's, and
+    // reading a board over it would answer about a machine we have left. This
+    // build is short-lived — the connection's own rebuild lands moments later
+    // and runs this method again, with the right link.
+    if (connection is! Online || connection.hostId != hostId) {
+      _shownHostId = hostId;
+      return ref.read(boardCacheProvider).forHost(hostId) ?? AgentList.empty();
     }
 
     await _startSync(connection.client);
     final board = await _readBoard(connection.client);
-    _lastBoard = (hostId: hostId, board: board);
+    _shownHostId = hostId;
+    ref.read(boardCacheProvider).store(hostId, board);
     return board;
   }
 
@@ -764,11 +830,20 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
     final connection = ref.read(connectionProvider).value;
     if (connection is! Online) return;
 
-    // Read BEFORE the request, so the board and the machine it is filed under
-    // cannot disagree if the host changes while the read is in flight.
-    final hostId = ref.read(currentHostProvider)?.id ?? '';
+    // THE CONNECTION SAYS WHICH MACHINE IT IS TO, and that is the machine this
+    // answer belongs to — not whatever the selection happens to be. The two
+    // disagree for the length of a dial (the old connection is retained while
+    // the next one is being made), and reading one machine's board while filing
+    // it under another's id is how a cache starts lying. A refresh that cannot
+    // be attributed is skipped; the next one, on the new connection, will do.
+    final hostId = connection.hostId;
+    if (hostId != (ref.read(currentHostProvider)?.id ?? '')) return;
+
     try {
       final board = await _readBoard(connection.client);
+      // And the machine may change WHILE the read is out: those rows belong to
+      // the machine we have left, and the build for the new one owns the state.
+      if ((ref.read(currentHostProvider)?.id ?? '') != hostId) return;
       // REMEMBERED HERE TOO, and not only in `build()`.
       //
       // Events are the normal way a board arrives — the safety net and every
@@ -777,7 +852,8 @@ class BoardNotifier extends AsyncNotifier<AgentList> {
       // starting) had rows on screen and NOTHING in the memory that the next
       // rebuild falls back to. When the link then dropped, the board blanked:
       // exactly the lie this cache was added to prevent.
-      _lastBoard = (hostId: hostId, board: board);
+      _shownHostId = hostId;
+      ref.read(boardCacheProvider).store(hostId, board);
       state = AsyncValue.data(board);
       unawaited(_maybeNotify(board));
     } on Object catch (e, st) {

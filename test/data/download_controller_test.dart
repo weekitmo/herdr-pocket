@@ -161,6 +161,7 @@ void main() {
                     client: HerdrClient(clientTransport),
                     hello: const HerdrHello(version: '0.9.0', protocol: 22),
                     socketPath: '/tmp/herdr.sock',
+                    hostId: 'h1',
                   ),
           ),
         ),

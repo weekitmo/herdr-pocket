@@ -220,6 +220,7 @@ class _FixedConnection extends ConnectionNotifier {
         client: HerdrClient(_NoopTransport()),
         hello: const HerdrHello(version: '0.9.0', protocol: 22),
         socketPath: '/home/dev/.config/herdr/herdr.sock',
+        hostId: 'h1',
       );
 }
 

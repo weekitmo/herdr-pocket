@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/data/herdr_client.dart';
+import 'package:herdr_pocket/data/host_profile.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
@@ -18,6 +19,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// The pane these tests attach to, as `pane.list` reports it.
 const String kTestPaneId = 'w1:p1';
+
+/// The machine these tests are talking to.
+///
+/// Named rather than left to fall through to `currentHostProvider`'s own
+/// resolution, because the fake connection says WHICH machine it is to (that is
+/// what `Online.hostId` is for) and two lists refuse to be read over a link
+/// that belongs to a different one.
+const HostProfile kTestHost = HostProfile(
+  id: 'test-host',
+  label: 'devbox',
+  username: 'dev',
+  host: '10.0.0.5',
+);
 
 /// Everything needed to mount [TerminalPage] against a scripted machine.
 ///
@@ -38,12 +52,14 @@ Future<FakeTerminalDaemon> pumpTerminalPage(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
+        currentHostProvider.overrideWithValue(kTestHost),
         connectionProvider.overrideWith(
           () => FixedConnection(
             Online(
               client: HerdrClient(machine),
               hello: const HerdrHello(version: '0.9.0', protocol: 22),
               socketPath: '/tmp/herdr.sock',
+              hostId: kTestHost.id,
             ),
           ),
         ),

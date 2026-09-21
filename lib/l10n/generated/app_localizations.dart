@@ -860,6 +860,12 @@ abstract class AppLocalizations {
   /// **'Workspaces'**
   String get workspacesTitle;
 
+  /// No description provided for @workspacesLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading workspaces…'**
+  String get workspacesLoading;
+
   /// No description provided for @workspacesEmptyTitle.
   ///
   /// In en, this message translates to:

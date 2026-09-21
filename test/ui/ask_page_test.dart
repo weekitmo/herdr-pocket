@@ -103,6 +103,7 @@ Widget _host(Widget child, HerdrTransport transport) => ProviderScope(
               client: HerdrClient(transport),
               hello: const HerdrHello(version: '0.9.0', protocol: 22),
               socketPath: '/tmp/herdr.sock',
+              hostId: 'h1',
             ),
           ),
         ),

@@ -28,14 +28,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///      for the one thing there is to do about it;
 ///   3. and the summary now lists the empty groups too, because "no working
 ///      agents" and "no working count shown" were the same picture.
-void main() {
-  const host = HostProfile(
-    id: 'h1',
-    label: 'devbox',
-    username: 'dev',
-    host: '10.0.0.5',
-  );
+const host = HostProfile(
+  id: 'h1',
+  label: 'devbox',
+  username: 'dev',
+  host: '10.0.0.5',
+);
 
+void main() {
   late SharedPreferences prefs;
 
   setUp(() async {
@@ -48,6 +48,7 @@ void main() {
     ConnectionStatus status, {
     HostProfile? machine = host,
     AgentList? board,
+    String? readFrom,
   }) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -55,6 +56,17 @@ void main() {
           sharedPreferencesProvider.overrideWithValue(prefs),
           currentHostProvider.overrideWithValue(machine),
           connectionProvider.overrideWith(() => _FixedConnection(status)),
+          // The board page asks the CACHE whether the machine on screen has
+          // ever answered — that is how "no agents there" stays distinguishable
+          // from "not read yet". A stand-in board provider has to say so, or
+          // the screen honestly waits for an answer that is never coming.
+          boardCacheProvider.overrideWithValue(
+            BoardCache()
+              ..store(
+                readFrom ?? machine?.id ?? '',
+                board ?? AgentList.empty(),
+              ),
+          ),
           if (board != null)
             boardProvider.overrideWith(() => _FixedBoard(board)),
         ],
@@ -267,6 +279,27 @@ void main() {
       // And the empty state still says why there are no rows.
       expect(find.textContaining('No agents yet'), findsOneWidget);
     });
+
+    testWidgets('a machine that has not been read yet waits, and says so',
+        (tester) async {
+      // The cache holds a DIFFERENT machine: this one has never answered, so
+      // the board is empty for want of a read, not for want of agents. Drawing
+      // the zeroes above would be a claim about a machine nobody has asked —
+      // and a machine switch is exactly this state, with the link already up.
+      await pumpBoard(
+        tester,
+        _online(),
+        board: AgentList.empty(),
+        readFrom: 'the-machine-we-came-from',
+      );
+
+      expect(
+        find.textContaining('No agents yet'),
+        findsNothing,
+        reason: 'nothing here is a fact about this machine',
+      );
+      expect(find.text('Reading the agent list…'), findsOneWidget);
+    });
   });
 }
 
@@ -292,6 +325,7 @@ Online _online() => Online(
       client: HerdrClient(_NoopTransport()),
       hello: const HerdrHello(version: '0.9.0', protocol: 22),
       socketPath: '/home/dev/.config/herdr/herdr.sock',
+      hostId: host.id,
     );
 
 class _NoopTransport implements HerdrTransport {

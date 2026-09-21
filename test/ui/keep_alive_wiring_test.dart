@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/app/root_shell.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/host_profile.dart';
+import 'package:herdr_pocket/data/host_store.dart';
 import 'package:herdr_pocket/data/local/keep_alive.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
@@ -86,6 +87,16 @@ Future<ProviderContainer> _pump(WidgetTester tester, _FakeKeepAlive fake) async 
       // resubscribe timer pending, which `flutter_test` (rightly) fails the
       // test over.
       boardProvider.overrideWith(_EmptyBoard.new),
+      // A stand-in board provider bypasses the real cache, and the board page
+      // asks the cache whether the machine on screen has ever answered: without
+      // this the screen waits (with a spinner, which `pumpAndSettle` will not
+      // settle) for an answer that is never coming.
+      // The shell is pointed at "this machine" (the desktop fallback — the
+      // test's connection is a fake, so it does not matter which), and the
+      // board page asks the cache whether THAT machine has ever answered.
+      boardCacheProvider.overrideWithValue(
+        BoardCache()..store(HostStore.localProfile.id, AgentList.empty()),
+      ),
     ],
   );
   addTearDown(container.dispose);

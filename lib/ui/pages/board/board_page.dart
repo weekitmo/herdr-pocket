@@ -17,17 +17,27 @@ import 'package:herdr_pocket/ui/components/agent_icon.dart';
 import 'package:herdr_pocket/ui/components/agent_visuals.dart';
 import 'package:herdr_pocket/ui/components/connection_status_line.dart';
 import 'package:herdr_pocket/ui/components/dock.dart';
+import 'package:herdr_pocket/ui/components/loading_block.dart';
 import 'package:herdr_pocket/ui/components/refresh/herdr_refresh.dart';
 import 'package:herdr_pocket/ui/components/top_bar.dart';
 import 'package:herdr_pocket/ui/components/ui_icon.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
 import 'package:herdr_pocket/ui/design/ui_ids.dart';
 import 'package:herdr_pocket/ui/pages/board/ask_page.dart';
-import 'package:herdr_pocket/ui/pages/board/board_loading.dart';
 import 'package:herdr_pocket/ui/pages/hosts/hosts_page.dart';
 import 'package:herdr_pocket/ui/pages/shell/shell_entry.dart';
 import 'package:herdr_pocket/ui/pages/terminal/jump_sheet.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
+
+/// The step the centred wait should name for [status], if any.
+///
+/// A free function rather than logic inside the widget so the page's decision
+/// (is this dial worth the centred block?) and the block's wording come from
+/// the same reading of the same state.
+String? _dialStep(AppLocalizations l10n, ConnectionStatus? status) {
+  if (status is! Connecting) return null;
+  return connectionStageStep(l10n, status.stage);
+}
 
 /// The status board.
 ///
@@ -58,7 +68,17 @@ class _BoardPageState extends ConsumerState<BoardPage> {
     final board = ref.watch(boardProvider);
     final connection = ref.watch(connectionProvider);
 
-    final agents = board.value ?? AgentList.empty();
+    // WHAT THIS MACHINE HAS ACTUALLY ANSWERED, which is not the same as what
+    // the provider is holding: a rebuild keeps the previous value on purpose
+    // (that is what makes a reconnect quiet), so for as long as a machine
+    // switch takes, `board.value` can still be the machine the user just left.
+    // The cache is keyed by machine, so asking it for THIS one cannot answer
+    // with another's — and `null` from it is the one thing the screen must not
+    // draw as an empty board.
+    final hostId = ref.watch(currentHostProvider.select((h) => h?.id ?? ''));
+    final read = ref.read(boardCacheProvider).forHost(hostId);
+
+    final agents = read ?? board.value ?? AgentList.empty();
     final status = connection.value;
     final failure = status is ConnectionFailed ? status : null;
 
@@ -80,13 +100,21 @@ class _BoardPageState extends ConsumerState<BoardPage> {
 
     // NOTHING TO SHOW YET: the first dial, or the first board read that follows
     // it. This is the one state that gets the centred block instead of the
-    // line — see [BoardLoading] — and the reason it is conditional on there
+    // line — see [LoadingBlock] — and the reason it is conditional on there
     // being no rows is that a RECONNECT must keep the board it already has.
     // Blanking that board says "your agents are gone", which is the lie Phase
     // 26 removed; with rows on screen the line stays exactly where it was.
-    final awaitingFirstBoard =
-        (dialling || (status is Online && board.isLoading)) &&
-            agents.rows.isEmpty;
+    //
+    // `read == null` is the third way to be here, and the one a machine switch
+    // creates: the link is up but nothing has been read from THIS machine yet,
+    // and a summary of zeroes would be a claim about it that nobody has made.
+    // It is scoped to `Online` on purpose — a machine that is not even dialling
+    // has its own line and its own button ("Not connected", "Reconnect"), and
+    // those must not be replaced by a spinner. A FAILURE is out for the same
+    // reason: it is a line with an action, not a wait.
+    final awaitingFirstBoard = agents.rows.isEmpty &&
+        failure == null &&
+        (dialling || board.isLoading || (read == null && status is Online));
 
     if (awaitingFirstBoard) {
       // TWO WAITS, SAID DIFFERENTLY. Before `Online`, the question is how the
@@ -98,11 +126,11 @@ class _BoardPageState extends ConsumerState<BoardPage> {
       body.add(
         SliverFillRemaining(
           hasScrollBody: false,
-          child: BoardLoading(
+          child: LoadingBlock(
             title: reading
                 ? l10n.boardLoadingAgents
                 : connectionStatusLabel(l10n, status, loading: dialling),
-            step: reading ? null : boardLoadingStep(l10n, status),
+            step: reading ? null : _dialStep(l10n, status),
             target: reading ? null : host?.displayTarget,
             colors: colors,
           ),

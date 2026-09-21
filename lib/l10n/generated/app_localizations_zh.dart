@@ -408,6 +408,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get workspacesTitle => '工作区';
 
   @override
+  String get workspacesLoading => '正在读取工作区…';
+
+  @override
   String get workspacesEmptyTitle => '还没有工作区';
 
   @override

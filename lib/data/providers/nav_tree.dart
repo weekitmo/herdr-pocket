@@ -50,6 +50,15 @@ final navTreeCacheProvider = Provider<NavTreeCache>((ref) => NavTreeCache());
 /// The read is three requests (`workspace.list`, `tab.list`, `pane.list`) and
 /// only happens while something is actually showing the tree.
 class NavTreeNotifier extends AsyncNotifier<WorkspaceTree> {
+  /// The machine the tree currently on screen was read from.
+  ///
+  /// A REBUILD KEEPS THE PREVIOUS VALUE — which is what makes a reconnect
+  /// quiet, and exactly what must not happen when the machine changes: those
+  /// workspaces are another machine's, and a tap on one of them opens a pane
+  /// that does not exist there. So the machine the state belongs to is
+  /// remembered, and a build for a different one clears it first.
+  String? _shownHostId;
+
   @override
   Future<WorkspaceTree> build() async {
     // `listen` rather than `watch`: a rebuild would drop the value back to a
@@ -58,7 +67,27 @@ class NavTreeNotifier extends AsyncNotifier<WorkspaceTree> {
     // tree stays on screen and is replaced when the new one lands.
     ref.listen(boardProvider, (_, _) => unawaited(refresh()));
 
-    final hostId = ref.read(currentHostProvider)?.id ?? '';
+    // WATCHED, not read, for the same reason the board watches it: a switch of
+    // machines has to rebuild this list even before the connection catches up.
+    final hostId = ref.watch(
+      currentHostProvider.select((host) => host?.id ?? ''),
+    );
+
+    // SWITCHING MACHINES STARTS FROM NOTHING. See [_shownHostId].
+    //
+    // ⚠️ NOT `AsyncValue.loading()`. Riverpod re-attaches the previous value to
+    // a loading state (`copyWithPrevious` — the same "seamless reload" that
+    // makes a reconnect quiet), so the other machine's workspaces would come
+    // straight back. The only write that really replaces the value is a real
+    // one, and an empty tree is the honest placeholder: nothing anybody could
+    // tap into and open a pane that does not exist on the machine just switched
+    // to. The page below then says what it is actually doing, because it reads
+    // the same machine-keyed cache this list writes.
+    if (_shownHostId != null && _shownHostId != hostId) {
+      state = AsyncValue.data(WorkspaceTree.empty());
+      _shownHostId = null;
+    }
+
     final cache = ref.read(navTreeCacheProvider);
     final remembered = cache.forHost(hostId);
 
@@ -70,13 +99,24 @@ class NavTreeNotifier extends AsyncNotifier<WorkspaceTree> {
     // as "there are no workspaces" for as long as it lasts. `build`'s own
     // return value still lands when it lands, so the seed is a floor and never
     // a ceiling.
-    if (remembered != null) state = AsyncValue.data(remembered);
+    if (remembered != null) {
+      state = AsyncValue.data(remembered);
+      _shownHostId = hostId;
+    }
 
     final connection = await ref.watch(connectionProvider.future);
-    if (connection is! Online) return remembered ?? WorkspaceTree.empty();
+    // The connection has to be THIS machine's. While a switch is in flight the
+    // one on hand is still the previous machine's, and its tree is not this
+    // machine's answer — the connection's own rebuild lands moments later and
+    // runs this method again, with the right link.
+    if (connection is! Online || connection.hostId != hostId) {
+      _shownHostId = hostId;
+      return remembered ?? WorkspaceTree.empty();
+    }
 
     final tree = await connection.client.workspaceTree();
     cache.store(hostId, tree);
+    _shownHostId = hostId;
     return tree;
   }
 
@@ -92,14 +132,21 @@ class NavTreeNotifier extends AsyncNotifier<WorkspaceTree> {
   Future<void> refresh() async {
     final connection = ref.read(connectionProvider).value;
     if (connection is! Online) return;
-    final hostId = ref.read(currentHostProvider)?.id ?? '';
+    // The connection knows which machine it is to, and a refresh that cannot be
+    // attributed is skipped rather than filed under the wrong one — see the
+    // board's copy of this guard for the window it exists for.
+    final hostId = connection.hostId;
+    if (hostId != (ref.read(currentHostProvider)?.id ?? '')) return;
     try {
       final tree = await connection.client.workspaceTree();
       // THE PAGE MAY BE GONE BY NOW, and this provider is auto-disposing: a
       // read that lands after the user left would otherwise throw on a disposed
       // ref — a background refresh is not worth an unhandled error.
       if (!ref.mounted) return;
+      // Nor may it land on a machine we have left.
+      if ((ref.read(currentHostProvider)?.id ?? '') != hostId) return;
       ref.read(navTreeCacheProvider).store(hostId, tree);
+      _shownHostId = hostId;
       state = AsyncValue.data(tree);
     } on Object catch (e, st) {
       if (!ref.mounted) return;

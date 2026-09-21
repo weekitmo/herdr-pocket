@@ -108,32 +108,71 @@ void main() {
     );
   });
 
-  testWidgets("another machine never inherits the previous machine's tree",
+  testWidgets("switching machines drops the previous machine's tree at once",
       (tester) async {
     final daemon = FakeTerminalDaemon(paneRows: 46);
     final harness = await _Harness.pump(tester, prefs, daemon: daemon);
     await harness.openWorkspaces(tester);
     expect(find.text('dev'), findsOneWidget);
 
-    // A different machine, which happens to have nothing running on it. Its
-    // answer is "empty" and that is the answer the page must show: a tree of
-    // the previous host's workspaces would look right and be wrong, and the
-    // user would open a pane that does not exist there.
+    // The other machine's link is up, but its census has not answered. This is
+    // the window the report was about: a rebuild keeps the previous value, so
+    // without the machine check the page went on showing machine A's
+    // workspaces — and a tap on one of them opens a terminal for a pane that
+    // does not exist on the machine the user just switched to.
+    final gate = Completer<void>();
+    final other = _ScriptedMachine(label: 'other', gate: gate);
     harness.container.read(_machineProvider.notifier).host = _hostB;
     harness.container.read(_statusProvider.notifier).status = Online(
-          client: HerdrClient(_EmptyMachine()),
+          client: HerdrClient(other),
           hello: const HerdrHello(version: '0.9.0', protocol: 22),
           socketPath: '/tmp/herdr.sock',
+          hostId: _hostB.id,
         );
-    await tester.pumpAndSettle();
-
-    await harness.openBoard(tester);
-    await harness.openWorkspaces(tester);
+    await _settle(tester);
 
     expect(
       find.text('dev'),
       findsNothing,
-      reason: 'the cache is keyed by machine, so switching hosts starts clean',
+      reason: "machine A's workspaces are not machine B's workspaces",
+    );
+    // And it does not claim machine B has nothing, either: not read yet and
+    // nothing there look identical on a phone, and only one of them is true.
+    expect(find.text('No workspaces'), findsNothing);
+    expect(find.text('Reading workspaces…'), findsOneWidget);
+
+    // And the machine that DOES answer fills the page.
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('other'), findsOneWidget);
+  });
+
+  testWidgets('a machine that has been read is served from memory on return',
+      (tester) async {
+    final daemon = FakeTerminalDaemon(paneRows: 46);
+    final harness = await _Harness.pump(tester, prefs, daemon: daemon);
+    await harness.openWorkspaces(tester);
+    expect(find.text('dev'), findsOneWidget);
+
+    // Away to another machine and back, with the link unable to answer the
+    // second time: what was read from THIS machine is still its answer.
+    harness.container.read(_machineProvider.notifier).host = _hostB;
+    harness.container.read(_statusProvider.notifier).status =
+        const Connecting(attempt: 1, afterLoss: true);
+    await _settle(tester);
+    expect(find.text('dev'), findsNothing);
+
+    daemon.treeGate = Completer<void>();
+    harness.container.read(_machineProvider.notifier).host = _hostA;
+    harness.container.read(_statusProvider.notifier).status =
+        const Connecting(attempt: 1, afterLoss: true);
+    await _settle(tester);
+
+    expect(
+      find.text('dev'),
+      findsOneWidget,
+      reason: 'the machine we came back to was read before, and its tree is '
+          'remembered by machine id',
     );
   });
 }
@@ -180,6 +219,7 @@ class _Harness {
           client: HerdrClient(daemon),
           hello: const HerdrHello(version: '0.9.0', protocol: 22),
           socketPath: '/tmp/herdr.sock',
+          hostId: _hostA.id,
         );
 
     await tester.pumpWidget(
@@ -199,7 +239,10 @@ class _Harness {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // NOT `pumpAndSettle`: a machine that has not been read yet shows the
+    // centred wait, and a spinner never settles (the same note the board's own
+    // connection tests carry).
+    await _settle(tester);
     return _Harness(container);
   }
 
@@ -266,17 +309,31 @@ class _QuietBoard extends BoardNotifier {
   Future<void> refresh() async {}
 }
 
-/// A machine with no workspaces on it, for the cross-host question.
-class _EmptyMachine implements HerdrTransport {
+/// A machine whose census can be held, so the switch can be examined in
+/// flight. Everything it reports is labelled, so a test can tell whose rows are
+/// on screen.
+class _ScriptedMachine implements HerdrTransport {
+  _ScriptedMachine({required this.label, this.gate});
+
+  final String label;
+  final Completer<void>? gate;
+
   @override
   Future<String> roundTrip(String requestLine) async {
-    final method =
-        (jsonDecode(requestLine) as Map)['method'] as String?;
+    final method = (jsonDecode(requestLine) as Map)['method'] as String?;
+    await gate?.future;
     return switch (method) {
       'workspace.list' =>
-        '{"id":"x","result":{"type":"workspace_list","workspaces":[]}}',
-      'tab.list' => '{"id":"x","result":{"type":"tab_list","tabs":[]}}',
-      'pane.list' => '{"id":"x","result":{"type":"pane_list","panes":[]}}',
+        '{"id":"x","result":{"type":"workspace_list","workspaces":['
+            '{"workspace_id":"$label","number":1,"label":"$label",'
+            '"focused":true,"tab_count":1,"pane_count":1}]}}',
+      'tab.list' =>
+        '{"id":"x","result":{"type":"tab_list","tabs":[{"tab_id":"$label:t1",'
+            '"workspace_id":"$label","number":1,"label":"1","focused":true,'
+            '"pane_count":1}]}}',
+      'pane.list' =>
+        '{"id":"x","result":{"type":"pane_list","panes":[{"pane_id":"$label:p1",'
+            '"workspace_id":"$label","tab_id":"$label:t1","focused":true}]}}',
       _ => '{"id":"","error":{"code":"unknown_method","message":"n/a"}}',
     };
   }

@@ -166,6 +166,7 @@
   "navWorkspaces": "工作区",
   "navSettings": "设置",
   "workspacesTitle": "工作区",
+  "workspacesLoading": "正在读取工作区…",
   "workspacesEmptyTitle": "还没有工作区",
   "workspacesEmptyBody": "在机器的 herdr 里创建一个工作区，它就会出现在这里。",
   "workspacesCounts": "{tabs} 个标签 · {panes} 个窗格",

@@ -81,6 +81,36 @@ void main() {
     expect(run.board.value?.rows, hasLength(1));
   });
 
+  test('switching machines clears the board before the new one answers',
+      () async {
+    final run = _Run(prefs);
+    addTearDown(run.dispose);
+
+    run.container.read(_statusProvider.notifier).status = _online(_BoardDaemon());
+    await _until(() => run.board.value?.rows.isNotEmpty ?? false);
+    expect(run.board.value?.rows.single.info.paneId, 'w1:p1');
+
+    // The other machine's link is up, but its board has not answered yet. A
+    // rebuild keeps the previous value, so without the machine check the board
+    // went on showing machine A's agents — and a tap on one of them opens an
+    // ask page for a pane that does not exist on the machine just switched to.
+    final gate = Completer<void>();
+    run.container.read(_machineProvider.notifier).host = _hostB;
+    run.container.read(_statusProvider.notifier).status =
+        _online(_BoardDaemon(workspace: 'w2', gate: gate), machine: _hostB);
+
+    await _until(() => run.board.value?.rows.isEmpty ?? false);
+    expect(
+      run.board.value?.rows,
+      isEmpty,
+      reason: "machine A's agents are not machine B's agents",
+    );
+
+    gate.complete();
+    await _until(() => run.board.value?.rows.isNotEmpty ?? false);
+    expect(run.board.value?.rows.single.info.paneId, 'w2:p1');
+  });
+
   test("a different machine is never served the previous machine's board",
       () async {
     final daemon = _BoardDaemon();
@@ -128,10 +158,12 @@ const _hostB = HostProfile(
   host: '10.0.0.6',
 );
 
-Online _online(HerdrTransport transport) => Online(
+Online _online(HerdrTransport transport, {HostProfile machine = _hostA}) =>
+    Online(
       client: HerdrClient(transport),
       hello: const HerdrHello(version: '0.9.0', protocol: 22),
       socketPath: '/tmp/herdr.sock',
+      hostId: machine.id,
     );
 
 /// One container with the real board provider over a scripted machine.
@@ -213,8 +245,16 @@ class _ScriptedConnection extends ConnectionNotifier {
       Future<ConnectionStatus>.value(ref.watch(_statusProvider));
 }
 
-/// A machine whose board read can be switched off mid-test.
+/// A machine whose board read can be switched off or held mid-test.
 class _BoardDaemon implements HerdrTransport {
+  _BoardDaemon({this.workspace = 'w1', this.gate});
+
+  /// Labels every pane it reports, so a test can tell WHOSE rows are on screen.
+  final String workspace;
+
+  /// While set, every request waits on it — the slow link, made still.
+  final Completer<void>? gate;
+
   /// While true, every request fails the way a dropped link fails.
   bool failReads = false;
 
@@ -228,13 +268,14 @@ class _BoardDaemon implements HerdrTransport {
         'the SSH connection is gone',
       );
     }
+    await gate?.future;
     return switch (method) {
       'agent.list' =>
         '{"id":"1","result":{"type":"agent_list","agents":['
-            '{"pane_id":"w1:p1","agent_status":"working","agent":"pi"}]}}',
+            '{"pane_id":"$workspace:p1","agent_status":"working","agent":"pi"}]}}',
       'pane.list' =>
-        '{"id":"1","result":{"type":"pane_list","panes":[{"pane_id":"w1:p1",'
-            '"workspace_id":"w1","tab_id":"w1:t1","focused":true}]}}',
+        '{"id":"1","result":{"type":"pane_list","panes":[{"pane_id":"$workspace:p1",'
+            '"workspace_id":"$workspace","tab_id":"$workspace:t1","focused":true}]}}',
       // The event channel is not what this test is about: the board falls back
       // to its safety net when the subscription cannot be opened, which is a
       // real path and the cheapest one to fake.

@@ -426,6 +426,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get workspacesTitle => 'Workspaces';
 
   @override
+  String get workspacesLoading => 'Reading workspaces…';
+
+  @override
   String get workspacesEmptyTitle => 'No workspaces';
 
   @override

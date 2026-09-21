@@ -38,6 +38,7 @@ void main() {
     client: HerdrClient(_NoopTransport()),
     hello: const HerdrHello(version: '0.9.0', protocol: 22),
     socketPath: '/Users/someone/.config/herdr/herdr.sock',
+    hostId: 'h1',
   );
 
   late SharedPreferences prefs;

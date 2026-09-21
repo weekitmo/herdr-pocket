@@ -234,6 +234,7 @@ Online _online() => const Online(
       client: _NoClient(),
       hello: HerdrHello(version: '0.9.0', protocol: 22, capabilities: {}),
       socketPath: '/home/dev/.config/herdr/herdr.sock',
+      hostId: 'h1',
     );
 
 /// A client the policy tests never use: they only look at the status.
