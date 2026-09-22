@@ -141,6 +141,21 @@ dependencies:
   mobile_scanner: ^7.4.2
 
   package_info_plus: ^10.2.1
+
+  # Where iOS saves a downloaded file. One call: `getApplicationDocumentsDirectory`.
+  #
+  # ALREADY IN THE LOCK FILE as a transitive dependency (`flutter_secure_storage`
+  # -> its Windows implementation -> this), so naming it adds no package, no
+  # license and no audit surface -- the same reasoning as `crypto` and
+  # `pinenacl` below. What naming it DOES change is the plugin registrant: a
+  # transitive dependency of a platform-specific implementation is not built for
+  # iOS at all, so `getApplicationDocumentsDirectory()` would throw
+  # `MissingPluginException` there despite the package being "present".
+  #
+  # Not hand-rolled as `$HOME/Documents`. That happens to be right on iOS today
+  # and is exactly the kind of assumption that a future sandbox change turns
+  # into a path to nowhere, with a full-disk error as the symptom.
+  path_provider: ^2.1.6
   # Ed25519 key GENERATION, which dartssh2 can parse but not create.
   #
   # `dartssh2` renders a key pair to OpenSSH PEM and reads one back, and has no
@@ -169,6 +184,26 @@ dependencies:
 dev_dependencies:
   build_runner: ^2.16.1
   flutter_test:
+    sdk: flutter
+
+  # Tests that run ON A DEVICE, against the platform's REAL channels.
+  #
+  # WHY BOTH THIS AND `patrol`. Patrol drives things OUTSIDE the Flutter view
+  # (the notification shade, a system permission dialog, Espresso/UIAutomator),
+  # which is what the Android suite needs. This package is the Flutter SDK's
+  # own: it runs the app's real `main()` on the device, so `dart:io` is the
+  # device's, `Platform.isIOS` is true, and the plugin registrant is the real
+  # one. That is the only way to answer "does this work on iOS" for a codebase
+  # whose every platform seam is a `Platform.isAndroid` branch that a host-side
+  # test cannot reach.
+  #
+  # Shipped with the SDK rather than fetched, so it adds no package to the lock
+  # file and no license to audit. Like patrol it brings a native plugin, and
+  # like patrol nothing under `lib/` imports it.
+  #
+  # ⚠️ `flutter test` does NOT run `integration_test/` -- it runs `test/`. These
+  # need a booted device: see `tool/ios_sim_test.sh`.
+  integration_test:
     sdk: flutter
 
   # E2E tests that can reach OUTSIDE the Flutter view — the notification shade,

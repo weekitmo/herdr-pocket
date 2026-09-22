@@ -14,6 +14,18 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<!-- WHAT iOS IS TOLD ABOUT LANGUAGES, and it is a different question from
+	     what Flutter resolves at runtime. Flutter reads the system's locale list
+	     itself and picks from `supportedLocales`; this key is what the SYSTEM
+	     reads -- for the per-app language picker in Settings, and for the store
+	     listing. Without it an app whose strings are 99% Chinese advertises
+	     itself as English, and the per-app language control does not appear at
+	     all. Mirrors `supportedLocales` in `app/herdr_pocket_app.dart`. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>herdr_pocket</string>
 	<key>CFBundlePackageType</key>
@@ -26,6 +38,43 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- WHERE THE IOS DOWNLOAD GOES, and why no permission is needed for it.
+	     Every app owns a Documents directory; these two keys are what PUBLISH it
+	     into the Files app, as "On My iPhone › Herdr Pocket". That is the whole
+	     mechanism behind `local/apple_download_target.dart` — there is no
+	     runtime prompt, because there was never anything to ask for.
+
+	     `UIFileSharingEnabled` is the older iTunes/Finder file-sharing switch,
+	     which Files also honours; `LSSupportsOpeningDocumentsInPlace` is what
+	     lets the user open a file HERE rather than making a copy elsewhere. Both
+	     are needed for the folder to behave like a normal place: the first alone
+	     gives a read-only-ish drop box, the second alone does not list it. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<!-- THE FOUR USAGE DESCRIPTIONS. Absent is not "the feature is off" on iOS:
+	     touching the protected resource without a string TERMINATES THE PROCESS.
+	     The user sees the app vanish, with no dialog and no log they can read.
+	     Each of these is in the base language here and translated in
+	     `en.lproj` / `zh-Hans.lproj` -- see InfoPlist.strings, which is what the
+	     system actually displays on a device whose language is not English. -->
+	<!-- `mobile_scanner` on the pairing screen. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Scan the pairing QR code that `hdp pair` prints.</string>
+	<!-- `local_auth`, for the app lock. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock Herdr Pocket with Face ID.</string>
+	<!-- THE ONE THAT DOES NOT FAIL LOUDLY. Every machine this app talks to is
+	     reached by SSH, and on a LAN that is a local-network connection: iOS 14+
+	     asks the user once, and if there is no string to show it DENIES by
+	     default. The symptom is not a dialog -- it is "connection refused" on a
+	     machine that is up and reachable from every other device on the desk. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your own machines over SSH.</string>
+	<!-- `image_picker`, for the composer's photo attachment. -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach a photo to send to an agent in the terminal.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

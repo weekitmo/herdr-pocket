@@ -1025,6 +1025,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachUnavailable => 'This connection cannot carry files.';
 
   @override
+  String get attachPickerUnavailable => 'This platform has no document picker.';
+
+  @override
   String get jumpTitle => 'Jump to';
 
   @override
@@ -1197,7 +1200,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTransferEnabledFooter =>
-      'Turns on downloading files to the phone from the file browser. Needs a folder on the phone first.';
+      'Turns on downloading files to the phone from the file browser. The folder below is where they are saved.';
 
   @override
   String get settingsDownloadDir => 'Download folder';
@@ -1212,6 +1215,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsDownloadDirRevoked =>
       'This folder\'s permission is gone. Pick it again.';
+
+  @override
+  String get settingsDownloadDirAppleNote =>
+      'Saved to the Files app, under On My iPhone › Herdr Pocket.';
 
   @override
   String get fileActionDownload => 'Download to phone';

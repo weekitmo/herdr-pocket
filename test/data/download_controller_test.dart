@@ -64,6 +64,14 @@ class _FakeTarget implements DownloadTarget {
   @override
   Future<bool> hasAccess(String uri) async => hasAccessResult;
 
+  /// Android's answer: nothing to write to until the user grants a folder.
+  ///
+  /// The iOS implementation returns a directory here, and that difference is
+  /// what `RemoteDownload` and the settings row branch on -- so a fake that
+  /// answered otherwise would be testing the wrong platform's path.
+  @override
+  Future<GrantedDirectory?> defaultDirectory() async => null;
+
   @override
   Future<GrantedDirectory?> pick() async =>
       const GrantedDirectory(uri: 'content://tree/x', label: 'Download');

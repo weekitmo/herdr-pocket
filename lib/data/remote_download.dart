@@ -160,7 +160,22 @@ class DownloadController extends Notifier<TransferState> {
       return;
     }
 
-    final dirUri = settings.downloadDirUri;
+    // THE STORED FOLDER, OR THE PLATFORM'S OWN ANSWER, and the order matters.
+    //
+    // On Android a stored SAF uri is the ONLY place this may write, so a fresh
+    // install has no destination and says so -- `defaultDirectory()` returns
+    // null there and the `noDirectory` refusal below is unchanged.
+    //
+    // On iOS the app owns a `Documents` folder from the moment it is installed,
+    // so a first run has somewhere to put a file without the user having chosen
+    // anything. Without this fallback the FIRST download on a new phone would
+    // fail for a folder that exists and cannot be picked -- the worst kind of
+    // error, because the instruction it implies ("choose a folder") is
+    // impossible to carry out.
+    final chosen = settings.downloadDirUri;
+    final dirUri = (chosen == null || chosen.isEmpty)
+        ? (await target.defaultDirectory())?.uri
+        : chosen;
     if (dirUri == null || dirUri.isEmpty) {
       state = TransferFailed(DownloadFailure.noDirectory, fileName: fileName);
       return;

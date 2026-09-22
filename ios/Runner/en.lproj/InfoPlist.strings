@@ -1,0 +1,16 @@
+/* The four permission prompts, in English.
+ *
+ * WHY THIS FILE EXISTS AT ALL. `Info.plist` carries the base-language copy,
+ * but iOS reads the prompt it shows from the LOCALISED bundle resource when one
+ * matches the device's language. A Chinese phone that gets an English Face ID
+ * prompt is a phone whose user is being asked for something in a language they
+ * were not reading the app in.
+ *
+ * Kept in step with `zh-Hans.lproj/InfoPlist.strings` by hand: two files, four
+ * short sentences, and no build step that could get them out of sync on its own.
+ */
+
+"NSCameraUsageDescription" = "Scan the pairing QR code that `hdp pair` prints.";
+"NSFaceIDUsageDescription" = "Unlock Herdr Pocket with Face ID.";
+"NSLocalNetworkUsageDescription" = "Connect to your own machines over SSH.";
+"NSPhotoLibraryUsageDescription" = "Attach a photo to send to an agent in the terminal.";

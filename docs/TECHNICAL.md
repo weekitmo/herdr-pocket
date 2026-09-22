@@ -369,6 +369,56 @@ CI（`.github/workflows/ci.yml`）在 `flutter analyze` 之外还有三道闸，
   别被它骗了。）
 - **文件浏览器只读**：能列、能预览、能下载，不在手机上编辑文件。
 - **应用内更新只在 Android 能装**：检查到处都能跑，但只有 Android 有办法把 APK
-  交给系统安装器。
+  交给系统安装器。iOS 上 `apkInstallTargetProvider` 为 null，弹窗因此渲染另一套面板。
 - **macOS 上 App Sandbox 是关的**：客户端必须读用户主目录下的 socket 并且主动开出去
   SSH 连接，沙盒里两件事都做不了。
+
+## 9. iOS
+
+**只到模拟器。** 没有 Apple 开发者账号，所以真机安装、TestFlight、App Store 与
+APNs 推送都不在范围内 —— 不是没做，是做不了。已核实能跑的部分：
+
+| 能力 | 状态 | 怎么实现的 |
+|---|---|---|
+| SSH → `direct-streamlocal` → herdr | ✅ 模拟器上实测通 | 纯 Dart，与 Android 同一条路 |
+| 终端镜像 / shell / 文件 / git | ✅ | 同上，都是纯 Dart + dartssh2 |
+| 下载到手机 | ✅ | `data/local/apple_download_target.dart`：写进 app 自己的 `Documents`，
+两个 plist key 把它发布到「文件」App |
+| composer 的 `+` 选文件 | ✅ 代码就位，happy path 手动验 | `ios/Runner/LocalStorageChannel.swift`，与 `MainActivity.kt` 同一个通道 |
+| 通知 | ✅ | `DarwinInitializationSettings`（一直就有） |
+| 应用锁（Face ID） | ✅ | `local_auth` + `NSFaceIDUsageDescription` |
+| 扫码配对 | ✅ 代码就位 | 需要摄像头；模拟器上请用「粘贴配对串」 |
+| **后台保活** | ❌ 且**不该有** | iOS 的后台模式是白名单，没有一条允许长期持有任意 TCP。
+`beginBackgroundTask` 只给 ~30 秒，是另一个功能。
+⇒ `ProcessKeeper.isSupported` 在 iOS 为 false，设置里那一行不画 |
+| **APK 自更新** | ❌ 且**不该有** | iOS 不允许 app 自装二进制 |
+
+### 两个平台各自的下载目录
+
+它们解决的是同一个问题（「文件落到用户找得到的地方」），但机制完全不同，
+所以是两份实现而不是一个开关：
+
+- **Android（SAF）**：app 自己的存储是私有的 ⇒ 必须请用户**授权一个目录**，
+  授权要持久化。于是有 `pick()`、有 `hasAccess()` 要验证授权还在不在、
+  有一整个方法通道和待处理选择器的记账。
+- **iOS（自己的 Documents）**：每个 app 本来就有 `Documents`，
+  `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace` 就把它发布到
+  「文件」App。**没有要问的东西**，于是 `defaultDirectory()` 直接给答案，
+  `pick()` 也不需要开任何界面。整个类零通道 ⇒ 是全项目唯一能在 `flutter test`
+  里跑的平台缝。
+
+> `DownloadTarget.defaultDirectory()` 返回 **null** 就是 Android 那句「没授权就没地方写」，
+> 返回**目录**就是 iOS 那句「本来就有」。`RemoteDownload` 与设置页据此分流：
+> iOS 新装的第一次下载不能失败，否则它会让人去「选一个目录」—— 而那是做不到的事。
+
+### 测它
+
+```sh
+sh tool/ios_sim_test.sh          # 起一次性 sshd，在已启动的模拟器上跑集成测试
+```
+
+为什么这个项目非要有 `integration_test` 不可：**每一条平台缝都是 `Platform.isAndroid`
+分支**，在宿主机上跑测试等于用宿主机的平台回答 iOS 的问题。
+
+它能把整条链路跑真（模拟器的 `127.0.0.1` 就是这台 Mac），但有两件事它做不到，
+需要人点：**系统的文件选择器**，和**系统权限弹窗**。

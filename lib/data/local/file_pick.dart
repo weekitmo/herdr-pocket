@@ -48,8 +48,10 @@ enum PickFailure {
   /// Larger than the caller's cap.
   tooLarge,
 
-  /// No document picker is wired up on this platform. True of desktop and iOS
-  /// today; a real answer rather than an error.
+  /// No document picker is wired up on this platform — desktop, or anywhere
+  /// the channel has no native side. A real answer rather than an error, and
+  /// deliberately not a failure: there is nothing the user did wrong and
+  /// nothing they could do differently.
   unsupported,
 
   /// The picker returned something that could not be read.
@@ -80,16 +82,25 @@ abstract interface class PhoneFilePicker {
   Future<PickedFile?> pick({required int maxBytes});
 }
 
-/// The Android implementation.
+/// The implementation, for every platform that has this channel.
+///
+/// NAMED AFTER THE CHANNEL'S JOB, NOT AFTER ANDROID'S PART OF IT. It used to be
+/// `SafFilePicker`, which was accurate while Android was the only side that
+/// answered: SAF is Android's Storage Access Framework, and there is no iOS
+/// equivalent to name. But the CONTRACT is not Android's — it is "hand back a
+/// path to one file on this phone", and both native sides implement exactly
+/// that (`MainActivity.kt` with `ACTION_OPEN_DOCUMENT`, `LocalStorageChannel.swift`
+/// with `UIDocumentPickerViewController`). One Dart client, because there is one
+/// shape of answer.
 ///
 /// Shares `download_dir`'s channel, which is the app's one local-storage
-/// channel: it owns the SAF calls in both directions, and a second channel would
+/// channel: it owns the picker in both directions, and a second channel would
 /// mean a second place for the pending-picker bookkeeping.
-class SafFilePicker implements PhoneFilePicker {
-  SafFilePicker({MethodChannel? channel})
+class SystemFilePicker implements PhoneFilePicker {
+  SystemFilePicker({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(channelName);
 
-  /// The name every SAF call in this app goes through — the same one the
+  /// The name every picker call in this app goes through — the same one the
   /// download directory uses, on purpose: one local-storage channel with one
   /// piece of pending-picker bookkeeping behind it.
   static const String channelName = 'dev.maddax.herdrpocket/download_dir';
@@ -140,5 +151,5 @@ class SafFilePicker implements PhoneFilePicker {
 /// a platform channel cannot run under `flutter test`, and the composer's
 /// attachment path is worth exercising without a phone.
 final phoneFilePickerProvider = Provider<PhoneFilePicker>(
-  (ref) => SafFilePicker(),
+  (ref) => SystemFilePicker(),
 );

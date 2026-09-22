@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/data/local/apple_download_target.dart';
 
 /// A folder on the phone the app may keep writing into.
 ///
@@ -70,6 +71,24 @@ abstract interface class DownloadTarget {
   /// Returns null when the user backed out, which is a real answer and not a
   /// failure: the caller keeps whatever it had.
   Future<GrantedDirectory?> pick();
+
+  /// Where to write when neither the user nor a previous run has chosen.
+  ///
+  /// A NULLABLE ANSWER THAT MEANS TWO DIFFERENT THINGS, and the difference is
+  /// the platform's rather than this app's:
+  ///
+  ///   * **null** — there is nowhere to write until someone grants a folder.
+  ///     This is Android, where an app's own storage is private and the grant
+  ///     IS the destination. A download that starts here has nothing to fail
+  ///     towards.
+  ///   * **a directory** — the app already owns a folder it may publish to the
+  ///     user, so there is nothing to ask and no grant to lose. This is iOS,
+  ///     where `Documents` plus two Info.plist keys is the whole mechanism.
+  ///
+  /// It exists as a separate question from [pick] because on Android the two
+  /// must not be confused: [pick] opens a system sheet, and calling it from the
+  /// download path would put a folder chooser in the middle of a transfer.
+  Future<GrantedDirectory?> defaultDirectory();
 
   /// Whether a previously granted [uri] may still be written to.
   ///
@@ -140,6 +159,9 @@ class SafDownloadTarget implements DownloadTarget {
       label: (label == null || label.isEmpty) ? uri : label,
     );
   }
+
+  @override
+  Future<GrantedDirectory?> defaultDirectory() async => null;
 
   @override
   Future<bool> hasAccess(String uri) async =>
@@ -246,14 +268,15 @@ class SafDownloadTarget implements DownloadTarget {
 /// The download target for this platform, or null when there is none.
 ///
 /// Null is a real answer rather than a loading state, matching
-/// `remoteUploaderProvider`: the feature genuinely does not exist on a platform
-/// without a directory-grant mechanism, and a UI that says so beats one that
-/// fails at the last step.
+/// `remoteUploaderProvider`: a platform with no directory-grant mechanism and no
+/// folder of its own to publish has nowhere to put a file, and a UI that says so
+/// beats one that fails at the last step.
 ///
-/// Only Android, today. iOS writes into its own sandbox and exposes the result
-/// through a share sheet, which is a different feature rather than a port of
-/// this one.
+/// Android and iOS both answer, for different reasons — see the two
+/// implementations. iOS needs no grant at all, which is why it returns a
+/// non-null target even though it has no picker worth opening.
 final downloadTargetProvider = Provider<DownloadTarget?>((ref) {
+  if (Platform.isIOS) return ref.watch(appleDownloadTargetProvider);
   if (!Platform.isAndroid) return null;
   return SafDownloadTarget();
 });

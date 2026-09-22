@@ -970,7 +970,13 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
   String _pickMessage(PickException e, AppLocalizations l10n) => switch (e.reason) {
     PickFailure.tooLarge => l10n.attachTooLarge,
-    PickFailure.unsupported => l10n.attachUnavailable,
+    // NOT `attachUnavailable`. That sentence is about the CONNECTION — "this
+    // connection cannot carry files" — and it was reached from here, which made
+    // the app blame the machine for a missing platform feature. On a phone
+    // whose OS has no picker wired up, the user's next move (check the
+    // connection, try another host) is the wrong one, and an app that sends
+    // somebody to look in the wrong place is worse than one that says less.
+    PickFailure.unsupported => l10n.attachPickerUnavailable,
     PickFailure.busy || PickFailure.unreadable || PickFailure.unknown =>
       '${l10n.attachFailed}: ${e.detail ?? e.reason.name}',
   };

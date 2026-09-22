@@ -12,7 +12,7 @@
 [herdr](https://herdr.dev) 的 Flutter 客户端（**Herdr Pocket**，两个词都大写）：
 看板 + 工作区树 + 终端镜像 + 一条不经 herdr 的 SSH 终端，外加文件、git、起 agent、
 `hdp` 配对。跨平台：手机与桌面一份 Flutter 代码；**实机验证主要走 Android**
-（MiX 2S / `herdr_test` 模拟器）。
+（MiX 2S / `herdr_test` 模拟器），**iOS 目前只到模拟器**（没有开发者账号）。
 
 ## 红线
 
@@ -30,14 +30,23 @@
 7. **不碰 `../whip/`（AGPL，只移植语义不移植表达）与 `../herdrup/`（Apache-2.0，可复用需署名）**。
 8. **README 两个语言版本同步改**：`README.md` / `README.zh-CN.md`；
    `CHANGELOG.md` 是单文件双语，**发版前先写条目再打 tag**（没条目发布任务会失败）。
+9. **iOS 的 plist 与 pbxproj 改完必须验**：`plutil -lint ios/Runner/Info.plist`
+   （改坏了是**静默**失手 —— 文件在仓库里但没进 bundle，或者 plist 直接不合法）。
+   ⚠️ 缺 usage description 在 iOS 上不是「功能不可用」而是**进程被系统杀掉**，
+   见 [`../AGENTS.md`](../AGENTS.md) Phase 32。
 
-## 三条命令
+## 四条命令
 
 ```sh
-flutter analyze && flutter test     # 约 1000 个测试，约 45 秒
+flutter analyze && flutter test     # 约 1200 个测试，约 60 秒
 sh tool/ci_tests.sh                 # 同一套，外加「有测试被跳过就失败」那道门
-patrol test -d <device>             # 上机冒烟，手动跑，不进 CI
+patrol test -d <device>             # Android 上机冒烟，手动跑，不进 CI
+sh tool/ios_sim_test.sh             # iOS 模拟器集成测试（起一次性 sshd，直连本机 herdr）
 ```
+
+⚠️ **第三条与第四条不能互相替代。** 这个项目**每一条平台缝都是 `Platform.isAndroid`
+分支** ⇒ 在宿主机（macOS）上跑测试，等于用**宿主机的平台**回答 iOS 的问题，
+结构性测不到。`integration_test/ios_device_test.dart` 必须跑在**真模拟器**上。
 
 改传输、终端、协议相关的代码时**跑第二条**：`flutter test` 在笔记本上会安静地跳过
 `test/integration/`，绿色勾什么都不代表。会创建东西的测试要 `HP_LIVE_WRITES=1`。

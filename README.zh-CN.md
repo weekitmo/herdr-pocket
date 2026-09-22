@@ -124,6 +124,7 @@ flowchart LR
 flutter analyze && flutter test   # 约 1000 个测试，约 45 秒
 sh tool/ci_tests.sh               # 同一套，只要有测试被跳过就失败
 patrol test -d <device>           # 上机冒烟，手动跑，需要 patrol_cli
+sh tool/ios_sim_test.sh           # 在已启动的 iOS 模拟器上跑平台测试
 ```
 
 `flutter test` 会跳过那些需要真 daemon、真 SSH 服务端的测试；`tool/ci_tests.sh` 会把两者

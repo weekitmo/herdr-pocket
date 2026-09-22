@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/local/download_target.dart';
+import 'package:herdr_pocket/data/local/keep_alive.dart';
 import 'package:herdr_pocket/data/providers/app_info.dart';
 import 'package:herdr_pocket/data/providers/app_lock.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
@@ -171,16 +172,24 @@ class SettingsPage extends ConsumerWidget {
                     onChanged: (v) =>
                         notifier.setNotificationsEnabled(enabled: v),
                   ),
-                  SettingsSwitchRow(
-                    label: l10n.settingsKeepAlive,
-                    // The one row in this group that carries a note, and it
-                    // earns it: the cost of this switch is a persistent
-                    // notification, and a switch that spends something the
-                    // label does not name is a switch nobody can decide about.
-                    note: l10n.settingsKeepAliveNote,
-                    value: settings.keepAlive,
-                    onChanged: (v) => notifier.setKeepAlive(enabled: v),
-                  ),
+                  // THE KEEP-ALIVE ROW ONLY EXISTS WHERE IT CAN DO SOMETHING.
+                  // Its mechanism is an Android foreground service, and iOS has
+                  // no equivalent — so on iOS this row would be a switch that
+                  // writes a preference and changes nothing, which is the app
+                  // lying about the user's own phone. The setting stays in the
+                  // store either way, so a preference set on Android is not lost
+                  // if the same profile is restored elsewhere.
+                  if (ref.watch(processKeeperProvider).isSupported)
+                    SettingsSwitchRow(
+                      label: l10n.settingsKeepAlive,
+                      // The one row in this group that carries a note, and it
+                      // earns it: the cost of this switch is a persistent
+                      // notification, and a switch that spends something the
+                      // label does not name is a switch nobody can decide about.
+                      note: l10n.settingsKeepAliveNote,
+                      value: settings.keepAlive,
+                      onChanged: (v) => notifier.setKeepAlive(enabled: v),
+                    ),
                   SettingsSwitchRow(
                     label: l10n.settingsAutoConnect,
                     value: settings.autoConnect,
@@ -1042,6 +1051,12 @@ class _DownloadDirectoryRowState extends ConsumerState<_DownloadDirectoryRow> {
   /// Null while unknown, then whether the stored grant still works.
   bool? _valid;
 
+  /// Non-null on a platform that HANDS THE APP A FOLDER rather than asking for
+  /// one. When it is set there is nothing to pick, so the row stops being a
+  /// control and becomes a statement — see the build method and
+  /// `local/apple_download_target.dart`.
+  GrantedDirectory? _implicit;
+
   /// True while the system picker is open, so a fast double tap cannot open two.
   bool _picking = false;
 
@@ -1058,14 +1073,32 @@ class _DownloadDirectoryRowState extends ConsumerState<_DownloadDirectoryRow> {
   }
 
   Future<void> _check() async {
-    final uri = widget.uri;
     final target = ref.read(downloadTargetProvider);
-    if (uri == null || uri.isEmpty || target == null) {
+    if (target == null) {
       if (mounted) setState(() => _valid = null);
       return;
     }
+    // ASKED BEFORE THE STORED URI. On Android this is null and the row behaves
+    // exactly as it did; on iOS it is the app's own folder, and the stored uri
+    // (which a fresh install does not have) is beside the point.
+    final implicit = await target.defaultDirectory();
+    final uri = implicit?.uri ?? widget.uri;
+    if (uri == null || uri.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _implicit = implicit;
+          _valid = null;
+        });
+      }
+      return;
+    }
     final ok = await target.hasAccess(uri);
-    if (mounted) setState(() => _valid = ok);
+    if (mounted) {
+      setState(() {
+        _implicit = implicit;
+        _valid = ok;
+      });
+    }
   }
 
   Future<void> _pick() async {
@@ -1110,24 +1143,42 @@ class _DownloadDirectoryRowState extends ConsumerState<_DownloadDirectoryRow> {
     final l10n = AppLocalizations.of(context);
     final colors = widget.colors;
     final hasLabel = (widget.label ?? '').isNotEmpty;
-    final revoked = _valid == false;
+    // THE PLATFORM'S OWN FOLDER, IF IT HAS ONE, WINS OVER THE STORED ONE. On iOS
+    // there is nothing to choose, so `settingsDownloadDirLabel` is either empty
+    // (fresh install) or a copy of this name from a previous launch.
+    final implicit = _implicit;
+    final revoked = _valid == false && implicit == null;
+
+    final text = implicit?.label ??
+        (revoked
+            ? l10n.settingsDownloadDirUnset
+            : (hasLabel ? widget.label! : l10n.settingsDownloadDirUnset));
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => unawaited(_pick()),
+      // A FOLDER THE PLATFORM HANDS OVER IS NOT A CONTROL. The chevron and the
+      // tap both promise a system sheet, and on iOS there is no sheet to open —
+      // tapping would do nothing visible, which reads as a broken row rather
+      // than as a folder the app already has.
+      onTap: implicit != null ? null : () => unawaited(_pick()),
       child: SettingsRow(
         label: l10n.settingsDownloadDir,
         // TWO LINES, because a granted folder should say so and a revoked one
         // has to say something the user can act on — and "未选择" would be a
         // lie once a folder HAS been chosen but lost its permission.
-        note: revoked ? l10n.settingsDownloadDirRevoked : null,
+        //
+        // The iOS note answers the only question that row leaves open, which is
+        // WHERE this folder is: the app's own container is not a place a user
+        // can picture, and the Files path is. It is not a revocation warning —
+        // nothing there can be revoked.
+        note: implicit != null
+            ? l10n.settingsDownloadDirAppleNote
+            : (revoked ? l10n.settingsDownloadDirRevoked : null),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              revoked
-                  ? l10n.settingsDownloadDirUnset
-                  : (hasLabel ? widget.label! : l10n.settingsDownloadDirUnset),
+              text,
               style: TextStyle(
                 color: revoked ? colors.statusTextDied : colors.textDim,
                 fontSize: TextSize.body,
@@ -1135,12 +1186,14 @@ class _DownloadDirectoryRowState extends ConsumerState<_DownloadDirectoryRow> {
                 fontFamilyFallback: HerdrFonts.monoFallback,
               ),
             ),
-            const SizedBox(width: Space.xs),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: 14,
-              color: colors.textFaint,
-            ),
+            if (implicit == null) ...[
+              const SizedBox(width: Space.xs),
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: 14,
+                color: colors.textFaint,
+              ),
+            ],
           ],
         ),
       ),

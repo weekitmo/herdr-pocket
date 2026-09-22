@@ -1,0 +1,10 @@
+/* 四个权限提示的中文文案。默认语言，见 `l10n.yaml`（`app_zh.arb` 是主 arb）。
+ *
+ * 措辞跟着 app 里的语气走：说清「为什么」，不说「为了更好的体验」。
+ * 与 `en.lproj/InfoPlist.strings` 手工保持一致。
+ */
+
+"NSCameraUsageDescription" = "扫描 hdp pair 打印的配对二维码。";
+"NSFaceIDUsageDescription" = "用 Face ID 解锁 Herdr Pocket。";
+"NSLocalNetworkUsageDescription" = "通过 SSH 连接你自己的机器。";
+"NSPhotoLibraryUsageDescription" = "把照片作为附件发给终端里的 agent。";

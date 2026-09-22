@@ -170,6 +170,11 @@ class _FakeTarget implements ApkInstallTarget {
 
 /// The keep-alive service, absent: this test is not about the notification.
 class _NoopKeeper implements ProcessKeeper {
+  /// These fakes stand in for the Android one, which is the only platform
+  /// where the feature exists -- and the settings row is drawn from this.
+  @override
+  bool get isSupported => true;
+
   @override
   Future<bool> start({required String title, required String text}) async =>
       false;

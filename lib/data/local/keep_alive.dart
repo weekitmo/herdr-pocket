@@ -23,6 +23,22 @@ import 'package:herdr_pocket/data/providers/connection.dart';
 /// `KeepAlive` widget, and the two would collide as an ambiguous import in
 /// every file that needs both — the same trap `SoftKey` was named around.
 abstract interface class ProcessKeeper {
+  /// Whether this platform can hold a process awake at all.
+  ///
+  /// ASKED BEFORE THE SWITCH IS DRAWN, not after it is flipped. This is the
+  /// difference between a control and a decoration: on a platform whose answer
+  /// is no, there is nothing the user can decide, and a switch that changes a
+  /// stored boolean without changing anything about the connection is the app
+  /// telling them something untrue about their own phone.
+  ///
+  /// True on Android, where a foreground service exists for exactly this.
+  /// False on iOS, where the background modes are a closed list (audio,
+  /// location, voip, fetch, processing, accessory) and none of them means
+  /// "hold an arbitrary TCP connection open". `beginBackgroundTask` is the
+  /// nearest thing and buys about thirty seconds, which is a different feature
+  /// with a different promise, not a weaker version of this one.
+  bool get isSupported;
+
   /// Holds the process alive, with a notification saying [title] / [text].
   ///
   /// Returns false when the platform refused — a missing notification
@@ -44,6 +60,10 @@ class PlatformKeepAlive implements ProcessKeeper {
 
   static const MethodChannel channel =
       MethodChannel('dev.maddax.herdrpocket/keep_alive');
+
+  /// Android only — see the interface.
+  @override
+  bool get isSupported => Platform.isAndroid;
 
   @override
   Future<bool> start({required String title, required String text}) async {

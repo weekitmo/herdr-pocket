@@ -980,6 +980,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachUnavailable => '当前连接不支持传文件。';
 
   @override
+  String get attachPickerUnavailable => '这个平台没有文件选择器。';
+
+  @override
   String get jumpTitle => '跳转';
 
   @override
@@ -1146,7 +1149,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsTransferEnabledFooter =>
-      '开启后才能在文件浏览里把文件下载到手机。需要先选一个手机上的目录。';
+      '开启后才能在文件浏览里把文件下载到手机。文件会保存到下面那个目录。';
 
   @override
   String get settingsDownloadDir => '下载目录';
@@ -1159,6 +1162,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsDownloadDirRevoked => '这个目录的授权已失效，请重新选择。';
+
+  @override
+  String get settingsDownloadDirAppleNote =>
+      '存在「文件」App 的「我的 iPhone › Herdr Pocket」里。';
 
   @override
   String get fileActionDownload => '下载到手机';

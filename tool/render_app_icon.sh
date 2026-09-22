@@ -1,12 +1,13 @@
 #!/bin/sh
 # Renders the launcher icon from the SVGs in assets/icon/ into every PNG Android
-# asks for.
+# and iOS ask for.
 #
 # Usage:
 #   sh tool/render_app_icon.sh
 #
 # Then rebuild the APK — launchers cache the icon, so an install alone can keep
-# showing the old one.
+# showing the old one. iOS does not cache across a reinstall, but Xcode does
+# cache the compiled asset catalog, so build as usual and it follows.
 #
 # WHY SVG IS THE SOURCE. Android does not read SVG, and the alternative —
 # exporting by hand from a design tool — makes the icon a binary nobody can
@@ -42,12 +43,30 @@
 #      mipmap-anydpi-v26/ic_launcher.xml. Android 13+ repaints it in a single
 #      system colour, which only works because the mark is one flat colour on
 #      transparency and its prompt is a real hole rather than a dark shape.
+#
+# --- iOS, same mark, two different rules ------------------------------------
+#
+#   4. ios/Runner/Assets.xcassets/AppIcon.appiconset — fifteen PNGs, and the
+#      constraints are NOT Android's:
+#
+#      * NO ALPHA CHANNEL. An icon with alpha is rejected on submission, and the
+#        tile is opaque anyway — so the alpha is stripped rather than carried.
+#      * NO ROUNDED CORNERS AND NO MARGIN. `tile.svg` is a 22%-radius rounded
+#        square because older Android launchers draw that file AS the icon.
+#        iOS does the opposite: the system masks the icon to its own squircle,
+#        so a rounded tile inside that mask shows the background through four
+#        slivers of corner. iOS gets a FULL-BLEED SQUARE and lets the system
+#        round it. Same two colours, different substrate.
+#      * The mark keeps the legacy 62%: iOS does not crop the artwork, but the
+#        system's mask does cut the corners, so the one thing worth checking is
+#        that no ink reaches them. That check runs below.
 set -eu
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MARK="$ROOT/assets/icon/mark.svg"
 TILE="$ROOT/assets/icon/tile.svg"
 RES="$ROOT/android/app/src/main/res"
+ASSETS="$ROOT/ios/Runner/Assets.xcassets/AppIcon.appiconset"
 
 # Legacy tiles are never cropped, so this is purely how big the art should look
 # on the tile: 62% leaves the tile's rounded corner empty and still reads at
@@ -177,4 +196,63 @@ print('  safe-zone check: every pixel of ink is inside the %dpx (66dp) circle' %
 print('  artwork reach:   %.1f%% of that radius, aspect %.2f:1'
       % (100.0 * $mark_r / $mark_w * $fg_px / $SAFE_R, $mark_w / $mark_h))"
 
-echo "done — rebuild the APK; launchers cache icons across a plain reinstall"
+# --- 4. iOS: the same tile and mark, square and opaque ----------------------
+#
+# Sizes are the ones `Contents.json` already declares, and the file names are
+# the ones it already references — this rewrites the PIXELS and never the
+# catalog. Adding a device family in Xcode means adding its size here too, which
+# is the point: the list of sizes belongs to the platform, and duplicating it in
+# a shell array is how it silently falls behind.
+IOS_FILES="20x20@1x:20 20x20@2x:40 20x20@3x:60
+29x29@1x:29 29x29@2x:58 29x29@3x:87
+40x40@1x:40 40x40@2x:80 40x40@3x:120
+60x60@2x:120 60x60@3x:180
+76x76@1x:76 76x76@2x:152 83.5x83.5@2x:167
+1024x1024@1x:1024"
+
+mkdir -p "$ASSETS"
+
+# Fail BEFORE writing fifteen files, not after: the check is about geometry, so
+# it is answered by the artwork alone.
+#
+# The system's mask is a squircle, which CONTAINS the inscribed circle: a point
+# inside that circle is inside the mask for certain, and a point on a corner of
+# the square is not. So measuring the artwork's reach against the half-width is a
+# conservative test for "the mask cannot shave it" — and unlike a hand-checked
+# screenshot it fails the BUILD instead of shipping.
+rsvg-convert -w 2048 "$MARK" -o "$TMP/ios_measure.png"
+magick "$TMP/ios_measure.png" -trim +repage "$TMP/ios_measure_trim.png"
+mw=$(magick identify -format '%w' "$TMP/ios_measure_trim.png")
+mr=$(max_radius "$TMP/ios_measure_trim.png")
+python3 -c "
+mw, mr = float($mw), float($mr)
+# The mark is composited at LEGACY_PCT of the icon and centred, so the ink's
+# reach in icon pixels is mr scaled by (mark_width / artwork_width), and the
+# question is what fraction that is of the icon's half-width (px / 2). Both px
+# and mark_width cancel, leaving this:
+frac = (mr / mw) * ($LEGACY_PCT / 100.0) * 2.0
+print('  iOS safe-circle check: artwork reaches %.1f%% of the icon half-width' % (100.0 * frac))
+if frac > 1.0:
+    raise SystemExit(
+        'the mark reaches past the inscribed circle, which the iOS mask is '
+        'guaranteed to contain, so the corners would be shaved: %.1f%%.\\n'
+        'Shrink LEGACY_PCT or the artwork.' % (100.0 * frac))
+"
+
+for pair in $IOS_FILES; do
+  name=${pair%%:*}
+  px=${pair##*:}
+  mark=$((px * LEGACY_PCT / 100))
+  [ "$mark" -lt 1 ] && mark=1
+
+  # A white square drawn directly: `tile.svg`'s rounded rect is Android's
+  # framing, and re-rendering it here would bake those corners into an icon the
+  # system is about to round again.
+  rsvg-convert -w "$mark" "$MARK" -o "$TMP/ios_m.png"
+  magick -size "${px}x${px}" xc:white "$TMP/ios_m.png" -gravity center \
+    -composite -alpha remove -alpha off "PNG24:$ASSETS/Icon-App-$name.png"
+  echo "  AppIcon.appiconset/Icon-App-$name.png  ${px}x${px}  (mark ${mark}px)"
+done
+
+echo "done — rebuild the APK (launchers cache icons across a plain reinstall) and the"
+echo "       iOS app (Xcode caches the compiled asset catalog, but a rebuild picks it up)."

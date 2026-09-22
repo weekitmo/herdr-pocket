@@ -164,6 +164,11 @@ class _PingingTransport implements HerdrTransport {
 }
 
 class _FakeKeepAlive implements ProcessKeeper {
+  /// These fakes stand in for the Android one, which is the only platform
+  /// where the feature exists -- and the settings row is drawn from this.
+  @override
+  bool get isSupported => true;
+
   int starts = 0;
   int stops = 0;
 

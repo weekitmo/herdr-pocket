@@ -132,6 +132,7 @@ go through the machine's shell; whole files move over SFTP.
 flutter analyze && flutter test   # ~1000 tests, ~45s
 sh tool/ci_tests.sh               # the same suite, and it fails if anything skipped
 patrol test -d <device>           # on-device smoke tests; by hand, needs patrol_cli
+sh tool/ios_sim_test.sh           # platform tests on a booted iOS simulator
 ```
 
 `flutter test` skips the tests that need a live daemon and a live SSH server;

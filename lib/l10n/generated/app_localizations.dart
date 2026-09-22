@@ -1964,6 +1964,12 @@ abstract class AppLocalizations {
   /// **'This connection cannot carry files.'**
   String get attachUnavailable;
 
+  /// No description provided for @attachPickerUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This platform has no document picker.'**
+  String get attachPickerUnavailable;
+
   /// No description provided for @jumpTitle.
   ///
   /// In en, this message translates to:
@@ -2285,7 +2291,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsTransferEnabledFooter.
   ///
   /// In en, this message translates to:
-  /// **'Turns on downloading files to the phone from the file browser. Needs a folder on the phone first.'**
+  /// **'Turns on downloading files to the phone from the file browser. The folder below is where they are saved.'**
   String get settingsTransferEnabledFooter;
 
   /// No description provided for @settingsDownloadDir.
@@ -2311,6 +2317,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This folder\'s permission is gone. Pick it again.'**
   String get settingsDownloadDirRevoked;
+
+  /// No description provided for @settingsDownloadDirAppleNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to the Files app, under On My iPhone › Herdr Pocket.'**
+  String get settingsDownloadDirAppleNote;
 
   /// No description provided for @fileActionDownload.
   ///

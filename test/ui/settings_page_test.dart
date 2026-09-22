@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/data/herdr_client.dart';
+import 'package:herdr_pocket/data/local/keep_alive.dart';
 import 'package:herdr_pocket/data/providers/app_info.dart';
 import 'package:herdr_pocket/data/providers/connection.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
@@ -52,6 +53,7 @@ void main() {
     WidgetTester tester,
     ConnectionStatus status, {
     SharedPreferences? store,
+    ProcessKeeper? keeper,
   }) async {
     final override = store ?? prefs;
     await tester.pumpWidget(
@@ -61,6 +63,10 @@ void main() {
           connectionProvider.overrideWith(() => _FixedConnection(status)),
           currentHostProvider.overrideWithValue(null),
           packageInfoProvider.overrideWith((ref) async => _packageInfo),
+          // Only when a test asks: the default is the real one, whose answer on
+          // a test machine (macOS) is `false` -- which is the state this page
+          // has to survive anyway.
+          if (keeper != null) processKeeperProvider.overrideWithValue(keeper),
         ],
         child: const HerdrTheme(
           colors: HerdrColors.dark,
@@ -108,6 +114,41 @@ void main() {
   testWidgets('renders while disconnected', (tester) async {
     await pumpSettings(tester, const Disconnected());
     expect(tester.takeException(), isNull);
+  });
+
+  // THE KEEP-ALIVE ROW IS A CAPABILITY, NOT A PREFERENCE.
+  //
+  // Its mechanism is an Android foreground service. On iOS there is no such
+  // thing, so a switch there would write a preference and change nothing about
+  // the connection -- which is the app making a claim about the user's own
+  // phone that is not true. These two tests are the pair that pins that: the row
+  // exists where the platform can do it, and is absent where it cannot.
+  group('the keep-alive row', () {
+    testWidgets('is drawn where the platform can hold the process',
+        (tester) async {
+      await pumpSettings(
+        tester,
+        const Disconnected(),
+        keeper: _FixedKeeper(supported: true),
+      );
+
+      expect(find.text('Keep alive in background'), findsOneWidget);
+    });
+
+    testWidgets('is absent where it cannot, rather than present and inert',
+        (tester) async {
+      await pumpSettings(
+        tester,
+        const Disconnected(),
+        keeper: _FixedKeeper(supported: false),
+      );
+
+      expect(find.text('Keep alive in background'), findsNothing);
+      // And the rest of the group is untouched: this removes a row, it does not
+      // take the page down with it.
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('renders while a connection is failing', (tester) async {
@@ -192,6 +233,21 @@ void main() {
       expect(tester.takeException(), isNull, reason: '${colors.brightness}');
     }
   });
+}
+
+/// A process keeper that answers the one question the settings page asks.
+class _FixedKeeper implements ProcessKeeper {
+  _FixedKeeper({required bool supported}) : isSupported = supported;
+
+  @override
+  final bool isSupported;
+
+  @override
+  Future<bool> start({required String title, required String text}) async =>
+      isSupported;
+
+  @override
+  Future<void> stop() async {}
 }
 
 /// A connection that reports whatever it was built with.
