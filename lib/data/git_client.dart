@@ -93,11 +93,19 @@ class GitClient {
   /// all, and no repository. Each gets its own outcome, because "nothing is
   /// wrong here" and "I could not look" must never be the same sentence — the
   /// sidebar's own vocabulary draws the same line.
+  ///
+  /// `--untracked-files=all`, not `normal`. With `normal` a new DIRECTORY is a
+  /// single `? dir/` row, and a directory is the one thing this feature can
+  /// never diff — git refuses it, correctly, and the reader who just created
+  /// `new/thing.txt` sees one un-openable row instead of their file. `all`
+  /// lists unnamed files themselves, which is also what the desktop git clients
+  /// do. Empty directories disappear from the listing under `all`, which is
+  /// right: git cannot commit them, so there is nothing to report.
   Future<GitStatusResult> status(String cwd) async {
     final quote = quoteRemotePath(cwd);
     final out = await _runner.runCommand(
       'LC_ALL=C git -C $quote status --porcelain=v2 --branch '
-      "--untracked-files=normal -z 2>/dev/null; printf '$remoteExitMarkerEscape%s' \"\$?\"",
+      "--untracked-files=all -z 2>/dev/null; printf '$remoteExitMarkerEscape%s' \"\$?\"",
     );
     final result = _splitExit(out);
     final code = result.exitCode;
@@ -162,7 +170,64 @@ class GitClient {
       );
     }
 
-    final body = _stripTrailingNewline(result.body);
+    return _diffBody(result.body);
+  }
+
+  /// Reads the diff for a path git does not track yet.
+  ///
+  /// `git diff` cannot see a path that is not in the index, so an untracked
+  /// file has no diff from it at all — which is the whole reason this method
+  /// exists. `--no-index` is git's own answer: with `/dev/null` on one side it
+  /// prints exactly what `git add -N` followed by `git diff` would have
+  /// printed, `new file mode 100644` and content-as-additions included, and
+  /// `Binary files … differ` for something it will not render.
+  ///
+  /// Synthesising that text in the UI — which is what this replaces — meant
+  /// re-deriving the header, the missing-trailing-newline rule, the binary
+  /// rule and the path base by hand. The path base came out wrong, and the file
+  /// the user had just created was reported as "no diff to show".
+  Future<GitDiffResult> untrackedDiff(String cwd, String path) async {
+    final args = 'git -C ${quoteRemotePath(cwd)} diff --no-index --no-color '
+        '--patch -- /dev/null ${quoteRemotePath(path)}';
+
+    final out = await _runner.runCommand(
+      'LC_ALL=C $args 2>/dev/null; printf \'$remoteExitMarkerEscape%s\' "\$?"',
+    );
+    final result = _splitExit(out);
+    final code = result.exitCode;
+
+    if (code == null) return const GitDiffFailure(GitFailure.unknown);
+    if (code == 127) return const GitDiffFailure(GitFailure.notInstalled);
+    // Exit 1 is `--no-index`'s way of saying "there are differences", so for
+    // this one command it is the NORMAL answer rather than an error. It is also
+    // what an unreadable path produces, and the two are told apart by the
+    // output: anything git managed to read leaves at least the `diff --git`
+    // line, while a path it could not access leaves stdout empty (its complaint
+    // goes to the stderr this command discards).
+    if (code == 1 && result.body.trim().isEmpty) {
+      return GitDiffFailure(
+        GitFailure.unknown,
+        detail: 'git could not read $path',
+      );
+    }
+    if (code != 0 && code != 1) {
+      return GitDiffFailure(
+        GitFailure.unknown,
+        detail: 'git diff --no-index exited $code',
+      );
+    }
+
+    return _diffBody(result.body);
+  }
+
+  /// Caps and parses one diff reply.
+  ///
+  /// THE SAME RULE FOR BOTH COMMANDS, deliberately: a diff read from `git diff`
+  /// and one read from `git diff --no-index` are the same kind of answer, and two
+  /// copies of "strip the sentinel newline, cut at the cap on a byte boundary,
+  /// decode leniently" would eventually disagree about one of the three.
+  GitDiffResult _diffBody(String stdout) {
+    final body = _stripTrailingNewline(stdout);
     final encoded = utf8.encode(body);
     final truncated = encoded.length > maxDiffBytes;
     final text = truncated

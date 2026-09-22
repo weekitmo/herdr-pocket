@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/app/settings.dart';
+import 'package:herdr_pocket/data/providers/git_marks.dart';
 import 'package:herdr_pocket/data/remote_fs.dart';
 import 'package:herdr_pocket/domain/files/file_kind.dart';
 import 'package:herdr_pocket/domain/files/file_transfer.dart';
+import 'package:herdr_pocket/domain/git/git_status.dart';
+import 'package:herdr_pocket/domain/git/git_tree_marks.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/download_sheet.dart';
 import 'package:herdr_pocket/ui/components/file_actions_sheet.dart';
@@ -182,7 +185,13 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
         actions: [
           HerdrBarButton(
             label: l10n.actionRefresh,
-            onPressed: () => unawaited(_load()),
+            // The listing and the git marks are two separate reads, so both are
+            // asked for again: refreshing one and not the other would leave a
+            // row's letter describing a file the listing no longer shows.
+            onPressed: () {
+              ref.invalidate(gitTreeMarksProvider(widget.path));
+              unawaited(_load());
+            },
             child: const Icon(CupertinoIcons.arrow_clockwise),
           ),
         ],
@@ -227,6 +236,12 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
       settingsProvider.select((s) => s.fileTransferEnabled),
     );
 
+    // Git's view of this directory, or the empty set while it is being read /
+    // when there is nothing to say. Watched rather than awaited: the listing is
+    // already on screen and must not wait for two more commands, and when the
+    // marks arrive the rows redraw themselves.
+    final marks = ref.watch(gitTreeMarksProvider(widget.path)).value;
+
     return ListView.separated(
       padding: EdgeInsets.only(
         top: insets.top + Space.sm,
@@ -250,6 +265,13 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
         return _EntryRow(
           entry: entry,
           colors: colors,
+          // Null until the status read lands, and null forever outside a
+          // repository — which is exactly "draw no glyph".
+          mark: marks?.markFor(
+            widget.path,
+            entry.name,
+            isDirectory: entry.isDirectory,
+          ),
           onTap: () => unawaited(_open(entry)),
           onDownload: canDownloadEntry
               ? () => unawaited(_download(entry))
@@ -272,12 +294,17 @@ class _EntryRow extends StatelessWidget {
     required this.entry,
     required this.colors,
     required this.onTap,
+    this.mark,
     this.onDownload,
     this.onMore,
   });
 
   final RemoteDirEntry entry;
   final HerdrColors colors;
+
+  /// What git says about this row, or null when it says nothing.
+  final GitTreeMark? mark;
+
   final VoidCallback onTap;
 
   /// Null when this row offers no download — a directory, or file transfer is
@@ -310,18 +337,29 @@ class _EntryRow extends StatelessWidget {
             ),
             const SizedBox(width: Space.md),
             Expanded(
-              child: Text(
-                entry.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: TextSize.strong,
-                  // Names are machine data: they are compared against terminal
-                  // output and `git status`, so they get the machine voice.
-                  fontFamily: HerdrFonts.mono,
-                  fontFamilyFallback: HerdrFonts.monoFallback,
-                ),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      entry.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: TextSize.strong,
+                        // Names are machine data: they are compared against
+                        // terminal output and `git status`, so they get the
+                        // machine voice.
+                        fontFamily: HerdrFonts.mono,
+                        fontFamilyFallback: HerdrFonts.monoFallback,
+                      ),
+                    ),
+                  ),
+                  // Right after the name, where the eye already is: a change is
+                  // a property OF THIS FILE, not a trailing row action.
+                  if (mark != null)
+                    _ChangeMark(mark: mark!, colors: colors),
+                ],
               ),
             ),
             if (entry.isLink)
@@ -364,6 +402,102 @@ class _EntryRow extends StatelessWidget {
     );
   }
 }
+
+/// Git's word for one row: a letter for a file, a dot for a directory.
+///
+/// The letter is git's OWN (`M`, `A`, `D`, `R`, `?`, `U`), not a word this
+/// build made up — the same choice the status list makes. The colour comes from
+/// the app's existing status vocabulary, so a green `A` and a green dot mean
+/// the same kind of thing as the green they already mean elsewhere.
+class _ChangeMark extends StatelessWidget {
+  const _ChangeMark({required this.mark, required this.colors});
+
+  final GitTreeMark mark;
+  final HerdrColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final color = _markColor(colors, mark.kind);
+    final letter = mark.letter;
+
+    return Semantics(
+      // A screen reader reading a bare `M` says nothing. The glyph stays, and
+      // the meaning is carried beside it where it is invisible.
+      //
+      // `container: true` is what makes this its OWN node: without it the
+      // annotation merges into whichever ancestor node merges descendants, and
+      // the label arrives attached to the row's name instead of the glyph.
+      container: true,
+      label: letter == null
+          ? l10n.gitMarkDirectory
+          : _markLabel(l10n, mark.kind),
+      child: Padding(
+        padding: const EdgeInsets.only(left: Space.sm),
+        child: ExcludeSemantics(
+          child: letter == null
+              // A directory is never itself modified or added; it CONTAINS
+              // changes. A dot says exactly that without claiming a letter
+              // that belongs to one of its children.
+              ? Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                )
+              : Text(
+                  letter,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: TextSize.micro,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: HerdrFonts.mono,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The colour for a change kind.
+///
+/// These are the app's existing status hues, not a second palette: green for
+/// "something arrived", amber for "unfinished / look at me", red for "gone or
+/// broken". Renames and copies are neutral because nothing is wrong with them
+/// and the letter already carries the meaning.
+Color _markColor(HerdrColors colors, GitChangeKind kind) => switch (kind) {
+      GitChangeKind.added || GitChangeKind.untracked => colors.statusTextDone,
+      GitChangeKind.modified ||
+      GitChangeKind.unrecognised =>
+        colors.statusTextWaiting,
+      GitChangeKind.deleted || GitChangeKind.conflicted => colors.statusTextDied,
+      GitChangeKind.renamed ||
+      GitChangeKind.copied ||
+      GitChangeKind.typechange =>
+        colors.textDim,
+      GitChangeKind.ignored => colors.textFaint,
+    };
+
+/// The spoken name of a change kind.
+///
+/// [GitChangeKind.untracked] and [GitChangeKind.conflicted] reuse the words the
+/// status list already shows as its section titles, so the same fact has one
+/// name in the app rather than two.
+String _markLabel(AppLocalizations l10n, GitChangeKind kind) => switch (kind) {
+      GitChangeKind.modified => l10n.gitMarkModified,
+      GitChangeKind.added => l10n.gitMarkAdded,
+      GitChangeKind.deleted => l10n.gitMarkDeleted,
+      GitChangeKind.renamed => l10n.gitMarkRenamed,
+      GitChangeKind.copied => l10n.gitMarkCopied,
+      GitChangeKind.typechange => l10n.gitMarkTypeChanged,
+      GitChangeKind.untracked => l10n.gitUntracked,
+      GitChangeKind.conflicted => l10n.gitConflicted,
+      GitChangeKind.unrecognised => l10n.gitMarkUnrecognised,
+      GitChangeKind.ignored => '',
+    };
 
 class _Message extends StatelessWidget {
   const _Message({

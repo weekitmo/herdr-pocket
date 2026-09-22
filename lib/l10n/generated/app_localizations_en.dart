@@ -617,6 +617,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gitUnavailable => 'git is not installed on that machine';
 
   @override
+  String get gitMarkModified => 'Modified';
+
+  @override
+  String get gitMarkAdded => 'Added';
+
+  @override
+  String get gitMarkDeleted => 'Deleted';
+
+  @override
+  String get gitMarkRenamed => 'Renamed';
+
+  @override
+  String get gitMarkCopied => 'Copied';
+
+  @override
+  String get gitMarkTypeChanged => 'Type changed';
+
+  @override
+  String get gitMarkUnrecognised => 'Unrecognised git status';
+
+  @override
+  String get gitMarkDirectory => 'Has changes';
+
+  @override
   String get actionRefresh => 'Refresh';
 
   @override

@@ -49,6 +49,15 @@ class GitDiffView extends StatelessWidget {
         );
 
     final rows = <Widget>[];
+    // A diff whose entire content is preamble — a binary file, a new empty
+    // file, a mode-only change — has no hunks and would otherwise render as an
+    // empty screen. It is shown as a faint block, the same treatment a hunk's
+    // own preamble already gets.
+    if (diff.meta.isNotEmpty) {
+      rows.add(
+        _HunkHeader(header: diff.meta.join('\n'), colors: colors, base: base),
+      );
+    }
     for (final hunk in diff.hunks) {
       if (hunk.header.isNotEmpty) {
         rows.add(_HunkHeader(header: hunk.header, colors: colors, base: base));

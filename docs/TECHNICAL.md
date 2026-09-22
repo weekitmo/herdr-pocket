@@ -86,8 +86,17 @@ control 模式从 stdin 读 `terminal.input` / `resize` / `scroll` / `release`�
   ```mermaid 围栏用 `mermaid_core` + `mermaid_flutter` **原生渲染**（纯 Dart，无 WebView、
   无 JS），同步渲染一张流程图实测约 160 ms，所以块是懒构建的。长按文件 → 操作面板
   （Markdown 预览 / 查看文件信息 / 下载）。
-- git：`git status --porcelain=v2 --branch -z`、`git diff`。herdr 自己没有任何 git API，
-  只有 `worktree.list`（一个分支名和拓扑，没有改动文件）。
+- git：`git status --porcelain=v2 --branch --untracked-files=all -z`、`git diff`，以及
+  未跟踪文件的 **`git diff --no-index -- /dev/null <path>`**。herdr 自己没有任何 git API，
+  只有 `worktree.list`（一个分支名和拓扑，没有改动文件）。三件事都是被同一个 bug 逼出来的，
+  值得记住：`-uall` 让新建目录里的文件**逐个列出**（`normal` 只给一行 `? dir/`，
+  而目录永远无法 diff）；`--no-index` 的退出码 **1 是正常答案**（有差异），
+  「1 且 stdout 为空」才是读不到；没有 `@@` 的 diff（二进制 / 空的新文件 / 只改 mode）
+  进 `GitDiff.meta`，不再被解析器丢掉而显示成「没有可显示的差异」。
+- **文件列表联动 git**：`lib/domain/git/git_tree_marks.dart` 把 status 折成「这一行戴什么」
+  （文件 = git 原生字母，目录 = 含改动的圆点），provider 在
+  `lib/data/providers/git_marks.dart`，按绝对目录键控。不在仓库 / 读失败一律 **空集** ——
+  高亮是装饰，绝不让文件页变成错误页。
 - skills 与 MCP：`lib/data/remote_capabilities.dart` 用**一条**命令一起拿（31 个 skill
   根目录 + 14 处 MCP 配置），回复按三个 marker 切分：`HERDR_HOME\t<path>`、
   `<path>\t<description>`、`\u0001HERDR-FILE\u0001<path>`。控制字符是故意的 ——

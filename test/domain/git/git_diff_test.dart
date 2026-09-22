@@ -132,15 +132,55 @@ void main() {
       expect(GitDiff.parse('').hunks, isEmpty);
     });
 
-    test('a mode-only change has no hunks and reports empty', () {
+    test('a mode-only change keeps its mode lines, and is NOT "no diff"', () {
       // `git diff` prints the preamble and two mode lines and NOTHING else when
-      // only the mode changed. There is no text to show, and that is a fact
-      // about the change rather than a parse failure.
+      // only the mode changed. There is no text to show, but there IS a change,
+      // and reporting it as "no diff to show" was a lie: the file became
+      // executable. The preamble is kept as [GitDiff.meta].
       const raw = 'diff --git a/x.sh b/x.sh\n'
           'old mode 100644\n'
           'new mode 100755\n';
 
-      expect(GitDiff.parse(raw).isEmpty, isTrue);
+      final diff = GitDiff.parse(raw);
+
+      expect(diff.isEmpty, isFalse);
+      expect(diff.hunks, isEmpty);
+      expect(diff.meta, contains('old mode 100644'));
+      expect(diff.meta, contains('new mode 100755'));
+    });
+
+    test("a binary change keeps git's “Binary files … differ” line", () {
+      // Captured from `git diff --no-index -- /dev/null blob.bin` on this
+      // machine. Without [GitDiff.meta] the whole thing parsed to nothing and
+      // the screen said there was no diff — about a file git had just called
+      // different.
+      const raw = 'diff --git a/blob.bin b/blob.bin\n'
+          'new file mode 100644\n'
+          'index 0000000..0f49c4a\n'
+          'Binary files /dev/null and b/blob.bin differ\n';
+
+      final diff = GitDiff.parse(raw);
+
+      expect(diff.isEmpty, isFalse);
+      expect(diff.hunks, isEmpty);
+      expect(
+        diff.meta,
+        contains('Binary files /dev/null and b/blob.bin differ'),
+      );
+    });
+
+    test('a new EMPTY file still shows its header, not "no diff"', () {
+      // `git diff --no-index -- /dev/null empty.txt` exits 1 and prints three
+      // header lines and no hunk. A file was created; saying nothing happened
+      // would be wrong.
+      const raw = 'diff --git a/empty.txt b/empty.txt\n'
+          'new file mode 100644\n'
+          'index 0000000..e69de29\n';
+
+      final diff = GitDiff.parse(raw);
+
+      expect(diff.isEmpty, isFalse);
+      expect(diff.meta, contains('new file mode 100644'));
     });
 
     test('a CRLF file keeps its carriage returns', () {

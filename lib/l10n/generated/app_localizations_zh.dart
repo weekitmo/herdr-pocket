@@ -598,6 +598,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get gitUnavailable => '这台机器上没有 git';
 
   @override
+  String get gitMarkModified => '已修改';
+
+  @override
+  String get gitMarkAdded => '新增';
+
+  @override
+  String get gitMarkDeleted => '已删除';
+
+  @override
+  String get gitMarkRenamed => '已重命名';
+
+  @override
+  String get gitMarkCopied => '已复制';
+
+  @override
+  String get gitMarkTypeChanged => '文件类型已变';
+
+  @override
+  String get gitMarkUnrecognised => 'git 状态无法识别';
+
+  @override
+  String get gitMarkDirectory => '目录里有改动';
+
+  @override
   String get actionRefresh => '刷新';
 
   @override

@@ -1,11 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:herdr_pocket/data/git_client.dart';
-import 'package:herdr_pocket/data/remote_fs.dart';
-import 'package:herdr_pocket/domain/git/git_diff.dart';
 import 'package:herdr_pocket/domain/git/git_status.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/diff_view.dart';
@@ -526,11 +523,16 @@ class _GitDiffPageState extends ConsumerState<GitDiffPage> {
 
     GitDiffResult result;
     try {
-      result = await client.diff(
-        widget.cwd,
-        path: widget.entry.path,
-        staged: widget.staged,
-      );
+      // An untracked path has no diff from `git diff` at all — it is the one
+      // case git cannot answer from the index — so it is asked for through
+      // `--no-index` instead. Both return the same parsed shape.
+      result = widget.entry.isUntracked
+          ? await client.untrackedDiff(widget.cwd, widget.entry.path)
+          : await client.diff(
+              widget.cwd,
+              path: widget.entry.path,
+              staged: widget.staged,
+            );
     } on Object catch (e) {
       result = GitDiffFailure(GitFailure.unknown, detail: '$e');
     }
@@ -615,99 +617,15 @@ class _GitDiffPageState extends ConsumerState<GitDiffPage> {
             ),
           ],
         ),
-      // An untracked file has no diff at all — `git diff` cannot see a path it
-      // does not track, so this is expected rather than a failure. Its whole
-      // content is what changed, so that is what is shown, if it can be read.
-      GitDiffBody() when widget.entry.isUntracked =>
-        _UntrackedContent(entry: widget.entry, colors: colors, l10n: l10n),
+      // An empty diff is a real answer about a tracked path — no edits against
+      // the index, or nothing staged. An UNTRACKED path never reaches here:
+      // `--no-index` always finds the whole file, so the old branch that read
+      // the file by hand and rendered it as additions is gone. It was reading a
+      // repo-root-relative path as if it were absolute, and that is how a file
+      // that had just been created came to be reported as "no diff to show".
       GitDiffBody() => _Message(colors: colors, text: l10n.gitDiffEmpty),
       null => _Busy(colors: colors, message: l10n.gitLoading),
     };
-  }
-}
-
-/// The whole of an untracked file, rendered as an addition.
-///
-/// It costs one file read that the diff path already knows how to do, and it
-/// answers the question the reader actually has. No localisation key exists for
-/// "this file is new, here it is", and "No diff to show" would be true but
-/// useless.
-class _UntrackedContent extends ConsumerStatefulWidget {
-  const _UntrackedContent({
-    required this.entry,
-    required this.colors,
-    required this.l10n,
-  });
-
-  final GitEntry entry;
-  final HerdrColors colors;
-  final AppLocalizations l10n;
-
-  @override
-  ConsumerState<_UntrackedContent> createState() => _UntrackedContentState();
-}
-
-class _UntrackedContentState extends ConsumerState<_UntrackedContent> {
-  GitDiff? _diff;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_load());
-  }
-
-  Future<void> _load() async {
-    final runner = ref.read(remoteRunnerProvider);
-    if (runner == null) {
-      if (mounted) setState(() => _loading = false);
-      return;
-    }
-
-    GitDiff? diff;
-    try {
-      final result = await RemoteFs(runner).read(widget.entry.path);
-      if (result is RemoteFileContent) {
-        // Built as a unified diff rather than as its own view: the renderer is
-        // the same one a tracked file uses, so an added line looks the same
-        // wherever it came from. The synthetic header is marked as such so
-        // nobody later mistakes it for git's output.
-        diff = GitDiff.parse(
-          'diff --git a/${widget.entry.path} b/${widget.entry.path}\n'
-          'new file\n'
-          '@@ -0,0 +1,${_lineCount(result.content)} @@\n'
-          '${result.content.split('\n').map((l) => '+$l').join('\n')}',
-        );
-      }
-    } on Object {
-      diff = null;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _diff = diff;
-      _loading = false;
-    });
-  }
-
-  static int _lineCount(String content) {
-    final lines = const LineSplitter().convert(content);
-    return lines.isEmpty ? 1 : lines.length;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final diff = _diff;
-    if (_loading) {
-      return _Busy(colors: widget.colors, message: widget.l10n.gitLoading);
-    }
-    if (diff == null || diff.isEmpty) {
-      return _Message(colors: widget.colors, text: widget.l10n.gitDiffEmpty);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: Space.sm),
-      child: GitDiffView(diff: diff, colors: widget.colors),
-    );
   }
 }
 

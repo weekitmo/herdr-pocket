@@ -613,7 +613,7 @@ void main() {
       expect(
         runner.onlyCommand,
         "LC_ALL=C git -C '/tmp/repo' status --porcelain=v2 --branch "
-        '--untracked-files=normal -z 2>/dev/null; '
+        '--untracked-files=all -z 2>/dev/null; '
         "printf '$commandMarker%s' \"\$?\"",
       );
       expectOneLine(runner.onlyCommand);

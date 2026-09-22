@@ -39,7 +39,9 @@ skills and MCP and `@` for files.
 the phone.
 
 **Git changes.** The pane's directory as a repository: staged, unstaged,
-untracked, conflicted, ahead/behind, and a diff for any file.
+untracked, conflicted, ahead/behind, and a diff for any file — newly added,
+deleted and binary ones included. Browsing the working directory marks the
+files and folders that have changed.
 
 **Starting an agent.** Pick a directory and an agent — in a fresh `git worktree`
 if you want one. Or drop an agent into an idle shell pane.

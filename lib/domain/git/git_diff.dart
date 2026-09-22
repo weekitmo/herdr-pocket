@@ -63,10 +63,17 @@ class GitDiffHunk {
 
 /// A parsed diff.
 class GitDiff {
-  const GitDiff._({required this.hunks, required this.isEmpty});
+  const GitDiff._({
+    required this.hunks,
+    required this.meta,
+    required this.isEmpty,
+  });
 
   /// An empty diff — nothing to compare, or nothing changed.
-  const GitDiff.empty() : hunks = const [], isEmpty = true;
+  const GitDiff.empty()
+      : hunks = const [],
+        meta = const [],
+        isEmpty = true;
 
   /// Parses unified diff text.
   ///
@@ -76,6 +83,12 @@ class GitDiff {
   /// error.
   factory GitDiff.parse(String raw) {
     final hunks = <GitDiffHunk>[];
+    // Preamble that belongs to NO hunk. `git diff` prints this shape for a
+    // change with nothing textual to show: a binary file (`Binary files …
+    // differ`), a brand-new EMPTY file, and a mode-only change. Dropping it
+    // made every one of those report "no diff to show" about a file that
+    // genuinely changed — see [isEmpty].
+    var meta = <String>[];
     // The trailing newline of the whole diff splits into one empty element;
     // counting it would add a phantom context line to every hunk, inflate the
     // line count and show a blank row at the end of the file.
@@ -103,7 +116,8 @@ class GitDiff {
     // diff disagree with the file it claims to describe. The single trailing
     // newline is removed above, because it would otherwise split into one empty
     // element and become a phantom context line at the end of every hunk.
-    for (final line in text.split('\n')) {
+    final lines = text.split('\n');
+    for (final line in lines) {
       if (line.startsWith('@@')) {
         flush();
         // The preamble belongs to the hunk that follows it, so it is folded
@@ -179,17 +193,31 @@ class GitDiff {
     }
     flush();
 
+    // Whatever is still in the prelude never found a `@@` to belong to. It is
+    // the whole story of a binary / empty-file / mode-only change, so it is kept
+    // rather than dropped.
+    if (prelude.isNotEmpty) meta = prelude;
+
     return GitDiff._(
       hunks: List<GitDiffHunk>.unmodifiable(hunks),
-      isEmpty: !text.split('\n').any((l) => l.startsWith('@@')),
+      meta: List<String>.unmodifiable(meta),
+      isEmpty: hunks.isEmpty && meta.isEmpty,
     );
   }
 
   /// The hunks, in file order.
   final List<GitDiffHunk> hunks;
 
-  /// True when there was nothing to show — an empty diff, or a diff with no
-  /// hunks at all (a mode-only change looks like this).
+  /// Lines that belong to no hunk: a binary file's `Binary files … differ`,
+  /// the header of a new empty file, a mode-only change's `old mode`/`new mode`.
+  /// These are the complete content of such a diff, so they are shown on their
+  /// own rather than folded into a hunk that does not exist.
+  final List<String> meta;
+
+  /// True when there was nothing to show — an empty diff, not a diff whose
+  /// whole content happens to be [meta]. A binary file that changed HAS a diff
+  /// (git says so, and the two paths are in it), and reporting that as "no diff"
+  /// is the lie this field used to tell.
   final bool isEmpty;
 
   /// Added lines across every hunk.

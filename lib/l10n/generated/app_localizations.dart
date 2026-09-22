@@ -1220,6 +1220,54 @@ abstract class AppLocalizations {
   /// **'git is not installed on that machine'**
   String get gitUnavailable;
 
+  /// No description provided for @gitMarkModified.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get gitMarkModified;
+
+  /// No description provided for @gitMarkAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get gitMarkAdded;
+
+  /// No description provided for @gitMarkDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted'**
+  String get gitMarkDeleted;
+
+  /// No description provided for @gitMarkRenamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Renamed'**
+  String get gitMarkRenamed;
+
+  /// No description provided for @gitMarkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get gitMarkCopied;
+
+  /// No description provided for @gitMarkTypeChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Type changed'**
+  String get gitMarkTypeChanged;
+
+  /// No description provided for @gitMarkUnrecognised.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognised git status'**
+  String get gitMarkUnrecognised;
+
+  /// No description provided for @gitMarkDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Has changes'**
+  String get gitMarkDirectory;
+
   /// No description provided for @actionRefresh.
   ///
   /// In en, this message translates to:

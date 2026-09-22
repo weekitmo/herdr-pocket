@@ -238,6 +238,111 @@ void main() {
       expect(find.textContaining('Something went wrong'), findsOneWidget);
     });
 
+    /// A listing with one directory and three files, plus a status that says
+    /// `src/` contains a change and one file is modified.
+    String markedListing() => _ok(
+          'total 32\n'
+          'drwxr-xr-x   4 kit  wheel  128 Jan  4 11:22 src\n'
+          '-rw-r--r--   1 kit  wheel    7 Jan  4 11:22 edited.txt\n'
+          '-rw-r--r--   1 kit  wheel    7 Jan  4 11:22 new.txt\n'
+          '-rw-r--r--   1 kit  wheel    7 Jan  4 11:22 plain.txt\n',
+        );
+
+    String markedStatus() => _status(
+          '1 .M N... 100644 100644 100644 '
+          '45b983be36b73c0788dc9cbcb76cbb80fc7bb057 '
+          '45b983be36cbb8fc7bb057b087f099dc481a12f edited.txt\u0000'
+          '? new.txt\u0000'
+          '1 .M N... 100644 100644 100644 '
+          '45b983be36b73c0788dc9cbcb76cbb80fc7bb057 '
+          '45b983be36cbb8fc7bb057b087f099dc481a12f src/inner.txt\u0000',
+        );
+
+    testWidgets("a changed file wears git's letter, a changed directory a dot",
+        (tester) async {
+      // The listing is the page's job; the marks are an extra that must arrive
+      // without delaying it.
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        _host(
+          const FileTreePage(path: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('status ')) return markedStatus();
+            if (command.contains('ls -lA')) return markedListing();
+            return _ok('');
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // git's own alphabet, not words this build invented: `M` for the edited
+      // file and `?` for the untracked one.
+      expect(find.text('M'), findsOneWidget);
+      expect(find.text('?'), findsOneWidget);
+      // The directory carries the meaning without a letter: it is not itself
+      // modified, it CONTAINS a change.
+      expect(find.bySemanticsLabel('Has changes'), findsOneWidget);
+      // Each meaning lands on exactly the one row it belongs to, which is also
+      // the assertion that `plain.txt` wears nothing: there is only one
+      // `Modified` in the listing, and it is not on the unchanged file.
+      expect(find.bySemanticsLabel('Modified'), findsOneWidget);
+      expect(find.bySemanticsLabel('Untracked'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets(
+        'a subdirectory looks its children up by their REPO-relative path',
+        (tester) async {
+      // `GitEntry.path` is relative to the repository ROOT, while the page is
+      // showing `/tmp/repo/src`: joining the two wrong is how every mark in the
+      // app would point at a file that does not exist.
+      await tester.pumpWidget(
+        _host(
+          const FileTreePage(path: '/tmp/repo/src'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('status ')) return markedStatus();
+            if (command.contains('ls -lA')) {
+              return _ok(
+                'total 8\n'
+                '-rw-r--r--   1 kit  wheel    7 Jan  4 11:22 inner.txt\n',
+              );
+            }
+            return _ok('');
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('inner.txt'), findsOneWidget);
+      expect(find.text('M'), findsOneWidget);
+    });
+
+    testWidgets('git failing means NO marks, not a broken listing',
+        (tester) async {
+      // A decoration that turns the file browser into an error page would be
+      // worse than no decoration at all: the listing is the reason the screen
+      // exists.
+      await tester.pumpWidget(
+        _host(
+          const FileTreePage(path: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) {
+              return '$remoteExitMarker' '128';
+            }
+            if (command.contains('ls -lA')) return markedListing();
+            return _ok('');
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('edited.txt'), findsOneWidget);
+      expect(find.text('M'), findsNothing);
+      expect(find.textContaining('Something went wrong'), findsNothing);
+    });
+
     testWidgets('tapping a file pushes the preview', (tester) async {
       await tester.pumpWidget(
         _host(
@@ -437,15 +542,40 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('an untracked file shows its content as an addition',
+    testWidgets(
+        'an untracked file is diffed through git, not read by hand',
         (tester) async {
+      // The bug this replaced: `git diff` cannot see an untracked path, so the
+      // page used to read the file itself — with a REPO-ROOT-RELATIVE path
+      // against a shell whose cwd is the login home. The read failed and the
+      // screen said "No diff to show" about a file that had just been created.
+      // `git diff --no-index` answers the same question from git's own side.
+      String? statusCommand;
+      String? diffCommand;
       await tester.pumpWidget(
         _host(
           const GitPage(cwd: '/tmp/repo'),
           _FakeRunner((command) {
             if (command.contains('rev-parse')) return _root();
-            if (command.startsWith('head ')) return _ok('hello from a new file\n');
-            return _status('? fresh.txt\u0000');
+            if (command.contains('--no-index')) {
+              diffCommand = command;
+              // Exit 1, NOT 0: `--no-index` reports "there are differences"
+              // that way, and treating it as a failure was the second half of
+              // this bug.
+              return 'diff --git a/fresh.txt b/fresh.txt\n'
+                  'new file mode 100644\n'
+                  '--- /dev/null\n'
+                  '+++ b/fresh.txt\n'
+                  '@@ -0,0 +1 @@\n'
+                  '+hello from a new file\n'
+                  '$remoteExitMarker'
+                  '1';
+            }
+            if (command.contains('status ')) {
+              statusCommand = command;
+              return _status('? fresh.txt\u0000');
+            }
+            return _ok('');
           }),
         ),
       );
@@ -454,9 +584,143 @@ void main() {
       await tester.tap(find.text('fresh.txt'));
       await tester.pumpAndSettle();
 
-      // `git diff` cannot see an untracked path, so the whole file is shown as
-      // an addition rather than as "No diff to show".
       expect(find.text('hello from a new file'), findsOneWidget);
+      expect(find.text('No diff to show'), findsNothing);
+      expect(diffCommand, contains('--no-index'));
+      expect(diffCommand, contains('-- /dev/null'));
+      expect(diffCommand, contains("'fresh.txt'"));
+      // The whole point of `--untracked-files=all`: one row per FILE, so a
+      // brand-new directory does not become a single un-openable row.
+      expect(statusCommand, contains('--untracked-files=all'));
+    });
+
+    testWidgets("an unreadable untracked path is a failure, not 'no diff'",
+        (tester) async {
+      // `--no-index` answers exit 1 both for "differences" and for "I could
+      // not read this". They are told apart by the OUTPUT: a readable path
+      // always leaves at least the `diff --git` line.
+      await tester.pumpWidget(
+        _host(
+          const GitPage(cwd: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('--no-index')) return '$remoteExitMarker' '1';
+            return _status('? vanished.txt\u0000');
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('vanished.txt'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('No diff to show'), findsNothing);
+      expect(find.textContaining('Something went wrong'), findsOneWidget);
+    });
+
+    testWidgets('a deleted file shows what was removed', (tester) async {
+      // The other half of the report: "only modifications have diffs". A
+      // deletion is an ordinary unstaged change, and `git diff` renders it —
+      // this test keeps it that way.
+      await tester.pumpWidget(
+        _host(
+          const GitPage(cwd: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('diff ')) {
+              return _ok(
+                'diff --git a/gone.txt b/gone.txt\n'
+                'deleted file mode 100644\n'
+                '--- a/gone.txt\n'
+                '+++ /dev/null\n'
+                '@@ -1 +0,0 @@\n'
+                '-was here\n',
+              );
+            }
+            return _status(
+              '1 .D N... 100644 100644 000000 '
+              '587be6b4c3f93f93c489c0111bba5596147a26cb '
+              '587be6b4c3f93f93c489c0111bba5596147a26cb gone.txt\u0000',
+            );
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('gone.txt'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('was here'), findsOneWidget);
+      expect(find.text('No diff to show'), findsNothing);
+    });
+
+    testWidgets('a staged NEW file shows its content as additions',
+        (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const GitPage(cwd: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('diff ')) {
+              return _ok(
+                'diff --git a/staged_new.txt b/staged_new.txt\n'
+                'new file mode 100644\n'
+                'index 0000000..350888f\n'
+                '--- /dev/null\n'
+                '+++ b/staged_new.txt\n'
+                '@@ -0,0 +1 @@\n'
+                '+staged content\n',
+              );
+            }
+            return _status(
+              '1 A. N... 000000 100644 100644 '
+              '0000000000000000000000000000000000000000 '
+              '350888f88b7647220e610e725a503c1983ba6a3f staged_new.txt\u0000',
+            );
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('staged_new.txt'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('staged content'), findsOneWidget);
+      expect(find.text('No diff to show'), findsNothing);
+    });
+
+    testWidgets('a BINARY change says git said so instead of "no diff"',
+        (tester) async {
+      // A binary diff has no hunks at all. Before `GitDiff.meta` the whole
+      // reply parsed to nothing and the page reported no difference about a
+      // file git had just called different.
+      await tester.pumpWidget(
+        _host(
+          const GitPage(cwd: '/tmp/repo'),
+          _FakeRunner((command) {
+            if (command.contains('rev-parse')) return _root();
+            if (command.contains('diff ')) {
+              return _ok(
+                'diff --git a/blob.bin b/blob.bin\n'
+                'index 1234567..89abcde 100644\n'
+                'Binary files a/blob.bin and b/blob.bin differ\n',
+              );
+            }
+            return _status(
+              '1 .M N... 100644 100644 100644 '
+              '1234567890abcdef1234567890abcdef12345678 '
+              '89abcdef0123456789abcdef0123456789abcdef blob.bin\u0000',
+            );
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('blob.bin'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Binary files'), findsOneWidget);
+      expect(find.text('No diff to show'), findsNothing);
     });
   });
 
