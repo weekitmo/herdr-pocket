@@ -8,8 +8,8 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
-| [0.4.0](#v040) | 2026-09-20 | 应用锁（PIN + 指纹）；机器延迟；看板默认全展开并记住折叠；慢链路上的三步引导 |
-| [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
+| [0.4.1](#v041) | 2026-09-22 | iOS（模拟器）：权限、图标、下载目录、文件选择器 |
+| [0.4.0](#v040) | 2026-09-20 | 应用锁（PIN + 指纹）；机器延迟；看板默认全展开并记住折叠；慢链路上的三步引导 || [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
 | [0.3.3](#v033) | 2026-09-18 | 从 shell 页返回后，界面不再假死 |
 | [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
 | [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
@@ -17,6 +17,42 @@
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v041"></a>
+## [0.4.1] — 2026-09-22
+
+### 中文
+
+**新功能**
+
+- **iOS。** 看板、工作区树、终端镜像、文件、Git 都能在 iOS 上用了。
+  - **下载到手机**存在 app 自己的目录，在「文件」App 的「我的 iPhone › Herdr Pocket」里。
+  - **从手机选文件**（终端聊天窗的 `+`）。
+  - 相机、相册、Face ID、局域网四处权限提示都是中文的。
+- **图标。** iOS 上不再是 Flutter 默认 logo，与 Android 同一图案。
+
+**说明**
+
+- iOS 暂只支持模拟器。**后台保活**在 iOS 上不可用（依赖 Android 的前台服务），
+  设置里不显示这一项。
+
+### English
+
+**New**
+
+- **iOS.** The board, workspace tree, terminal mirror, files and git all work on iOS now.
+  - **Downloading to the phone** saves into the app's own folder, in the Files app under
+    *On My iPhone › Herdr Pocket*.
+  - **Picking a file off the phone** (the composer's `+`).
+  - Camera, photo library, Face ID and local-network prompts are localised.
+- **The icon.** No longer the stock Flutter logo on iOS; the same mark as Android.
+
+**Notes**
+
+- iOS is simulator-only for now. **Background keep-alive** is unavailable on iOS (it relies on
+  an Android foreground service), so the setting does not appear there.
 
 ---
 
