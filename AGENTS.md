@@ -34,6 +34,8 @@
    （改坏了是**静默**失手 —— 文件在仓库里但没进 bundle，或者 plist 直接不合法）。
    ⚠️ 缺 usage description 在 iOS 上不是「功能不可用」而是**进程被系统杀掉**，
    见 [`../AGENTS.md`](../AGENTS.md) Phase 32。
+10. **不要乱加tests** 禁止对项目内涉及到的文本文案进行单独加测试，导致测试用例膨胀。
+11. **UI界面保持简洁** 不要擅自在UI界面进行过多的文案说明以及技术说明，保持简洁明了。
 
 ## 四条命令
 
@@ -61,5 +63,5 @@ sh tool/ios_sim_test.sh             # iOS 模拟器集成测试（起一次性 s
   的原话是「直接写高颜值客户端」。功能条目只写「是什么」，不写「为什么我们这么设计」，
   那些留给 `docs/TECHNICAL.md`。
 
-细节、来历和已验证的结论都在 [`docs/TECHNICAL.md`](docs/TECHNICAL.md) 与
-[`../AGENTS.md`](../AGENTS.md)，这里不重复。
+细节、来历和已验证的结论都在 [`docs/TECHNICAL.md`](docs/TECHNICAL.md) 
+- commit 请以英文 + [`COMMIT.md`](COMMIT.md) 规范执行
