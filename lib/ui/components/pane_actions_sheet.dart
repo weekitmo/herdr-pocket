@@ -21,6 +21,7 @@ Future<PaneAction?> showPaneActions(
   BuildContext context, {
   required PaneInfo pane,
   bool withOpen = false,
+  List<String> ledgerAgents = const [],
 }) {
   final l10n = AppLocalizations.of(context);
   return showCupertinoModalPopup<PaneAction>(
@@ -43,7 +44,11 @@ Future<PaneAction?> showPaneActions(
         ),
       ),
       actions: [
-        for (final action in paneActionsFor(pane, withOpen: withOpen))
+        for (final action in paneActionsFor(
+          pane,
+          withOpen: withOpen,
+          ledgerAgents: ledgerAgents,
+        ))
           CupertinoActionSheetAction(
             onPressed: () => Navigator.of(sheetContext).pop(action),
             child: actionSheetLabel(labelForPaneAction(action, l10n)),
@@ -67,6 +72,11 @@ Future<PaneAction?> showPaneActions(
   PaneAction.open => (UiIconName.workspaces, CupertinoIcons.arrow_right_square),
   PaneAction.browseFiles => (UiIconName.folder, CupertinoIcons.folder),
   PaneAction.git => (UiIconName.branch, CupertinoIcons.arrow_branch),
+  // The themed set has no document glyph; `BlocksAndArrows` is the closest
+  // thing in it to "a structured list of what happened", and the row's label
+  // does the rest of the work. A proper doc icon means fetching one into
+  // `assets/ui_icons/` and re-recording the manifest.
+  PaneAction.ledger => (UiIconName.panes, CupertinoIcons.doc_text),
   PaneAction.focus => (UiIconName.aim, CupertinoIcons.scope),
 };
 
@@ -79,5 +89,6 @@ String labelForPaneAction(PaneAction action, AppLocalizations l10n) =>
       PaneAction.open => l10n.actionOpen,
       PaneAction.browseFiles => l10n.filesTitle,
       PaneAction.git => l10n.gitTitle,
+      PaneAction.ledger => l10n.paneActionLedger,
       PaneAction.focus => l10n.workspacesFocusPane,
     };

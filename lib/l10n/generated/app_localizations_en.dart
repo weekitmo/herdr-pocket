@@ -1629,4 +1629,131 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellCommandCustom => 'Custom';
+
+  @override
+  String get ledgerTitle => 'Session ledger';
+
+  @override
+  String get ledgerReload => 'Reload';
+
+  @override
+  String get ledgerLoading => 'Reading the session record';
+
+  @override
+  String get ledgerUnreachable => 'The machine\'s files are not reachable now';
+
+  @override
+  String get ledgerUnreadable => 'This agent\'s session record cannot be read';
+
+  @override
+  String get ledgerEmpty => 'No session record found for this directory';
+
+  @override
+  String get ledgerModel => 'Model';
+
+  @override
+  String get ledgerDirectory => 'Directory';
+
+  @override
+  String get ledgerTurns => 'Turns';
+
+  @override
+  String get ledgerToolCalls => 'Tool calls';
+
+  @override
+  String get ledgerToolTime => 'Time in tools';
+
+  @override
+  String get ledgerTokens => 'Tokens';
+
+  @override
+  String get ledgerTokenIn => 'in';
+
+  @override
+  String get ledgerTokenOut => 'out';
+
+  @override
+  String get ledgerTokenCache => 'cache';
+
+  @override
+  String get ledgerContextWindow => 'Context window';
+
+  @override
+  String get ledgerCost => 'Cost';
+
+  @override
+  String get ledgerGuessed => 'Newest session in this directory';
+
+  @override
+  String get ledgerTailOnly => 'Only the end of the file was read';
+
+  @override
+  String get ledgerTools => 'Tools';
+
+  @override
+  String get ledgerToolCount => 'calls';
+
+  @override
+  String get ledgerToolMedian => 'median';
+
+  @override
+  String get ledgerToolTimeShort => 'busy';
+
+  @override
+  String get ledgerYou => 'You';
+
+  @override
+  String get ledgerThinking => 'Thinking';
+
+  @override
+  String get ledgerNoResult => 'no result';
+
+  @override
+  String get paneActionLedger => 'Session ledger';
+
+  @override
+  String ledgerCallsCount(int count) {
+    return '$count calls';
+  }
+
+  @override
+  String ledgerFailuresCount(int count) {
+    return '$count failed';
+  }
+
+  @override
+  String ledgerOpenCount(int count) {
+    return '$count with no result';
+  }
+
+  @override
+  String ledgerSkipped(int count) {
+    return '$count lines could not be read';
+  }
+
+  @override
+  String ledgerTurnLabel(int index) {
+    return 'Turn $index';
+  }
+
+  @override
+  String ledgerChars(int count) {
+    return '$count chars';
+  }
+
+  @override
+  String get settingsLedger => 'Session ledger (beta)';
+
+  @override
+  String get settingsLedgerNote =>
+      'Reads the agent\'s own session record: turns, tools, tokens. pi and codex for now.';
+
+  @override
+  String get ledgerFailuresShort => '✗';
+
+  @override
+  String get ledgerNoTurns => 'This session has no turns yet';
+
+  @override
+  String get ledgerAssistant => 'Assistant';
 }

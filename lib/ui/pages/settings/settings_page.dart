@@ -190,6 +190,15 @@ class SettingsPage extends ConsumerWidget {
                       value: settings.keepAlive,
                       onChanged: (v) => notifier.setKeepAlive(enabled: v),
                     ),
+                  // A BETA ROW IN THE GROUP IT BELONGS TO rather than a group
+                  // of its own: one switch is not a section, and the note is
+                  // what marks it as unfinished.
+                  SettingsSwitchRow(
+                    label: l10n.settingsLedger,
+                    note: l10n.settingsLedgerNote,
+                    value: settings.ledgerEnabled,
+                    onChanged: (v) => notifier.setLedgerEnabled(enabled: v),
+                  ),
                   SettingsSwitchRow(
                     label: l10n.settingsAutoConnect,
                     value: settings.autoConnect,

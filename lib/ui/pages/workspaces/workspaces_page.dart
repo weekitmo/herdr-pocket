@@ -1,9 +1,11 @@
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:herdr_pocket/app/settings.dart';
 import 'package:herdr_pocket/data/providers/hosts.dart';
 import 'package:herdr_pocket/data/providers/nav_tree.dart';
 import 'package:herdr_pocket/data/providers/refresh.dart';
+import 'package:herdr_pocket/data/transcripts/transcript_registry.dart';
 import 'package:herdr_pocket/domain/agent/agent_group.dart';
 import 'package:herdr_pocket/domain/workspace/pane_actions.dart';
 import 'package:herdr_pocket/domain/workspace/pane_info.dart';
@@ -25,6 +27,7 @@ import 'package:herdr_pocket/ui/pages/git/git_page.dart';
 import 'package:herdr_pocket/ui/pages/launch/launch_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/layout_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
+import 'package:herdr_pocket/ui/pages/transcript/ledger_page.dart';
 
 /// The machine's own hierarchy: workspaces, their tabs, and the panes in them.
 ///
@@ -361,7 +364,17 @@ class WorkspacesPage extends ConsumerWidget {
     HerdrColors colors,
     AppLocalizations l10n,
   ) async {
-    final action = await showPaneActions(context, pane: pane, withOpen: true);
+    final action = await showPaneActions(
+      context,
+      pane: pane,
+      withOpen: true,
+      // Read here, at the moment the rows are built: the beta switch decides
+      // whether the row exists at all, so a pane with nothing to offer does not
+      // get a row that opens an empty page.
+      ledgerAgents: ref.read(settingsProvider).ledgerEnabled
+          ? supportedLedgerAgents
+          : const [],
+    );
 
     if (!context.mounted || action == null) return;
     switch (action) {
@@ -371,6 +384,13 @@ class WorkspacesPage extends ConsumerWidget {
         _push(context, FileTreePage(path: pane.cwd!));
       case PaneAction.git:
         _push(context, GitPage(cwd: pane.cwd!));
+      case PaneAction.ledger:
+        // Same page as the terminal offers, asked from the other door: the
+        // pane's directory is what finds the session either way.
+        _push(
+          context,
+          LedgerPage(agentId: pane.agent, cwd: pane.cwd!, paneId: pane.paneId),
+        );
       case PaneAction.focus:
         await _focus(
           context,

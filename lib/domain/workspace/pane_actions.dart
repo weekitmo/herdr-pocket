@@ -28,6 +28,14 @@ enum PaneAction {
   /// Read the pane's git status and diff.
   git,
 
+  /// Read the agent session's own record: turns, tools, tokens.
+  ///
+  /// Only offered for agents whose transcripts this build can parse, and the
+  /// list is passed in rather than known here: it is the adapter registry that
+  /// owns the answer, and a second copy of it in the domain would be the one
+  /// that goes stale.
+  ledger,
+
   /// Move the machine's own focus to this pane.
   focus,
 }
@@ -43,12 +51,19 @@ enum PaneAction {
 /// open a page whose only honest content is "no directory", so the row is not
 /// drawn at all. Same for focus: a pane that already has the machine's focus
 /// has nothing to do.
-List<PaneAction> paneActionsFor(PaneInfo pane, {bool withOpen = false}) {
+List<PaneAction> paneActionsFor(
+  PaneInfo pane, {
+  bool withOpen = false,
+  List<String> ledgerAgents = const [],
+}) {
   final hasDirectory = pane.cwd != null && pane.cwd!.trim().isNotEmpty;
+  final hasLedger =
+      hasDirectory && ledgerAgents.contains(pane.agent.trim().toLowerCase());
   return [
     if (withOpen) PaneAction.open,
     if (hasDirectory) PaneAction.browseFiles,
     if (hasDirectory) PaneAction.git,
+    if (hasLedger) PaneAction.ledger,
     if (!pane.isFocused) PaneAction.focus,
   ];
 }

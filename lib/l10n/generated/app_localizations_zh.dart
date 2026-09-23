@@ -1540,4 +1540,131 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shellCommandCustom => '自定义';
+
+  @override
+  String get ledgerTitle => '会话账本';
+
+  @override
+  String get ledgerReload => '重新读取';
+
+  @override
+  String get ledgerLoading => '正在读取会话记录';
+
+  @override
+  String get ledgerUnreachable => '现在读不到机器上的文件';
+
+  @override
+  String get ledgerUnreadable => '这个 agent 的会话记录读不了';
+
+  @override
+  String get ledgerEmpty => '这个目录下没有找到会话记录';
+
+  @override
+  String get ledgerModel => '模型';
+
+  @override
+  String get ledgerDirectory => '目录';
+
+  @override
+  String get ledgerTurns => '回合';
+
+  @override
+  String get ledgerToolCalls => '工具调用';
+
+  @override
+  String get ledgerToolTime => '工具耗时';
+
+  @override
+  String get ledgerTokens => 'Token';
+
+  @override
+  String get ledgerTokenIn => '输入';
+
+  @override
+  String get ledgerTokenOut => '输出';
+
+  @override
+  String get ledgerTokenCache => '缓存';
+
+  @override
+  String get ledgerContextWindow => '上下文窗口';
+
+  @override
+  String get ledgerCost => '花费';
+
+  @override
+  String get ledgerGuessed => '按目录推测的最新会话';
+
+  @override
+  String get ledgerTailOnly => '只读了文件末尾';
+
+  @override
+  String get ledgerTools => '工具';
+
+  @override
+  String get ledgerToolCount => '次数';
+
+  @override
+  String get ledgerToolMedian => '中位';
+
+  @override
+  String get ledgerToolTimeShort => '耗时';
+
+  @override
+  String get ledgerYou => '你';
+
+  @override
+  String get ledgerThinking => '思考';
+
+  @override
+  String get ledgerNoResult => '没有结果';
+
+  @override
+  String get paneActionLedger => '会话账本';
+
+  @override
+  String ledgerCallsCount(int count) {
+    return '$count 次';
+  }
+
+  @override
+  String ledgerFailuresCount(int count) {
+    return '失败 $count';
+  }
+
+  @override
+  String ledgerOpenCount(int count) {
+    return '$count 次没有结果';
+  }
+
+  @override
+  String ledgerSkipped(int count) {
+    return '$count 行读不懂';
+  }
+
+  @override
+  String ledgerTurnLabel(int index) {
+    return '回合 $index';
+  }
+
+  @override
+  String ledgerChars(int count) {
+    return '$count 字';
+  }
+
+  @override
+  String get settingsLedger => '会话账本（Beta）';
+
+  @override
+  String get settingsLedgerNote =>
+      '读 agent 自己的会话记录：回合、工具、token。目前支持 pi 和 codex。';
+
+  @override
+  String get ledgerFailuresShort => '✗';
+
+  @override
+  String get ledgerNoTurns => '这个会话还没有对话';
+
+  @override
+  String get ledgerAssistant => '助手';
 }

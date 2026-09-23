@@ -9,15 +9,55 @@ import 'package:herdr_pocket/domain/workspace/pane_info.dart';
 /// mode of writing it twice is silent: one screen offers "Git changes" and the
 /// other does not, and nothing about either screen looks wrong. So the rule
 /// lives in one function and is checked here.
-PaneInfo pane({String? cwd, bool focused = false}) => PaneInfo(
-  paneId: 'w9:p1',
-  workspaceId: 'w9',
-  tabId: 'w9:t1',
-  cwd: cwd,
-  isFocused: focused,
-);
+PaneInfo pane({String? cwd, bool focused = false, String agent = ''}) =>
+    PaneInfo(
+      paneId: 'w9:p1',
+      workspaceId: 'w9',
+      tabId: 'w9:t1',
+      cwd: cwd,
+      agent: agent,
+      isFocused: focused,
+    );
 
 void main() {
+  test('the ledger row is offered only for an agent we can read', () {
+    // Two gates in one: the agent has to be one of the adapters this build
+    // ships, and the beta switch has to have been turned on — which is what
+    // passing an empty list means.
+    final withBeta = paneActionsFor(
+      pane(cwd: '/x', agent: 'pi'),
+      ledgerAgents: const ['pi', 'codex'],
+    );
+    expect(withBeta, contains(PaneAction.ledger));
+
+    final withoutBeta = paneActionsFor(pane(cwd: '/x', agent: 'pi'));
+    expect(withoutBeta, isNot(contains(PaneAction.ledger)));
+
+    final otherAgent = paneActionsFor(
+      pane(cwd: '/x', agent: 'claude'),
+      ledgerAgents: const ['pi', 'codex'],
+    );
+    expect(otherAgent, isNot(contains(PaneAction.ledger)));
+  });
+
+  test('an agent name is matched without regard to case or padding', () {
+    final actions = paneActionsFor(
+      pane(cwd: '/x', agent: ' Pi '),
+      ledgerAgents: const ['pi'],
+    );
+    expect(actions, contains(PaneAction.ledger));
+  });
+
+  test('a pane with no directory offers no ledger either', () {
+    // There is nothing to find the session file by, which is the same reason
+    // files and git are not offered.
+    final actions = paneActionsFor(
+      pane(agent: 'pi'),
+      ledgerAgents: const ['pi'],
+    );
+    expect(actions, isNot(contains(PaneAction.ledger)));
+  });
+
   test('a pane with a directory offers files and git', () {
     final actions = paneActionsFor(pane(cwd: '/x'));
     expect(actions, [

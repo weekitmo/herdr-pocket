@@ -161,6 +161,7 @@ class SettingsState {
     this.safetyInset = SafetyInsetMode.auto,
     this.fileTransferEnabled = false,
     this.composerEnabled = true,
+    this.ledgerEnabled = false,
     this.sessionCommand = defaultSessionCommand,
     this.scrollbackLines = defaultScrollbackLines,
     this.downloadDirUri,
@@ -299,6 +300,19 @@ class SettingsState {
   /// that is permanently unavailable is a worse answer than one that is absent.
   final bool composerEnabled;
 
+  /// Whether the beta session-ledger screen is offered at all.
+  ///
+  /// OFF BY DEFAULT, and that is the whole point of the switch: the ledger
+  /// reads files that another program writes for itself, in formats nobody
+  /// promised us, so it is the one screen in the app that can be wrong about
+  /// the user's machine in ways we cannot fix from here. A beta row that has to
+  /// be found is a beta row whose failures are chosen by the person reading
+  /// them; the terminal underneath is unaffected either way.
+  ///
+  /// A switch rather than a build flag because the people who want it are the
+  /// people running the agents, and they can decide for themselves.
+  final bool ledgerEnabled;
+
   /// What the SSH shell runs when it opens. Blank means the login shell.
   ///
   /// A SETTING RATHER THAN A CONSTANT, because the same feature is two different
@@ -332,6 +346,7 @@ class SettingsState {
     bool clearDownloadDir = false,
     bool? autoUpdateCheck,
     bool? composerEnabled,
+    bool? ledgerEnabled,
     String? sessionCommand,
     int? scrollbackLines,
   }) {
@@ -351,6 +366,7 @@ class SettingsState {
       safetyInset: safetyInset ?? this.safetyInset,
       fileTransferEnabled: fileTransferEnabled ?? this.fileTransferEnabled,
       composerEnabled: composerEnabled ?? this.composerEnabled,
+      ledgerEnabled: ledgerEnabled ?? this.ledgerEnabled,
       sessionCommand: sessionCommand ?? this.sessionCommand,
       scrollbackLines: scrollbackLines ?? this.scrollbackLines,
       // Both or neither: a label without a URI names a folder the app cannot
@@ -384,6 +400,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kSafetyInset = 'settings.safetyInset';
   static const _kFileTransfer = 'settings.fileTransferEnabled';
   static const _kComposer = 'settings.composerEnabled';
+  static const _kLedger = 'settings.ledgerEnabled';
   static const _kSessionCommand = 'settings.sessionCommand';
   static const _kScrollback = 'settings.scrollbackLines';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
@@ -422,6 +439,7 @@ class SettingsNotifier extends Notifier<SettingsState> {
       safetyInset: _safetyInsetFrom(prefs.getString(_kSafetyInset)),
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
       composerEnabled: prefs.getBool(_kComposer) ?? true,
+      ledgerEnabled: prefs.getBool(_kLedger) ?? false,
       sessionCommand: prefs.getString(_kSessionCommand) ?? defaultSessionCommand,
       // Clamped on the way IN as well as out: a value typed on a build that
       // allowed a different range must not become a buffer nobody can afford.
@@ -507,6 +525,16 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setComposerEnabled({required bool enabled}) async {
     state = state.copyWith(composerEnabled: enabled);
     await _prefs.setBool(_kComposer, enabled);
+  }
+
+  /// Turns the beta session ledger on or off.
+  ///
+  /// The gate is read where the rows are BUILT rather than where a tap is
+  /// handled, so switching it off removes the menu row instead of leaving a row
+  /// that opens a page with nothing to show.
+  Future<void> setLedgerEnabled({required bool enabled}) async {
+    state = state.copyWith(ledgerEnabled: enabled);
+    await _prefs.setBool(_kLedger, enabled);
   }
 
   /// Sets the command the SSH terminal runs.

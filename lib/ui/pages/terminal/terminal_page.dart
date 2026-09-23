@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,7 @@ import 'package:herdr_pocket/data/remote_files.dart';
 import 'package:herdr_pocket/data/remote_upload.dart';
 import 'package:herdr_pocket/data/terminal/terminal_control.dart';
 import 'package:herdr_pocket/data/terminal/terminal_selection.dart';
+import 'package:herdr_pocket/data/transcripts/transcript_registry.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 import 'package:herdr_pocket/domain/agent/agent_list.dart';
 import 'package:herdr_pocket/domain/agent/attachment.dart';
@@ -48,6 +48,7 @@ import 'package:herdr_pocket/ui/pages/terminal/menu_panel.dart';
 import 'package:herdr_pocket/ui/pages/terminal/pane_switcher.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_composer.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
+import 'package:herdr_pocket/ui/pages/transcript/ledger_page.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:xterm/core.dart';
 
@@ -1903,7 +1904,12 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     // that cannot yet know the answer.
     final candidates = pane == null
         ? const [PaneAction.browseFiles, PaneAction.git, PaneAction.focus]
-        : paneActionsFor(pane);
+        : paneActionsFor(
+            pane,
+            ledgerAgents: ref.read(settingsProvider).ledgerEnabled
+                ? supportedLedgerAgents
+                : const [],
+          );
     // Nothing this pane can carry out: the menu would be an empty box.
     if (candidates.isEmpty) return;
 
@@ -1929,13 +1935,24 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     if (!mounted || action == null) return;
     switch (action) {
-      case PaneAction.browseFiles || PaneAction.git:
+      case PaneAction.browseFiles || PaneAction.git || PaneAction.ledger:
         final cwd = await _directoryForAction(l10n);
         if (!mounted || cwd == null) return;
-        if (action == PaneAction.git) {
-          _push(GitPage(cwd: cwd));
-        } else {
-          _push(FileTreePage(path: cwd));
+        switch (action) {
+          case PaneAction.git:
+            _push(GitPage(cwd: cwd));
+          case PaneAction.ledger:
+            // The agent name comes from the same census that decided the row
+            // was worth offering, so this cannot disagree with the gate.
+            _push(
+              LedgerPage(
+                agentId: pane?.agent ?? '',
+                cwd: cwd,
+                paneId: _paneId,
+              ),
+            );
+          case PaneAction.browseFiles || PaneAction.open || PaneAction.focus:
+            _push(FileTreePage(path: cwd));
         }
       case PaneAction.focus:
         // Moving the desktop focus is reported either way: on failure the user

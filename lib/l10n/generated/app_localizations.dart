@@ -3013,6 +3013,234 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Custom'**
   String get shellCommandCustom;
+
+  /// No description provided for @ledgerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Session ledger'**
+  String get ledgerTitle;
+
+  /// No description provided for @ledgerReload.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get ledgerReload;
+
+  /// No description provided for @ledgerLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the session record'**
+  String get ledgerLoading;
+
+  /// No description provided for @ledgerUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'The machine\'s files are not reachable now'**
+  String get ledgerUnreachable;
+
+  /// No description provided for @ledgerUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'This agent\'s session record cannot be read'**
+  String get ledgerUnreadable;
+
+  /// No description provided for @ledgerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No session record found for this directory'**
+  String get ledgerEmpty;
+
+  /// No description provided for @ledgerModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get ledgerModel;
+
+  /// No description provided for @ledgerDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Directory'**
+  String get ledgerDirectory;
+
+  /// No description provided for @ledgerTurns.
+  ///
+  /// In en, this message translates to:
+  /// **'Turns'**
+  String get ledgerTurns;
+
+  /// No description provided for @ledgerToolCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool calls'**
+  String get ledgerToolCalls;
+
+  /// No description provided for @ledgerToolTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time in tools'**
+  String get ledgerToolTime;
+
+  /// No description provided for @ledgerTokens.
+  ///
+  /// In en, this message translates to:
+  /// **'Tokens'**
+  String get ledgerTokens;
+
+  /// No description provided for @ledgerTokenIn.
+  ///
+  /// In en, this message translates to:
+  /// **'in'**
+  String get ledgerTokenIn;
+
+  /// No description provided for @ledgerTokenOut.
+  ///
+  /// In en, this message translates to:
+  /// **'out'**
+  String get ledgerTokenOut;
+
+  /// No description provided for @ledgerTokenCache.
+  ///
+  /// In en, this message translates to:
+  /// **'cache'**
+  String get ledgerTokenCache;
+
+  /// No description provided for @ledgerContextWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Context window'**
+  String get ledgerContextWindow;
+
+  /// No description provided for @ledgerCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get ledgerCost;
+
+  /// No description provided for @ledgerGuessed.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest session in this directory'**
+  String get ledgerGuessed;
+
+  /// No description provided for @ledgerTailOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only the end of the file was read'**
+  String get ledgerTailOnly;
+
+  /// No description provided for @ledgerTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get ledgerTools;
+
+  /// No description provided for @ledgerToolCount.
+  ///
+  /// In en, this message translates to:
+  /// **'calls'**
+  String get ledgerToolCount;
+
+  /// No description provided for @ledgerToolMedian.
+  ///
+  /// In en, this message translates to:
+  /// **'median'**
+  String get ledgerToolMedian;
+
+  /// No description provided for @ledgerToolTimeShort.
+  ///
+  /// In en, this message translates to:
+  /// **'busy'**
+  String get ledgerToolTimeShort;
+
+  /// No description provided for @ledgerYou.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get ledgerYou;
+
+  /// No description provided for @ledgerThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get ledgerThinking;
+
+  /// No description provided for @ledgerNoResult.
+  ///
+  /// In en, this message translates to:
+  /// **'no result'**
+  String get ledgerNoResult;
+
+  /// No description provided for @paneActionLedger.
+  ///
+  /// In en, this message translates to:
+  /// **'Session ledger'**
+  String get paneActionLedger;
+
+  /// How many tool calls the session made.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} calls'**
+  String ledgerCallsCount(int count);
+
+  /// How many of them failed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} failed'**
+  String ledgerFailuresCount(int count);
+
+  /// Calls the session ended without an answer.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} with no result'**
+  String ledgerOpenCount(int count);
+
+  /// Lines of the record we could not explain.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} lines could not be read'**
+  String ledgerSkipped(int count);
+
+  /// Which turn, counted from one.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {index}'**
+  String ledgerTurnLabel(int index);
+
+  /// Length of a thinking block.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chars'**
+  String ledgerChars(int count);
+
+  /// No description provided for @settingsLedger.
+  ///
+  /// In en, this message translates to:
+  /// **'Session ledger (beta)'**
+  String get settingsLedger;
+
+  /// No description provided for @settingsLedgerNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Reads the agent\'s own session record: turns, tools, tokens. pi and codex for now.'**
+  String get settingsLedgerNote;
+
+  /// No description provided for @ledgerFailuresShort.
+  ///
+  /// In en, this message translates to:
+  /// **'✗'**
+  String get ledgerFailuresShort;
+
+  /// No description provided for @ledgerNoTurns.
+  ///
+  /// In en, this message translates to:
+  /// **'This session has no turns yet'**
+  String get ledgerNoTurns;
+
+  /// No description provided for @ledgerAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get ledgerAssistant;
 }
 
 class _AppLocalizationsDelegate

@@ -675,5 +675,91 @@
   "@shellCommandDefaultValue": {
     "description": "Shown in the settings row in place of the default command, which is a shell snippet."
   },
-  "shellCommandCustom": "Custom"
+  "shellCommandCustom": "Custom",
+  "ledgerTitle": "Session ledger",
+  "ledgerReload": "Reload",
+  "ledgerLoading": "Reading the session record",
+  "ledgerUnreachable": "The machine's files are not reachable now",
+  "ledgerUnreadable": "This agent's session record cannot be read",
+  "ledgerEmpty": "No session record found for this directory",
+  "ledgerModel": "Model",
+  "ledgerDirectory": "Directory",
+  "ledgerTurns": "Turns",
+  "ledgerToolCalls": "Tool calls",
+  "ledgerToolTime": "Time in tools",
+  "ledgerTokens": "Tokens",
+  "ledgerTokenIn": "in",
+  "ledgerTokenOut": "out",
+  "ledgerTokenCache": "cache",
+  "ledgerContextWindow": "Context window",
+  "ledgerCost": "Cost",
+  "ledgerGuessed": "Newest session in this directory",
+  "ledgerTailOnly": "Only the end of the file was read",
+  "ledgerTools": "Tools",
+  "ledgerToolCount": "calls",
+  "ledgerToolMedian": "median",
+  "ledgerToolTimeShort": "busy",
+  "ledgerYou": "You",
+  "ledgerThinking": "Thinking",
+  "ledgerNoResult": "no result",
+  "paneActionLedger": "Session ledger",
+  "ledgerCallsCount": "{count} calls",
+  "@ledgerCallsCount": {
+    "description": "How many tool calls the session made.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ledgerFailuresCount": "{count} failed",
+  "@ledgerFailuresCount": {
+    "description": "How many of them failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ledgerOpenCount": "{count} with no result",
+  "@ledgerOpenCount": {
+    "description": "Calls the session ended without an answer.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ledgerSkipped": "{count} lines could not be read",
+  "@ledgerSkipped": {
+    "description": "Lines of the record we could not explain.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ledgerTurnLabel": "Turn {index}",
+  "@ledgerTurnLabel": {
+    "description": "Which turn, counted from one.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "ledgerChars": "{count} chars",
+  "@ledgerChars": {
+    "description": "Length of a thinking block.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsLedger": "Session ledger (beta)",
+  "settingsLedgerNote": "Reads the agent's own session record: turns, tools, tokens. pi and codex for now.",
+  "ledgerFailuresShort": "✗",
+  "ledgerNoTurns": "This session has no turns yet",
+  "ledgerAssistant": "Assistant"
 }
