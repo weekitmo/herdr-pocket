@@ -21,7 +21,7 @@ const List<TranscriptAdapter> transcriptAdapters = [
 ///
 /// Null is a real answer, not a failure: herdr knows seventeen agents and this
 /// build can read two of them, and a pane running any of the other fifteen
-/// simply does not offer the ledger.
+/// simply does not offer the trace.
 TranscriptAdapter? adapterForAgent(String agentId) {
   final wanted = agentId.trim().toLowerCase();
   for (final adapter in transcriptAdapters) {
@@ -82,7 +82,7 @@ TranscriptAdapter? adapterForLines(List<String> lines) {
   return best;
 }
 
-/// Every agent this build can render a ledger for.
-List<String> get supportedLedgerAgents => [
+/// Every agent this build can render a trace for.
+List<String> get supportedTraceAgents => [
   for (final adapter in transcriptAdapters) adapter.agentId,
 ];

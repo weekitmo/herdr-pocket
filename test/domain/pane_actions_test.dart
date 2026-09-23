@@ -20,42 +20,42 @@ PaneInfo pane({String? cwd, bool focused = false, String agent = ''}) =>
     );
 
 void main() {
-  test('the ledger row is offered only for an agent we can read', () {
+  test('the trace row is offered only for an agent we can read', () {
     // Two gates in one: the agent has to be one of the adapters this build
     // ships, and the beta switch has to have been turned on — which is what
     // passing an empty list means.
     final withBeta = paneActionsFor(
       pane(cwd: '/x', agent: 'pi'),
-      ledgerAgents: const ['pi', 'codex'],
+      traceAgents: const ['pi', 'codex'],
     );
-    expect(withBeta, contains(PaneAction.ledger));
+    expect(withBeta, contains(PaneAction.trace));
 
     final withoutBeta = paneActionsFor(pane(cwd: '/x', agent: 'pi'));
-    expect(withoutBeta, isNot(contains(PaneAction.ledger)));
+    expect(withoutBeta, isNot(contains(PaneAction.trace)));
 
     final otherAgent = paneActionsFor(
       pane(cwd: '/x', agent: 'claude'),
-      ledgerAgents: const ['pi', 'codex'],
+      traceAgents: const ['pi', 'codex'],
     );
-    expect(otherAgent, isNot(contains(PaneAction.ledger)));
+    expect(otherAgent, isNot(contains(PaneAction.trace)));
   });
 
   test('an agent name is matched without regard to case or padding', () {
     final actions = paneActionsFor(
       pane(cwd: '/x', agent: ' Pi '),
-      ledgerAgents: const ['pi'],
+      traceAgents: const ['pi'],
     );
-    expect(actions, contains(PaneAction.ledger));
+    expect(actions, contains(PaneAction.trace));
   });
 
-  test('a pane with no directory offers no ledger either', () {
+  test('a pane with no directory offers no trace either', () {
     // There is nothing to find the session file by, which is the same reason
     // files and git are not offered.
     final actions = paneActionsFor(
       pane(agent: 'pi'),
-      ledgerAgents: const ['pi'],
+      traceAgents: const ['pi'],
     );
-    expect(actions, isNot(contains(PaneAction.ledger)));
+    expect(actions, isNot(contains(PaneAction.trace)));
   });
 
   test('a pane with a directory offers files and git', () {

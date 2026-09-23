@@ -27,7 +27,7 @@ import 'package:herdr_pocket/ui/pages/git/git_page.dart';
 import 'package:herdr_pocket/ui/pages/launch/launch_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/layout_page.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_page.dart';
-import 'package:herdr_pocket/ui/pages/transcript/ledger_page.dart';
+import 'package:herdr_pocket/ui/pages/transcript/trace_page.dart';
 
 /// The machine's own hierarchy: workspaces, their tabs, and the panes in them.
 ///
@@ -371,8 +371,8 @@ class WorkspacesPage extends ConsumerWidget {
       // Read here, at the moment the rows are built: the beta switch decides
       // whether the row exists at all, so a pane with nothing to offer does not
       // get a row that opens an empty page.
-      ledgerAgents: ref.read(settingsProvider).ledgerEnabled
-          ? supportedLedgerAgents
+      traceAgents: ref.read(settingsProvider).traceEnabled
+          ? supportedTraceAgents
           : const [],
     );
 
@@ -384,12 +384,12 @@ class WorkspacesPage extends ConsumerWidget {
         _push(context, FileTreePage(path: pane.cwd!));
       case PaneAction.git:
         _push(context, GitPage(cwd: pane.cwd!));
-      case PaneAction.ledger:
+      case PaneAction.trace:
         // Same page as the terminal offers, asked from the other door: the
         // pane's directory is what finds the session either way.
         _push(
           context,
-          LedgerPage(agentId: pane.agent, cwd: pane.cwd!, paneId: pane.paneId),
+          TracePage(agentId: pane.agent, cwd: pane.cwd!, paneId: pane.paneId),
         );
       case PaneAction.focus:
         await _focus(

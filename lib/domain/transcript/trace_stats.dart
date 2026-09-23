@@ -6,7 +6,7 @@
 /// checked against hand-counted fixtures rather than inside a build method.
 library;
 
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 /// One row of the tool table.
 class ToolStat {
@@ -20,7 +20,7 @@ class ToolStat {
   });
 
   /// Reads one row out of every call to [name] in [calls].
-  factory ToolStat.of(String name, List<LedgerToolCall> calls) {
+  factory ToolStat.of(String name, List<TraceToolCall> calls) {
     final durations = [for (final call in calls) ?call.duration]..sort();
     return ToolStat(
       name: name,
@@ -68,8 +68,8 @@ class ToolStat {
 /// answers is "where did this session's time go", and a tool called forty times
 /// in three milliseconds did not spend it. Ties fall back to the name so the
 /// order is stable between rebuilds.
-List<ToolStat> toolStats(List<LedgerTurn> turns) {
-  final byName = <String, List<LedgerToolCall>>{};
+List<ToolStat> toolStats(List<TraceTurn> turns) {
+  final byName = <String, List<TraceToolCall>>{};
   for (final turn in turns) {
     for (final call in turn.toolCalls) {
       byName.putIfAbsent(call.name, () => []).add(call);
@@ -87,8 +87,8 @@ List<ToolStat> toolStats(List<LedgerTurn> turns) {
 }
 
 /// The session at a glance.
-class LedgerSummary {
-  const LedgerSummary({
+class TraceSummary {
+  const TraceSummary({
     required this.turns,
     required this.toolCalls,
     required this.toolFailures,
@@ -121,14 +121,14 @@ class LedgerSummary {
       (firstAt == null || lastAt == null) ? null : lastAt!.difference(firstAt!);
 }
 
-/// Folds [turns] into [LedgerSummary].
+/// Folds [turns] into [TraceSummary].
 ///
 /// [reported] is the agent's own session total when it stated one; it wins over
 /// the sum, because a number the agent wrote down is better evidence than one we
 /// added up from its parts. [contextWindow] is passed through as-is: a window
 /// belongs to the model, and only the agent knows which one was in use.
-LedgerSummary summarize(
-  List<LedgerTurn> turns, {
+TraceSummary summarize(
+  List<TraceTurn> turns, {
   TokenUsage? reported,
   int? contextWindow,
 }) {
@@ -156,7 +156,7 @@ LedgerSummary summarize(
     }
   }
 
-  return LedgerSummary(
+  return TraceSummary(
     turns: turns.length,
     toolCalls: calls,
     toolFailures: failures,

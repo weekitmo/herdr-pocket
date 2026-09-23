@@ -5,12 +5,12 @@ import 'package:herdr_pocket/data/transcripts/codex_transcript.dart';
 import 'package:herdr_pocket/data/transcripts/pi_transcript.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_registry.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 /// Reading pi's session files.
 ///
 /// WHAT THIS FILE PROTECTS: the pairing. A tool call and its result are two
-/// separate lines, and every number the ledger shows — how long the call took,
+/// separate lines, and every number the trace shows — how long the call took,
 /// how often it failed — comes from putting them back together. Get the pairing
 /// wrong and the screen still looks right: it simply reports a duration of
 /// nothing for a tool that took a minute.
@@ -23,7 +23,7 @@ void main() {
 
   /// Unwraps a parse the fixtures expect to succeed, so the assertions below
   /// read as assertions rather than as error handling.
-  LedgerSession parsed(TranscriptParse result) => switch (result) {
+  TraceSession parsed(TranscriptParse result) => switch (result) {
     ParsedTranscript(:final session) => session,
     UnusableTranscript(:final detail) => throw StateError('fixture: $detail'),
   };
@@ -78,7 +78,7 @@ void main() {
 
   test('a call whose result never arrived is open, not a zero-second success', () {
     // A session that was interrupted really does end this way. Reporting it as
-    // a success would make the ledger claim something the transcript never said.
+    // a success would make the trace claim something the transcript never said.
     final session = parsed(
       pi.parse([
         _session(),
@@ -104,8 +104,8 @@ void main() {
       ]),
     );
 
-    expect(session.turns.single.items.whereType<LedgerThinking>(), isEmpty);
-    expect(session.turns.single.items.whereType<LedgerText>(), hasLength(1));
+    expect(session.turns.single.items.whereType<TraceThinking>(), isEmpty);
+    expect(session.turns.single.items.whereType<TraceText>(), hasLength(1));
   });
 
   test('a result with no matching call is kept but not attached', () {
@@ -118,7 +118,7 @@ void main() {
     );
 
     expect(session.turns.single.toolCalls, isEmpty);
-    expect(session.turns.single.items.whereType<LedgerNote>(), hasLength(1));
+    expect(session.turns.single.items.whereType<TraceNote>(), hasLength(1));
   });
 
   test('usage accumulates across the inferences inside one turn', () {

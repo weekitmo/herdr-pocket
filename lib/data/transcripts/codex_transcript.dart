@@ -14,13 +14,13 @@
 ///
 /// WHAT IS NOT HERE: the chain of thought. A `reasoning` item carries a
 /// one-line `summary` and an `encrypted_content` blob that only OpenAI can
-/// read, so the ledger shows the summary it was given and never implies there
+/// read, so the trace shows the summary it was given and never implies there
 /// was more — claiming to show "thinking" when the text is a label would be
 /// the same lie as an invented token count.
 ///
 /// TOKENS ARE PER TURN and the file says so itself: `token_count.info` carries
 /// both `last_token_usage` (this inference) and `total_token_usage` (the thread
-/// since it began). The ledger accumulates the former for its per-turn figure
+/// since it began). The trace accumulates the former for its per-turn figure
 /// and takes the latter for the session, because adding up the last-token
 /// numbers and calling it a total is a different number from what the agent
 /// reports.
@@ -29,7 +29,7 @@ library;
 import 'dart:convert';
 
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 class CodexTranscript implements TranscriptAdapter {
   const CodexTranscript();
@@ -172,19 +172,19 @@ class CodexTranscript implements TranscriptAdapter {
                 turn.prompt ??= text;
               } else {
                 if (turns.isEmpty) turns.add(_TurnBuilder(at: at));
-                turns.last.items.add(LedgerText(text));
+                turns.last.items.add(TraceText(text));
               }
             case 'reasoning':
               final summary = _summaryOf(payload?['summary']);
               if (summary.isNotEmpty) {
                 if (turns.isEmpty) turns.add(_TurnBuilder(at: at));
-                turns.last.items.add(LedgerThinking(summary));
+                turns.last.items.add(TraceThinking(summary));
               }
             case 'function_call':
               final id = stringOf(payload?['call_id']) ?? stringOf(payload?['id']) ?? '';
               if (turns.isEmpty) turns.add(_TurnBuilder(at: at));
               turns.last.items.add(
-                LedgerToolCall(
+                TraceToolCall(
                   id: id,
                   name: stringOf(payload?['name']) ?? '?',
                   arguments: stringOf(payload?['arguments']) ?? '',
@@ -201,8 +201,8 @@ class CodexTranscript implements TranscriptAdapter {
                   ? null
                   : at.difference(started);
               final previous = turns[site.turn].items[site.index];
-              if (previous is LedgerToolCall) {
-                turns[site.turn].items[site.index] = LedgerToolCall(
+              if (previous is TraceToolCall) {
+                turns[site.turn].items[site.index] = TraceToolCall(
                   id: previous.id,
                   name: previous.name,
                   arguments: previous.arguments,
@@ -230,7 +230,7 @@ class CodexTranscript implements TranscriptAdapter {
     }
 
     return ParsedTranscript(
-      LedgerSession(
+      TraceSession(
         agentId: agentId,
         model: model,
         sessionId: sessionId,
@@ -344,9 +344,9 @@ class _TurnBuilder {
   DateTime? at;
   String? prompt;
   TokenUsage? usage;
-  final List<LedgerItem> items = [];
+  final List<TraceItem> items = [];
 
-  LedgerTurn freeze({required int index}) => LedgerTurn(
+  TraceTurn freeze({required int index}) => TraceTurn(
     index: index,
     prompt: prompt,
     startedAt: at,

@@ -1542,129 +1542,129 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shellCommandCustom => '自定义';
 
   @override
-  String get ledgerTitle => '会话账本';
+  String get traceTitle => '会话跟踪';
 
   @override
-  String get ledgerReload => '重新读取';
+  String get traceReload => '重新读取';
 
   @override
-  String get ledgerLoading => '正在读取会话记录';
+  String get traceLoading => '正在读取会话记录';
 
   @override
-  String get ledgerUnreachable => '现在读不到机器上的文件';
+  String get traceUnreachable => '现在读不到机器上的文件';
 
   @override
-  String get ledgerUnreadable => '这个 agent 的会话记录读不了';
+  String get traceUnreadable => '这个 agent 的会话记录读不了';
 
   @override
-  String get ledgerEmpty => '这个目录下没有找到会话记录';
+  String get traceEmpty => '这个目录下没有找到会话记录';
 
   @override
-  String get ledgerModel => '模型';
+  String get traceModel => '模型';
 
   @override
-  String get ledgerDirectory => '目录';
+  String get traceDirectory => '目录';
 
   @override
-  String get ledgerTurns => '回合';
+  String get traceTurns => '回合';
 
   @override
-  String get ledgerToolCalls => '工具调用';
+  String get traceToolCalls => '工具调用';
 
   @override
-  String get ledgerToolTime => '工具耗时';
+  String get traceToolTime => '工具耗时';
 
   @override
-  String get ledgerTokens => 'Token';
+  String get traceTokens => 'Token';
 
   @override
-  String get ledgerTokenIn => '输入';
+  String get traceTokenIn => '输入';
 
   @override
-  String get ledgerTokenOut => '输出';
+  String get traceTokenOut => '输出';
 
   @override
-  String get ledgerTokenCache => '缓存';
+  String get traceTokenCache => '缓存';
 
   @override
-  String get ledgerContextWindow => '上下文窗口';
+  String get traceContextWindow => '上下文窗口';
 
   @override
-  String get ledgerCost => '花费';
+  String get traceCost => '花费';
 
   @override
-  String get ledgerGuessed => '按目录推测的最新会话';
+  String get traceGuessed => '按目录推测的最新会话';
 
   @override
-  String get ledgerTailOnly => '只读了文件末尾';
+  String get traceTailOnly => '只读了文件末尾';
 
   @override
-  String get ledgerTools => '工具';
+  String get traceTools => '工具';
 
   @override
-  String get ledgerToolCount => '次数';
+  String get traceToolCount => '次数';
 
   @override
-  String get ledgerToolMedian => '中位';
+  String get traceToolMedian => '中位';
 
   @override
-  String get ledgerToolTimeShort => '耗时';
+  String get traceToolTimeShort => '耗时';
 
   @override
-  String get ledgerYou => '你';
+  String get traceYou => '你';
 
   @override
-  String get ledgerThinking => '思考';
+  String get traceThinking => '思考';
 
   @override
-  String get ledgerNoResult => '没有结果';
+  String get traceNoResult => '没有结果';
 
   @override
-  String get paneActionLedger => '会话账本';
+  String get paneActionTrace => '会话跟踪';
 
   @override
-  String ledgerCallsCount(int count) {
+  String traceCallsCount(int count) {
     return '$count 次';
   }
 
   @override
-  String ledgerFailuresCount(int count) {
+  String traceFailuresCount(int count) {
     return '失败 $count';
   }
 
   @override
-  String ledgerOpenCount(int count) {
+  String traceOpenCount(int count) {
     return '$count 次没有结果';
   }
 
   @override
-  String ledgerSkipped(int count) {
+  String traceSkipped(int count) {
     return '$count 行读不懂';
   }
 
   @override
-  String ledgerTurnLabel(int index) {
+  String traceTurnLabel(int index) {
     return '回合 $index';
   }
 
   @override
-  String ledgerChars(int count) {
+  String traceChars(int count) {
     return '$count 字';
   }
 
   @override
-  String get settingsLedger => '会话账本（Beta）';
+  String get settingsTrace => '会话跟踪（Beta）';
 
   @override
-  String get settingsLedgerNote =>
-      '读 agent 自己的会话记录：回合、工具、token。目前支持 pi 和 codex。';
+  String get settingsTraceNote =>
+      '读 agent 自己的会话记录：回合、工具、token。目前支持 pi、dsh 和 codex。';
 
   @override
-  String get ledgerFailuresShort => '✗';
+  String get traceFailuresShort => '✗';
 
   @override
-  String get ledgerNoTurns => '这个会话还没有对话';
+  String get traceNoTurns => '这个会话还没有对话';
 
   @override
-  String get ledgerAssistant => '助手';
+  String get traceAssistant => '助手';
 }

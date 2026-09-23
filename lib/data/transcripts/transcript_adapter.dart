@@ -12,7 +12,7 @@
 /// crashes on somebody else's upgrade. Nothing in this library throws.
 library;
 
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 /// What an adapter made of a file.
 sealed class TranscriptParse {
@@ -27,7 +27,7 @@ sealed class TranscriptParse {
 class ParsedTranscript extends TranscriptParse {
   const ParsedTranscript(this.session);
 
-  final LedgerSession session;
+  final TraceSession session;
 }
 
 /// This is not the shape this adapter knows.

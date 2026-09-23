@@ -676,35 +676,35 @@
     "description": "Shown in the settings row in place of the default command, which is a shell snippet."
   },
   "shellCommandCustom": "Custom",
-  "ledgerTitle": "Session ledger",
-  "ledgerReload": "Reload",
-  "ledgerLoading": "Reading the session record",
-  "ledgerUnreachable": "The machine's files are not reachable now",
-  "ledgerUnreadable": "This agent's session record cannot be read",
-  "ledgerEmpty": "No session record found for this directory",
-  "ledgerModel": "Model",
-  "ledgerDirectory": "Directory",
-  "ledgerTurns": "Turns",
-  "ledgerToolCalls": "Tool calls",
-  "ledgerToolTime": "Time in tools",
-  "ledgerTokens": "Tokens",
-  "ledgerTokenIn": "in",
-  "ledgerTokenOut": "out",
-  "ledgerTokenCache": "cache",
-  "ledgerContextWindow": "Context window",
-  "ledgerCost": "Cost",
-  "ledgerGuessed": "Newest session in this directory",
-  "ledgerTailOnly": "Only the end of the file was read",
-  "ledgerTools": "Tools",
-  "ledgerToolCount": "calls",
-  "ledgerToolMedian": "median",
-  "ledgerToolTimeShort": "busy",
-  "ledgerYou": "You",
-  "ledgerThinking": "Thinking",
-  "ledgerNoResult": "no result",
-  "paneActionLedger": "Session ledger",
-  "ledgerCallsCount": "{count} calls",
-  "@ledgerCallsCount": {
+  "traceTitle": "Session trace",
+  "traceReload": "Reload",
+  "traceLoading": "Reading the session record",
+  "traceUnreachable": "The machine's files are not reachable now",
+  "traceUnreadable": "This agent's session record cannot be read",
+  "traceEmpty": "No session record found for this directory",
+  "traceModel": "Model",
+  "traceDirectory": "Directory",
+  "traceTurns": "Turns",
+  "traceToolCalls": "Tool calls",
+  "traceToolTime": "Time in tools",
+  "traceTokens": "Tokens",
+  "traceTokenIn": "in",
+  "traceTokenOut": "out",
+  "traceTokenCache": "cache",
+  "traceContextWindow": "Context window",
+  "traceCost": "Cost",
+  "traceGuessed": "Newest session in this directory",
+  "traceTailOnly": "Only the end of the file was read",
+  "traceTools": "Tools",
+  "traceToolCount": "calls",
+  "traceToolMedian": "median",
+  "traceToolTimeShort": "busy",
+  "traceYou": "You",
+  "traceThinking": "Thinking",
+  "traceNoResult": "no result",
+  "paneActionTrace": "Session trace",
+  "traceCallsCount": "{count} calls",
+  "@traceCallsCount": {
     "description": "How many tool calls the session made.",
     "placeholders": {
       "count": {
@@ -712,8 +712,8 @@
       }
     }
   },
-  "ledgerFailuresCount": "{count} failed",
-  "@ledgerFailuresCount": {
+  "traceFailuresCount": "{count} failed",
+  "@traceFailuresCount": {
     "description": "How many of them failed.",
     "placeholders": {
       "count": {
@@ -721,8 +721,8 @@
       }
     }
   },
-  "ledgerOpenCount": "{count} with no result",
-  "@ledgerOpenCount": {
+  "traceOpenCount": "{count} with no result",
+  "@traceOpenCount": {
     "description": "Calls the session ended without an answer.",
     "placeholders": {
       "count": {
@@ -730,8 +730,8 @@
       }
     }
   },
-  "ledgerSkipped": "{count} lines could not be read",
-  "@ledgerSkipped": {
+  "traceSkipped": "{count} lines could not be read",
+  "@traceSkipped": {
     "description": "Lines of the record we could not explain.",
     "placeholders": {
       "count": {
@@ -739,8 +739,8 @@
       }
     }
   },
-  "ledgerTurnLabel": "Turn {index}",
-  "@ledgerTurnLabel": {
+  "traceTurnLabel": "Turn {index}",
+  "@traceTurnLabel": {
     "description": "Which turn, counted from one.",
     "placeholders": {
       "index": {
@@ -748,8 +748,8 @@
       }
     }
   },
-  "ledgerChars": "{count} chars",
-  "@ledgerChars": {
+  "traceChars": "{count} chars",
+  "@traceChars": {
     "description": "Length of a thinking block.",
     "placeholders": {
       "count": {
@@ -757,9 +757,9 @@
       }
     }
   },
-  "settingsLedger": "Session ledger (beta)",
-  "settingsLedgerNote": "Reads the agent's own session record: turns, tools, tokens. pi and codex for now.",
-  "ledgerFailuresShort": "✗",
-  "ledgerNoTurns": "This session has no turns yet",
-  "ledgerAssistant": "Assistant"
+  "settingsTrace": "Session trace (beta)",
+  "settingsTraceNote": "Reads the agent's own session record: turns, tools, tokens. pi, dsh and codex for now.",
+  "traceFailuresShort": "✗",
+  "traceNoTurns": "This session has no turns yet",
+  "traceAssistant": "Assistant"
 }

@@ -10,8 +10,8 @@
 ///      guess and is reported as one.
 ///
 /// The caller is told which one answered, because the screen has to say
-/// "按目录推测的最新会话" when it guessed. A ledger silently built from the wrong
-/// session is worse than no ledger: it looks like an answer.
+/// "按目录推测的最新会话" when it guessed. A trace silently built from the wrong
+/// session is worse than no trace: it looks like an answer.
 ///
 /// WHY THE PATH IS GUARDED: the remote shell is not a login shell, so `lsof`
 /// (which lives in `/usr/sbin` on macOS) is often not on PATH at all. The first
@@ -78,7 +78,7 @@ class TranscriptLocator {
     int? pid,
   }) async {
     final adapter = adapterForAgent(agentId);
-    if (adapter == null) return UnsupportedAgent(agentId, supportedLedgerAgents);
+    if (adapter == null) return UnsupportedAgent(agentId, supportedTraceAgents);
 
     final now = DateTime.now();
     final candidates = <TranscriptLocation>[];

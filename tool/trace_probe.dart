@@ -5,8 +5,8 @@
 /// This is the check to run after an agent updates — a fixture can only prove
 /// the parser handles what we already knew about.
 ///
-///   dart run tool/ledger_probe.dart            # newest file per agent
-///   dart run tool/ledger_probe.dart PATH       # one file, whatever it is
+///   dart run tool/trace_probe.dart            # newest file per agent
+///   dart run tool/trace_probe.dart PATH       # one file, whatever it is
 library;
 
 import 'dart:io';
@@ -14,9 +14,9 @@ import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_locator.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_registry.dart';
 import 'package:herdr_pocket/data/transport/herdr_transport.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_stats.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_text.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
+import 'package:herdr_pocket/domain/transcript/trace_stats.dart';
+import 'package:herdr_pocket/domain/transcript/trace_text.dart';
 
 void main(List<String> args) async {
   if (args.length >= 2 && args.first == '--locate') {
@@ -94,7 +94,7 @@ Future<void> locate(String cwd, String agent) async {
   }
 }
 
-/// Prints what the ledger would draw, as text.
+/// Prints what the trace would draw, as text.
 void report(String label, List<String> lines) {
   final adapter = adapterForLines(lines);
   stdout.writeln('\n${'=' * 72}\n$label');
@@ -153,11 +153,11 @@ void report(String label, List<String> lines) {
   }
 }
 
-String _item(LedgerItem item) => switch (item) {
-  LedgerText(:final text) => 'assistant: ${oneLinePreview(text, maxChars: 60)}',
-  LedgerThinking(:final text) => 'thinking ${text.length} chars',
-  LedgerNote(:final text) => 'note: ${oneLinePreview(text, maxChars: 60)}',
-  LedgerToolCall(:final name, :final duration, :final isError, :final arguments) =>
+String _item(TraceItem item) => switch (item) {
+  TraceText(:final text) => 'assistant: ${oneLinePreview(text, maxChars: 60)}',
+  TraceThinking(:final text) => 'thinking ${text.length} chars',
+  TraceNote(:final text) => 'note: ${oneLinePreview(text, maxChars: 60)}',
+  TraceToolCall(:final name, :final duration, :final isError, :final arguments) =>
     'tool $name  ${duration == null ? 'open' : formatDuration(duration)}'
         '${isError == true ? ' FAILED' : ''}'
         '${arguments.isEmpty ? '' : '  ${oneLinePreview(arguments, maxChars: 40)}'}',
@@ -175,7 +175,7 @@ String _usage(TokenUsage? usage) {
   return parts.join(' ');
 }
 
-// --- `dart run tool/ledger_probe.dart --locate <cwd> [agent]` ---------------
+// --- `dart run tool/trace_probe.dart --locate <cwd> [agent]` ---------------
 //
 // Runs the REAL locator against this machine, with a local shell standing in
 // for the SSH connection, and prints every command it issued. This is the tool

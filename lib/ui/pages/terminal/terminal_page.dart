@@ -48,7 +48,7 @@ import 'package:herdr_pocket/ui/pages/terminal/menu_panel.dart';
 import 'package:herdr_pocket/ui/pages/terminal/pane_switcher.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_composer.dart';
 import 'package:herdr_pocket/ui/pages/terminal/terminal_render.dart';
-import 'package:herdr_pocket/ui/pages/transcript/ledger_page.dart';
+import 'package:herdr_pocket/ui/pages/transcript/trace_page.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:xterm/core.dart';
 
@@ -1906,8 +1906,8 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         ? const [PaneAction.browseFiles, PaneAction.git, PaneAction.focus]
         : paneActionsFor(
             pane,
-            ledgerAgents: ref.read(settingsProvider).ledgerEnabled
-                ? supportedLedgerAgents
+            traceAgents: ref.read(settingsProvider).traceEnabled
+                ? supportedTraceAgents
                 : const [],
           );
     // Nothing this pane can carry out: the menu would be an empty box.
@@ -1935,17 +1935,17 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
 
     if (!mounted || action == null) return;
     switch (action) {
-      case PaneAction.browseFiles || PaneAction.git || PaneAction.ledger:
+      case PaneAction.browseFiles || PaneAction.git || PaneAction.trace:
         final cwd = await _directoryForAction(l10n);
         if (!mounted || cwd == null) return;
         switch (action) {
           case PaneAction.git:
             _push(GitPage(cwd: cwd));
-          case PaneAction.ledger:
+          case PaneAction.trace:
             // The agent name comes from the same census that decided the row
             // was worth offering, so this cannot disagree with the gate.
             _push(
-              LedgerPage(
+              TracePage(
                 agentId: pane?.agent ?? '',
                 cwd: cwd,
                 paneId: _paneId,

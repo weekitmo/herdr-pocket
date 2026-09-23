@@ -161,7 +161,7 @@ class SettingsState {
     this.safetyInset = SafetyInsetMode.auto,
     this.fileTransferEnabled = false,
     this.composerEnabled = true,
-    this.ledgerEnabled = false,
+    this.traceEnabled = false,
     this.sessionCommand = defaultSessionCommand,
     this.scrollbackLines = defaultScrollbackLines,
     this.downloadDirUri,
@@ -300,9 +300,9 @@ class SettingsState {
   /// that is permanently unavailable is a worse answer than one that is absent.
   final bool composerEnabled;
 
-  /// Whether the beta session-ledger screen is offered at all.
+  /// Whether the beta session-trace screen is offered at all.
   ///
-  /// OFF BY DEFAULT, and that is the whole point of the switch: the ledger
+  /// OFF BY DEFAULT, and that is the whole point of the switch: the trace
   /// reads files that another program writes for itself, in formats nobody
   /// promised us, so it is the one screen in the app that can be wrong about
   /// the user's machine in ways we cannot fix from here. A beta row that has to
@@ -311,7 +311,7 @@ class SettingsState {
   ///
   /// A switch rather than a build flag because the people who want it are the
   /// people running the agents, and they can decide for themselves.
-  final bool ledgerEnabled;
+  final bool traceEnabled;
 
   /// What the SSH shell runs when it opens. Blank means the login shell.
   ///
@@ -346,7 +346,7 @@ class SettingsState {
     bool clearDownloadDir = false,
     bool? autoUpdateCheck,
     bool? composerEnabled,
-    bool? ledgerEnabled,
+    bool? traceEnabled,
     String? sessionCommand,
     int? scrollbackLines,
   }) {
@@ -366,7 +366,7 @@ class SettingsState {
       safetyInset: safetyInset ?? this.safetyInset,
       fileTransferEnabled: fileTransferEnabled ?? this.fileTransferEnabled,
       composerEnabled: composerEnabled ?? this.composerEnabled,
-      ledgerEnabled: ledgerEnabled ?? this.ledgerEnabled,
+      traceEnabled: traceEnabled ?? this.traceEnabled,
       sessionCommand: sessionCommand ?? this.sessionCommand,
       scrollbackLines: scrollbackLines ?? this.scrollbackLines,
       // Both or neither: a label without a URI names a folder the app cannot
@@ -400,7 +400,15 @@ class SettingsNotifier extends Notifier<SettingsState> {
   static const _kSafetyInset = 'settings.safetyInset';
   static const _kFileTransfer = 'settings.fileTransferEnabled';
   static const _kComposer = 'settings.composerEnabled';
-  static const _kLedger = 'settings.ledgerEnabled';
+  static const _kTrace = 'settings.traceEnabled';
+
+  /// The key this setting was stored under before the feature was renamed from
+  /// "ledger" to "trace".
+  ///
+  /// Read, never written: renaming a storage key silently resets a choice the
+  /// user made, and this one is a beta switch they had to go and find — losing
+  /// it would look exactly like the feature disappearing.
+  static const _kTraceLegacy = 'settings.ledgerEnabled';
   static const _kSessionCommand = 'settings.sessionCommand';
   static const _kScrollback = 'settings.scrollbackLines';
   static const _kDownloadDirUri = 'settings.downloadDirUri';
@@ -439,7 +447,8 @@ class SettingsNotifier extends Notifier<SettingsState> {
       safetyInset: _safetyInsetFrom(prefs.getString(_kSafetyInset)),
       fileTransferEnabled: prefs.getBool(_kFileTransfer) ?? false,
       composerEnabled: prefs.getBool(_kComposer) ?? true,
-      ledgerEnabled: prefs.getBool(_kLedger) ?? false,
+      traceEnabled:
+          prefs.getBool(_kTrace) ?? prefs.getBool(_kTraceLegacy) ?? false,
       sessionCommand: prefs.getString(_kSessionCommand) ?? defaultSessionCommand,
       // Clamped on the way IN as well as out: a value typed on a build that
       // allowed a different range must not become a buffer nobody can afford.
@@ -527,14 +536,14 @@ class SettingsNotifier extends Notifier<SettingsState> {
     await _prefs.setBool(_kComposer, enabled);
   }
 
-  /// Turns the beta session ledger on or off.
+  /// Turns the beta session trace on or off.
   ///
   /// The gate is read where the rows are BUILT rather than where a tap is
   /// handled, so switching it off removes the menu row instead of leaving a row
   /// that opens a page with nothing to show.
-  Future<void> setLedgerEnabled({required bool enabled}) async {
-    state = state.copyWith(ledgerEnabled: enabled);
-    await _prefs.setBool(_kLedger, enabled);
+  Future<void> setTraceEnabled({required bool enabled}) async {
+    state = state.copyWith(traceEnabled: enabled);
+    await _prefs.setBool(_kTrace, enabled);
   }
 
   /// Sets the command the SSH terminal runs.

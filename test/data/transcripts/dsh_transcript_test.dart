@@ -6,14 +6,14 @@ import 'package:herdr_pocket/data/transcripts/dsh_transcript.dart';
 import 'package:herdr_pocket/data/transcripts/pi_transcript.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_registry.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 /// Reading dsh's session files.
 ///
 /// WHAT THIS FILE PROTECTS, beyond "the fields land in the right place":
 ///
 ///   * the TURN NUMBER is the agent's, not ours. dsh records `turn/start {turn}`
-///     and `assistant/message {turn, step}`, so the ledger does not have to
+///     and `assistant/message {turn, step}`, so the trace does not have to
 ///     count from whatever window it happened to read — the one place in this
 ///     feature where a number on screen is the record's rather than a count of
 ///     what we saw;
@@ -28,7 +28,7 @@ import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
 void main() {
   const dsh = DshTranscript();
 
-  LedgerSession parsed(TranscriptParse result) => switch (result) {
+  TraceSession parsed(TranscriptParse result) => switch (result) {
     ParsedTranscript(:final session) => session,
     UnusableTranscript(:final detail) => throw StateError('fixture: $detail'),
   };
@@ -74,7 +74,7 @@ void main() {
 
   test('a reasoning block becomes a thinking item', () {
     // dsh keeps the reasoning TEXT in plain sight (unlike codex, which writes
-    // an encrypted blob and a one-line summary). Dropping it left the ledger
+    // an encrypted blob and a one-line summary). Dropping it left the trace
     // showing the answer with no sign of how it got there.
     final session = parsed(
       dsh.parse([
@@ -89,7 +89,7 @@ void main() {
       ]),
     );
 
-    final thinking = session.turns.single.items.whereType<LedgerThinking>().single;
+    final thinking = session.turns.single.items.whereType<TraceThinking>().single;
     expect(thinking.text, 'weighing two options');
   });
 
@@ -102,7 +102,7 @@ void main() {
       ]),
     );
 
-    expect(session.turns.single.items.whereType<LedgerThinking>(), isEmpty);
+    expect(session.turns.single.items.whereType<TraceThinking>(), isEmpty);
   });
 
   test('the inline copy of a tool call is not counted twice', () {
@@ -218,7 +218,7 @@ void main() {
     );
 
     expect(session.turns.single.toolCalls, isEmpty);
-    expect(session.turns.single.items.whereType<LedgerNote>(), hasLength(1));
+    expect(session.turns.single.items.whereType<TraceNote>(), hasLength(1));
   });
 
   test('the three adapters tell each other apart by structure', () {

@@ -5,7 +5,7 @@
 /// belongs to, whether a token count is known or merely zero — are exactly the
 /// parts worth testing without a widget in the way.
 ///
-/// WHY IT IS NOT THE CHAT VIEW. This is a ledger of what happened, not a
+/// WHY IT IS NOT THE CHAT VIEW. This is a trace of what happened, not a
 /// conversation to reply to. It reads the agent's own file and never writes to
 /// it; the terminal underneath is still the thing that drives the agent
 /// (see `TODO.md` T1-1 for the chat view, which shares this model).
@@ -82,18 +82,18 @@ class TokenUsage {
       (a == null && b == null) ? null : (a ?? 0) + (b ?? 0);
 }
 
-/// One line of the transcript, as the ledger draws it.
+/// One line of the transcript, as the trace draws it.
 ///
 /// Sealed rather than "a message with optional fields": a tool call is not a
 /// message with empty text, and making the compiler say so is what keeps the
 /// screen from having to ask whether `text` means anything this time.
-sealed class LedgerItem {
-  const LedgerItem();
+sealed class TraceItem {
+  const TraceItem();
 }
 
 /// Something a human or the agent said.
-class LedgerText extends LedgerItem {
-  const LedgerText(this.text);
+class TraceText extends TraceItem {
+  const TraceText(this.text);
 
   final String text;
 }
@@ -104,8 +104,8 @@ class LedgerText extends LedgerItem {
 /// string where the text used to be (Claude Code keeps only a signature once
 /// the block has been redacted). An empty [text] is therefore normal, and the
 /// only correct thing to do with it is not draw it.
-class LedgerThinking extends LedgerItem {
-  const LedgerThinking(this.text);
+class TraceThinking extends TraceItem {
+  const TraceThinking(this.text);
 
   final String text;
 }
@@ -115,8 +115,8 @@ class LedgerThinking extends LedgerItem {
 /// THE CALL AND ITS RESULT ARE ONE ITEM, because that is how a person reads a
 /// transcript: "Bash — flutter test — 42s — failed". Two rows would make the
 /// reader pair them up by eye, and the pairing is the thing we already know.
-class LedgerToolCall extends LedgerItem {
-  const LedgerToolCall({
+class TraceToolCall extends TraceItem {
+  const TraceToolCall({
     required this.id,
     required this.name,
     this.arguments = '',
@@ -133,7 +133,7 @@ class LedgerToolCall extends LedgerItem {
   /// The arguments exactly as the agent recorded them.
   ///
   /// Kept raw on purpose: codex stores a JSON *string* that may or may not
-  /// decode, and pi stores an object that may be arbitrarily deep. The ledger
+  /// decode, and pi stores an object that may be arbitrarily deep. The trace
   /// shows this text and never tries to be cleverer than the record.
   final String arguments;
 
@@ -155,8 +155,8 @@ class LedgerToolCall extends LedgerItem {
 
 /// A line the adapter understood well enough to keep, but not well enough to
 /// classify — codex's per-turn notes, or a text-bearing payload we do not model.
-class LedgerNote extends LedgerItem {
-  const LedgerNote(this.text);
+class TraceNote extends TraceItem {
+  const TraceNote(this.text);
 
   final String text;
 }
@@ -168,8 +168,8 @@ class LedgerNote extends LedgerItem {
 /// without making a number up; the turn is the smallest unit the agents
 /// actually bill. [usage] is the sum over the inferences in this turn — each of
 /// which was reported exactly, so the sum is exact too.
-class LedgerTurn {
-  const LedgerTurn({
+class TraceTurn {
+  const TraceTurn({
     required this.index,
     this.prompt,
     this.startedAt,
@@ -187,15 +187,15 @@ class LedgerTurn {
 
   final TokenUsage? usage;
 
-  final List<LedgerItem> items;
+  final List<TraceItem> items;
 
   /// Every tool call in this turn, in the order they were invoked.
-  Iterable<LedgerToolCall> get toolCalls => items.whereType<LedgerToolCall>();
+  Iterable<TraceToolCall> get toolCalls => items.whereType<TraceToolCall>();
 }
 
 /// A whole session: the turns, plus what the agent said about itself.
-class LedgerSession {
-  const LedgerSession({
+class TraceSession {
+  const TraceSession({
     required this.agentId,
     this.model,
     this.sessionId,
@@ -211,7 +211,7 @@ class LedgerSession {
   final String? model;
   final String? sessionId;
   final String? cwd;
-  final List<LedgerTurn> turns;
+  final List<TraceTurn> turns;
 
   /// Lines that did not parse as JSON, or that the adapter could not read.
   ///

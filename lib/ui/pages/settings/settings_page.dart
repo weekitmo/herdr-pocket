@@ -194,10 +194,10 @@ class SettingsPage extends ConsumerWidget {
                   // of its own: one switch is not a section, and the note is
                   // what marks it as unfinished.
                   SettingsSwitchRow(
-                    label: l10n.settingsLedger,
-                    note: l10n.settingsLedgerNote,
-                    value: settings.ledgerEnabled,
-                    onChanged: (v) => notifier.setLedgerEnabled(enabled: v),
+                    label: l10n.settingsTrace,
+                    note: l10n.settingsTraceNote,
+                    value: settings.traceEnabled,
+                    onChanged: (v) => notifier.setTraceEnabled(enabled: v),
                   ),
                   SettingsSwitchRow(
                     label: l10n.settingsAutoConnect,

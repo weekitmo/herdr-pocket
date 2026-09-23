@@ -24,7 +24,7 @@ import 'package:herdr_pocket/data/transport/herdr_transport.dart';
 ///    skills/MCP probe, and what would have caught this in one second.
 void main() {
   Directory home() {
-    final dir = Directory.systemTemp.createTempSync('hp-ledger-home');
+    final dir = Directory.systemTemp.createTempSync('hp-trace-home');
     addTearDown(() => dir.deleteSync(recursive: true));
     return dir;
   }

@@ -34,7 +34,7 @@ enum PaneAction {
   /// list is passed in rather than known here: it is the adapter registry that
   /// owns the answer, and a second copy of it in the domain would be the one
   /// that goes stale.
-  ledger,
+  trace,
 
   /// Move the machine's own focus to this pane.
   focus,
@@ -54,16 +54,16 @@ enum PaneAction {
 List<PaneAction> paneActionsFor(
   PaneInfo pane, {
   bool withOpen = false,
-  List<String> ledgerAgents = const [],
+  List<String> traceAgents = const [],
 }) {
   final hasDirectory = pane.cwd != null && pane.cwd!.trim().isNotEmpty;
-  final hasLedger =
-      hasDirectory && ledgerAgents.contains(pane.agent.trim().toLowerCase());
+  final hasTrace =
+      hasDirectory && traceAgents.contains(pane.agent.trim().toLowerCase());
   return [
     if (withOpen) PaneAction.open,
     if (hasDirectory) PaneAction.browseFiles,
     if (hasDirectory) PaneAction.git,
-    if (hasLedger) PaneAction.ledger,
+    if (hasTrace) PaneAction.trace,
     if (!pane.isFocused) PaneAction.focus,
   ];
 }

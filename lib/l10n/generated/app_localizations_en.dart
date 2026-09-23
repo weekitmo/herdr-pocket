@@ -1631,129 +1631,129 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellCommandCustom => 'Custom';
 
   @override
-  String get ledgerTitle => 'Session ledger';
+  String get traceTitle => 'Session trace';
 
   @override
-  String get ledgerReload => 'Reload';
+  String get traceReload => 'Reload';
 
   @override
-  String get ledgerLoading => 'Reading the session record';
+  String get traceLoading => 'Reading the session record';
 
   @override
-  String get ledgerUnreachable => 'The machine\'s files are not reachable now';
+  String get traceUnreachable => 'The machine\'s files are not reachable now';
 
   @override
-  String get ledgerUnreadable => 'This agent\'s session record cannot be read';
+  String get traceUnreadable => 'This agent\'s session record cannot be read';
 
   @override
-  String get ledgerEmpty => 'No session record found for this directory';
+  String get traceEmpty => 'No session record found for this directory';
 
   @override
-  String get ledgerModel => 'Model';
+  String get traceModel => 'Model';
 
   @override
-  String get ledgerDirectory => 'Directory';
+  String get traceDirectory => 'Directory';
 
   @override
-  String get ledgerTurns => 'Turns';
+  String get traceTurns => 'Turns';
 
   @override
-  String get ledgerToolCalls => 'Tool calls';
+  String get traceToolCalls => 'Tool calls';
 
   @override
-  String get ledgerToolTime => 'Time in tools';
+  String get traceToolTime => 'Time in tools';
 
   @override
-  String get ledgerTokens => 'Tokens';
+  String get traceTokens => 'Tokens';
 
   @override
-  String get ledgerTokenIn => 'in';
+  String get traceTokenIn => 'in';
 
   @override
-  String get ledgerTokenOut => 'out';
+  String get traceTokenOut => 'out';
 
   @override
-  String get ledgerTokenCache => 'cache';
+  String get traceTokenCache => 'cache';
 
   @override
-  String get ledgerContextWindow => 'Context window';
+  String get traceContextWindow => 'Context window';
 
   @override
-  String get ledgerCost => 'Cost';
+  String get traceCost => 'Cost';
 
   @override
-  String get ledgerGuessed => 'Newest session in this directory';
+  String get traceGuessed => 'Newest session in this directory';
 
   @override
-  String get ledgerTailOnly => 'Only the end of the file was read';
+  String get traceTailOnly => 'Only the end of the file was read';
 
   @override
-  String get ledgerTools => 'Tools';
+  String get traceTools => 'Tools';
 
   @override
-  String get ledgerToolCount => 'calls';
+  String get traceToolCount => 'calls';
 
   @override
-  String get ledgerToolMedian => 'median';
+  String get traceToolMedian => 'median';
 
   @override
-  String get ledgerToolTimeShort => 'busy';
+  String get traceToolTimeShort => 'busy';
 
   @override
-  String get ledgerYou => 'You';
+  String get traceYou => 'You';
 
   @override
-  String get ledgerThinking => 'Thinking';
+  String get traceThinking => 'Thinking';
 
   @override
-  String get ledgerNoResult => 'no result';
+  String get traceNoResult => 'no result';
 
   @override
-  String get paneActionLedger => 'Session ledger';
+  String get paneActionTrace => 'Session trace';
 
   @override
-  String ledgerCallsCount(int count) {
+  String traceCallsCount(int count) {
     return '$count calls';
   }
 
   @override
-  String ledgerFailuresCount(int count) {
+  String traceFailuresCount(int count) {
     return '$count failed';
   }
 
   @override
-  String ledgerOpenCount(int count) {
+  String traceOpenCount(int count) {
     return '$count with no result';
   }
 
   @override
-  String ledgerSkipped(int count) {
+  String traceSkipped(int count) {
     return '$count lines could not be read';
   }
 
   @override
-  String ledgerTurnLabel(int index) {
+  String traceTurnLabel(int index) {
     return 'Turn $index';
   }
 
   @override
-  String ledgerChars(int count) {
+  String traceChars(int count) {
     return '$count chars';
   }
 
   @override
-  String get settingsLedger => 'Session ledger (beta)';
+  String get settingsTrace => 'Session trace (beta)';
 
   @override
-  String get settingsLedgerNote =>
-      'Reads the agent\'s own session record: turns, tools, tokens. pi and codex for now.';
+  String get settingsTraceNote =>
+      'Reads the agent\'s own session record: turns, tools, tokens. pi, dsh and codex for now.';
 
   @override
-  String get ledgerFailuresShort => '✗';
+  String get traceFailuresShort => '✗';
 
   @override
-  String get ledgerNoTurns => 'This session has no turns yet';
+  String get traceNoTurns => 'This session has no turns yet';
 
   @override
-  String get ledgerAssistant => 'Assistant';
+  String get traceAssistant => 'Assistant';
 }

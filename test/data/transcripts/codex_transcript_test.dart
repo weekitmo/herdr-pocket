@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:herdr_pocket/data/transcripts/codex_transcript.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 /// Reading codex's rollout files.
 ///
@@ -12,14 +12,14 @@ import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
 /// plausible and is wrong:
 ///
 ///   * its own instructions arrive as `role: "user"` messages, so the first
-///     thing the ledger would show is a 17 000-character AGENTS.md block;
+///     thing the trace would show is a 17 000-character AGENTS.md block;
 ///   * `cached_input_tokens` is a SUBSET of `input_tokens`, so adding the two
 ///     the way an Anthropic-shaped agent requires doubles the bill;
 ///   * a tool failure is not a flag — it is a line inside the output text.
 void main() {
   const codex = CodexTranscript();
 
-  LedgerSession parse(List<String> lines) {
+  TraceSession parse(List<String> lines) {
     final result = codex.parse(lines);
     return switch (result) {
       ParsedTranscript(:final session) => session,
@@ -101,7 +101,7 @@ void main() {
       _reasoning('Preparing to read the config'),
     ]);
 
-    final thinking = session.turns.single.items.whereType<LedgerThinking>().single;
+    final thinking = session.turns.single.items.whereType<TraceThinking>().single;
     expect(thinking.text, 'Preparing to read the config');
   });
 

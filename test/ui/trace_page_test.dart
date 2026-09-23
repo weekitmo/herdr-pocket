@@ -2,15 +2,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:herdr_pocket/data/providers/ledger.dart';
+import 'package:herdr_pocket/data/providers/trace.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_locator.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/design/tokens.dart';
-import 'package:herdr_pocket/ui/pages/transcript/ledger_page.dart';
+import 'package:herdr_pocket/ui/pages/transcript/trace_page.dart';
 
-/// The ledger screen.
+/// The trace screen.
 ///
 /// WHAT THIS FILE PROTECTS: that the screen says what it knows and says when it
 /// does not. Every number on it comes from another program's private file, so
@@ -25,7 +25,7 @@ void main() {
     String agentId = 'pi',
   }) => ProviderScope(
     overrides: [
-      ledgerLoaderProvider.overrideWithValue(
+      traceLoaderProvider.overrideWithValue(
         reachable
             ? ({required agentId, required cwd, pid}) async =>
                   located ?? FoundTranscript(
@@ -49,7 +49,7 @@ void main() {
         ],
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
-        home: LedgerPage(agentId: agentId, cwd: '/work/app'),
+        home: TracePage(agentId: agentId, cwd: '/work/app'),
       ),
     ),
   );
@@ -108,9 +108,9 @@ void main() {
             source: TranscriptSource.openFile,
           ),
           parse: ParsedTranscript(
-            LedgerSession(
+            TraceSession(
               agentId: 'dsh',
-              turns: [LedgerTurn(index: 1, items: [LedgerText(long)])],
+              turns: [TraceTurn(index: 1, items: [TraceText(long)])],
             ),
           ),
           truncated: false,
@@ -144,7 +144,7 @@ void main() {
             source: TranscriptSource.byDirectory,
           ),
           parse: ParsedTranscript(
-            LedgerSession(agentId: 'dsh', cwd: '/work/app'),
+            TraceSession(agentId: 'dsh', cwd: '/work/app'),
           ),
           truncated: false,
         ),
@@ -219,7 +219,7 @@ void main() {
     expect(find.text('no result'), findsOneWidget);
   });
 
-  testWidgets('an unreadable agent is a sentence, not an empty ledger', (tester) async {
+  testWidgets('an unreadable agent is a sentence, not an empty trace', (tester) async {
     await tester.pumpWidget(
       page(located: const UnsupportedAgent('claude', ['pi', 'codex'])),
     );
@@ -290,19 +290,19 @@ void main() {
 /// A session with one of everything that has a rule attached to it: two tools
 /// with different speeds, one failure, one call that never came back, a
 /// thinking block, and a turn that reports tokens.
-LedgerSession _session() => LedgerSession(
+TraceSession _session() => TraceSession(
   agentId: 'pi',
   model: 'pi-2.5',
   cwd: '/work/app',
   turns: [
-    LedgerTurn(
+    TraceTurn(
       index: 1,
       prompt: 'run the tests',
       startedAt: DateTime.utc(2026, 9, 23, 10, 11),
       usage: const TokenUsage(input: 1200, output: 340, cacheRead: 26000),
       items: const [
-        LedgerThinking('I should read the file first'),
-        LedgerToolCall(
+        TraceThinking('I should read the file first'),
+        TraceToolCall(
           id: 'c1',
           name: 'bash',
           arguments: '{"command":"ls"}',
@@ -310,7 +310,7 @@ LedgerSession _session() => LedgerSession(
           isError: false,
           result: 'file-a\nfile-b',
         ),
-        LedgerToolCall(
+        TraceToolCall(
           id: 'c2',
           name: 'read',
           arguments: '{"path":"a.dart"}',
@@ -320,12 +320,12 @@ LedgerSession _session() => LedgerSession(
         ),
       ],
     ),
-    LedgerTurn(
+    TraceTurn(
       index: 2,
       prompt: 'now fix it',
       startedAt: DateTime.utc(2026, 9, 23, 10, 12),
       items: const [
-        LedgerToolCall(id: 'c3', name: 'bash', arguments: '{"command":"sleep 999"}'),
+        TraceToolCall(id: 'c3', name: 'bash', arguments: '{"command":"sleep 999"}'),
       ],
     ),
   ],

@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_stats.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_text.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
+import 'package:herdr_pocket/domain/transcript/trace_stats.dart';
+import 'package:herdr_pocket/domain/transcript/trace_text.dart';
 
-/// The ledger's arithmetic.
+/// The trace's arithmetic.
 ///
 /// WHAT THIS FILE PROTECTS: the honesty of the numbers, not their formatting.
 /// Three properties matter and each is checkable without a widget:
@@ -103,8 +103,8 @@ void main() {
 
     test('the span is the first to the last turn', () {
       final summary = summarize([
-        LedgerTurn(index: 1, startedAt: DateTime.utc(2026, 9, 23, 10)),
-        LedgerTurn(index: 2, startedAt: DateTime.utc(2026, 9, 23, 10, 30)),
+        TraceTurn(index: 1, startedAt: DateTime.utc(2026, 9, 23, 10)),
+        TraceTurn(index: 2, startedAt: DateTime.utc(2026, 9, 23, 10, 30)),
       ]);
 
       expect(summary.span, const Duration(minutes: 30));
@@ -157,15 +157,15 @@ void main() {
   });
 }
 
-LedgerTurn _turn(int index, List<LedgerItem> items, {TokenUsage? usage}) =>
-    LedgerTurn(index: index, items: items, usage: usage);
+TraceTurn _turn(int index, List<TraceItem> items, {TokenUsage? usage}) =>
+    TraceTurn(index: index, items: items, usage: usage);
 
-LedgerToolCall _call(
+TraceToolCall _call(
   String id,
   String name,
   Duration duration, {
   bool isError = false,
-}) => LedgerToolCall(
+}) => TraceToolCall(
   id: id,
   name: name,
   duration: duration,
@@ -173,4 +173,4 @@ LedgerToolCall _call(
   result: '',
 );
 
-LedgerToolCall _open(String id, String name) => LedgerToolCall(id: id, name: name);
+TraceToolCall _open(String id, String name) => TraceToolCall(id: id, name: name);

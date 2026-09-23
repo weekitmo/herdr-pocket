@@ -1,13 +1,12 @@
 import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:herdr_pocket/data/providers/ledger.dart';
+import 'package:herdr_pocket/data/providers/trace.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
 import 'package:herdr_pocket/data/transcripts/transcript_locator.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_stats.dart';
-import 'package:herdr_pocket/domain/transcript/ledger_text.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
+import 'package:herdr_pocket/domain/transcript/trace_stats.dart';
+import 'package:herdr_pocket/domain/transcript/trace_text.dart';
 import 'package:herdr_pocket/l10n/generated/app_localizations.dart';
 import 'package:herdr_pocket/ui/components/loading_block.dart';
 import 'package:herdr_pocket/ui/components/settings_list.dart';
@@ -27,8 +26,8 @@ import 'package:herdr_pocket/ui/design/tokens.dart';
 /// second lens on the same pane (the terminal stays one tap away, and the
 /// screen says when it could not read the record rather than showing an empty
 /// one). `TODO.md` T1-1 builds the chat view on the same parser.
-class LedgerPage extends ConsumerStatefulWidget {
-  const LedgerPage({
+class TracePage extends ConsumerStatefulWidget {
+  const TracePage({
     required this.agentId,
     required this.cwd,
     this.paneId,
@@ -50,11 +49,11 @@ class LedgerPage extends ConsumerStatefulWidget {
   final int? pid;
 
   @override
-  ConsumerState<LedgerPage> createState() => _LedgerPageState();
+  ConsumerState<TracePage> createState() => _TracePageState();
 }
 
-class _LedgerPageState extends ConsumerState<LedgerPage> {
-  _LedgerView _view = const _LedgerLoading();
+class _TracePageState extends ConsumerState<TracePage> {
+  _TraceView _view = const _TraceLoading();
 
   @override
   void initState() {
@@ -63,10 +62,10 @@ class _LedgerPageState extends ConsumerState<LedgerPage> {
   }
 
   Future<void> _load() async {
-    setState(() => _view = const _LedgerLoading());
-    final loader = ref.read(ledgerLoaderProvider);
+    setState(() => _view = const _TraceLoading());
+    final loader = ref.read(traceLoaderProvider);
     if (loader == null) {
-      if (mounted) setState(() => _view = const _LedgerUnreachable());
+      if (mounted) setState(() => _view = const _TraceUnreachable());
       return;
     }
 
@@ -89,13 +88,13 @@ class _LedgerPageState extends ConsumerState<LedgerPage> {
     if (!mounted) return;
     setState(() {
       _view = switch (located) {
-        UnsupportedAgent() => const _LedgerUnreadable(),
-        UnreadableTranscript() => const _LedgerUnreadable(),
-        NoTranscript() => const _LedgerEmpty(),
+        UnsupportedAgent() => const _TraceUnreadable(),
+        UnreadableTranscript() => const _TraceUnreadable(),
+        NoTranscript() => const _TraceEmpty(),
         FoundTranscript(:final parse, :final location, :final truncated) =>
           switch (parse) {
-            UnusableTranscript() => const _LedgerUnreadable(),
-            ParsedTranscript(:final session) => _LedgerLoaded(
+            UnusableTranscript() => const _TraceUnreadable(),
+            ParsedTranscript(:final session) => _TraceLoaded(
               session: session,
               location: location,
               truncated: truncated,
@@ -118,50 +117,50 @@ class _LedgerPageState extends ConsumerState<LedgerPage> {
         obstructs: false,
         leading: HerdrBackButton(label: l10n.navBack),
         title: Text(
-          widget.agentId.isEmpty ? l10n.ledgerTitle : widget.agentId,
+          widget.agentId.isEmpty ? l10n.traceTitle : widget.agentId,
           style: const TextStyle(fontSize: TextSize.strong),
         ),
         actions: [
           HerdrBarButton(
-            label: l10n.ledgerReload,
+            label: l10n.traceReload,
             onPressed: () => unawaited(_load()),
             child: const Icon(CupertinoIcons.arrow_clockwise),
           ),
         ],
       ),
       child: switch (_view) {
-        _LedgerLoading() => Padding(
+        _TraceLoading() => Padding(
           padding: const EdgeInsets.only(top: Space.xxxl * 2),
           child: LoadingBlock(
-            title: l10n.ledgerLoading,
+            title: l10n.traceLoading,
             target: widget.cwd,
             colors: colors,
           ),
         ),
-        _LedgerUnreachable() => _Message(
+        _TraceUnreachable() => _Message(
           icon: CupertinoIcons.wifi_slash,
-          title: l10n.ledgerUnreachable,
+          title: l10n.traceUnreachable,
           body: widget.cwd,
           colors: colors,
         ),
-        _LedgerUnreadable() => _Message(
+        _TraceUnreadable() => _Message(
           icon: CupertinoIcons.doc_text,
-          title: l10n.ledgerUnreadable,
+          title: l10n.traceUnreadable,
           body: widget.agentId,
           colors: colors,
         ),
-        _LedgerEmpty() => _Message(
+        _TraceEmpty() => _Message(
           icon: CupertinoIcons.tray,
-          title: l10n.ledgerEmpty,
+          title: l10n.traceEmpty,
           body: widget.cwd,
           colors: colors,
         ),
-        _LedgerLoaded(
+        _TraceLoaded(
           :final session,
           :final location,
           :final truncated,
         ) =>
-          _LedgerBody(
+          _TraceBody(
             session: session,
             location: location,
             truncated: truncated,
@@ -174,15 +173,15 @@ class _LedgerPageState extends ConsumerState<LedgerPage> {
 
 // --- The loaded screen -----------------------------------------------------
 
-class _LedgerBody extends StatelessWidget {
-  const _LedgerBody({
+class _TraceBody extends StatelessWidget {
+  const _TraceBody({
     required this.session,
     required this.location,
     required this.truncated,
     required this.onRefresh,
   });
 
-  final LedgerSession session;
+  final TraceSession session;
   final TranscriptLocation location;
   final bool truncated;
   final Future<void> Function() onRefresh;
@@ -199,7 +198,7 @@ class _LedgerBody extends StatelessWidget {
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      // A cut-off ledger is a ledger that scrolls under the bar, which is what
+      // A cut-off trace is a trace that scrolls under the bar, which is what
       // the obstructs: false above is for.
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + Space.xxxl,
@@ -227,7 +226,7 @@ class _LedgerBody extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: Space.xxl),
             child: Text(
-              l10n.ledgerNoTurns,
+              l10n.traceNoTurns,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: TextSize.note, color: colors.textFaint),
             ),
@@ -250,8 +249,8 @@ class _SummaryCard extends StatelessWidget {
     required this.colors,
   });
 
-  final LedgerSession session;
-  final LedgerSummary summary;
+  final TraceSession session;
+  final TraceSummary summary;
   final TranscriptLocation location;
   final bool truncated;
   final HerdrColors colors;
@@ -268,62 +267,62 @@ class _SummaryCard extends StatelessWidget {
           rows: [
             if (session.model case final model?)
               _Fact(
-                label: l10n.ledgerModel,
+                label: l10n.traceModel,
                 value: model,
                 mono: true,
                 colors: colors,
               ),
             if (session.cwd case final cwd?)
               _Fact(
-                label: l10n.ledgerDirectory,
+                label: l10n.traceDirectory,
                 value: cwd,
                 mono: true,
                 colors: colors,
               ),
             _Fact(
-              label: l10n.ledgerTurns,
+              label: l10n.traceTurns,
               value: '${summary.turns}',
               colors: colors,
             ),
             _Fact(
-              label: l10n.ledgerToolCalls,
+              label: l10n.traceToolCalls,
               value: [
-                l10n.ledgerCallsCount(summary.toolCalls),
+                l10n.traceCallsCount(summary.toolCalls),
                 if (summary.toolFailures > 0)
-                  l10n.ledgerFailuresCount(summary.toolFailures),
+                  l10n.traceFailuresCount(summary.toolFailures),
                 if (summary.openCalls > 0)
-                  l10n.ledgerOpenCount(summary.openCalls),
+                  l10n.traceOpenCount(summary.openCalls),
               ].join(' · '),
               colors: colors,
             ),
             if (summary.toolBusy > Duration.zero)
               _Fact(
-                label: l10n.ledgerToolTime,
+                label: l10n.traceToolTime,
                 value: formatDuration(summary.toolBusy),
                 mono: true,
                 colors: colors,
               ),
             if (usage != null)
               _Fact(
-                label: l10n.ledgerTokens,
+                label: l10n.traceTokens,
                 value: [
-                  if (usage.input case final v?) '${compactCount(v)} ${l10n.ledgerTokenIn}',
-                  if (usage.output case final v?) '${compactCount(v)} ${l10n.ledgerTokenOut}',
-                  if (usage.cacheRead case final v?) '${compactCount(v)} ${l10n.ledgerTokenCache}',
+                  if (usage.input case final v?) '${compactCount(v)} ${l10n.traceTokenIn}',
+                  if (usage.output case final v?) '${compactCount(v)} ${l10n.traceTokenOut}',
+                  if (usage.cacheRead case final v?) '${compactCount(v)} ${l10n.traceTokenCache}',
                 ].join(' · '),
                 mono: true,
                 colors: colors,
               ),
             if (summary.contextWindow case final window?)
               _Fact(
-                label: l10n.ledgerContextWindow,
+                label: l10n.traceContextWindow,
                 value: compactCount(window),
                 mono: true,
                 colors: colors,
               ),
             if (usage?.cost case final cost?)
               _Fact(
-                label: l10n.ledgerCost,
+                label: l10n.traceCost,
                 value: '\$${cost.toStringAsFixed(2)}',
                 mono: true,
                 colors: colors,
@@ -354,9 +353,9 @@ class _SummaryCard extends StatelessWidget {
   }
 
   List<String> _notes(AppLocalizations l10n) => [
-    if (location.isGuess) l10n.ledgerGuessed,
-    if (truncated) l10n.ledgerTailOnly,
-    if (session.skippedLines > 0) l10n.ledgerSkipped(session.skippedLines),
+    if (location.isGuess) l10n.traceGuessed,
+    if (truncated) l10n.traceTailOnly,
+    if (session.skippedLines > 0) l10n.traceSkipped(session.skippedLines),
   ];
 }
 
@@ -435,17 +434,17 @@ class _ToolTable extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  l10n.ledgerTools,
+                  l10n.traceTools,
                   style: TextStyle(
                     fontSize: TextSize.meta,
                     color: colors.textFaint,
                   ),
                 ),
               ),
-              _Column(l10n.ledgerFailuresShort, colors: colors, narrow: true),
-              _Column(l10n.ledgerToolCount, colors: colors),
-              _Column(l10n.ledgerToolMedian, colors: colors),
-              _Column(l10n.ledgerToolTimeShort, colors: colors, wide: true),
+              _Column(l10n.traceFailuresShort, colors: colors, narrow: true),
+              _Column(l10n.traceToolCount, colors: colors),
+              _Column(l10n.traceToolMedian, colors: colors),
+              _Column(l10n.traceToolTimeShort, colors: colors, wide: true),
             ],
           ),
         ),
@@ -568,7 +567,7 @@ class _ToolRow extends StatelessWidget {
 class _TurnCard extends StatelessWidget {
   const _TurnCard({required this.turn, required this.colors, required this.l10n});
 
-  final LedgerTurn turn;
+  final TraceTurn turn;
   final HerdrColors colors;
   final AppLocalizations l10n;
 
@@ -588,7 +587,7 @@ class _TurnCard extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  l10n.ledgerTurnLabel(turn.index),
+                  l10n.traceTurnLabel(turn.index),
                   style: TextStyle(
                     fontSize: TextSize.meta,
                     color: colors.textFaint,
@@ -639,7 +638,7 @@ class _TurnCard extends StatelessWidget {
                 if (turn.prompt case final prompt?)
                   _ExpandableText(
                     text: prompt,
-                    label: l10n.ledgerYou,
+                    label: l10n.traceYou,
                     colors: colors,
                     color: colors.text,
                     collapsedLines: 4,
@@ -658,8 +657,8 @@ class _TurnCard extends StatelessWidget {
   /// tool call inside it, which is why it sits on the turn and nowhere else.
   static String _usageLine(TokenUsage usage, AppLocalizations l10n) {
     final parts = <String>[
-      if (usage.input case final v?) '${compactCount(v)} ${l10n.ledgerTokenIn}',
-      if (usage.output case final v?) '${compactCount(v)} ${l10n.ledgerTokenOut}',
+      if (usage.input case final v?) '${compactCount(v)} ${l10n.traceTokenIn}',
+      if (usage.output case final v?) '${compactCount(v)} ${l10n.traceTokenOut}',
     ];
     return parts.join(' · ');
   }
@@ -673,7 +672,7 @@ class _ItemBlock extends StatelessWidget {
     required this.l10n,
   });
 
-  final LedgerItem item;
+  final TraceItem item;
   final HerdrColors colors;
   final AppLocalizations l10n;
 
@@ -684,26 +683,26 @@ class _ItemBlock extends StatelessWidget {
       // one: without it the answer reads as more of the question. The dsh
       // transcripts made this obvious — there the two sit in one card with
       // nothing between them.
-      LedgerText(:final text) => _ExpandableText(
+      TraceText(:final text) => _ExpandableText(
         text: text,
-        label: l10n.ledgerAssistant,
+        label: l10n.traceAssistant,
         colors: colors,
         color: colors.text,
       ),
-      LedgerNote(:final text) => _ExpandableText(
+      TraceNote(:final text) => _ExpandableText(
         text: text,
         colors: colors,
         color: colors.textDim,
       ),
-      LedgerThinking(:final text) => _Collapsible(
+      TraceThinking(:final text) => _Collapsible(
         colors: colors,
-        label: l10n.ledgerThinking,
-        detail: l10n.ledgerChars(text.length),
+        label: l10n.traceThinking,
+        detail: l10n.traceChars(text.length),
         body: text,
         shaded: true,
         icon: CupertinoIcons.eye_slash,
       ),
-      final LedgerToolCall call => _ToolCallBlock(
+      final TraceToolCall call => _ToolCallBlock(
         call: call,
         colors: colors,
         l10n: l10n,
@@ -714,7 +713,7 @@ class _ItemBlock extends StatelessWidget {
 
 /// A block of text that can be read in full.
 ///
-/// The ledger's first version capped messages at six lines with an ellipsis and
+/// The trace's first version capped messages at six lines with an ellipsis and
 /// no way past it, which on a real dsh turn meant the answer was cut off after
 /// its first heading — the screen looked like the agent had said nothing more.
 /// Whether the cap is even reached is measured rather than guessed: a
@@ -829,7 +828,7 @@ class _ToolCallBlock extends StatelessWidget {
     required this.l10n,
   });
 
-  final LedgerToolCall call;
+  final TraceToolCall call;
   final HerdrColors colors;
   final AppLocalizations l10n;
 
@@ -849,7 +848,7 @@ class _ToolCallBlock extends StatelessWidget {
           if (preview.isNotEmpty) preview,
         ].join(' '),
         trailing: call.duration == null
-            ? l10n.ledgerNoResult
+            ? l10n.traceNoResult
             : formatDuration(call.duration!),
         trailingColor: failed ? colors.died : colors.textDim,
         body: [
@@ -1044,34 +1043,34 @@ class _Message extends StatelessWidget {
 
 // --- View state ------------------------------------------------------------
 
-sealed class _LedgerView {
-  const _LedgerView();
+sealed class _TraceView {
+  const _TraceView();
 }
 
-class _LedgerLoading extends _LedgerView {
-  const _LedgerLoading();
+class _TraceLoading extends _TraceView {
+  const _TraceLoading();
 }
 
-class _LedgerLoaded extends _LedgerView {
-  const _LedgerLoaded({
+class _TraceLoaded extends _TraceView {
+  const _TraceLoaded({
     required this.session,
     required this.location,
     required this.truncated,
   });
 
-  final LedgerSession session;
+  final TraceSession session;
   final TranscriptLocation location;
   final bool truncated;
 }
 
-class _LedgerUnreachable extends _LedgerView {
-  const _LedgerUnreachable();
+class _TraceUnreachable extends _TraceView {
+  const _TraceUnreachable();
 }
 
-class _LedgerUnreadable extends _LedgerView {
-  const _LedgerUnreadable();
+class _TraceUnreadable extends _TraceView {
+  const _TraceUnreadable();
 }
 
-class _LedgerEmpty extends _LedgerView {
-  const _LedgerEmpty();
+class _TraceEmpty extends _TraceView {
+  const _TraceEmpty();
 }

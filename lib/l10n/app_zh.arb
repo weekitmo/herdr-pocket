@@ -675,35 +675,35 @@
     "description": "设置行里代替那条默认命令显示的短语——默认值是一段 shell，直接显示会撑爆行。"
   },
   "shellCommandCustom": "自定义",
-  "ledgerTitle": "会话账本",
-  "ledgerReload": "重新读取",
-  "ledgerLoading": "正在读取会话记录",
-  "ledgerUnreachable": "现在读不到机器上的文件",
-  "ledgerUnreadable": "这个 agent 的会话记录读不了",
-  "ledgerEmpty": "这个目录下没有找到会话记录",
-  "ledgerModel": "模型",
-  "ledgerDirectory": "目录",
-  "ledgerTurns": "回合",
-  "ledgerToolCalls": "工具调用",
-  "ledgerToolTime": "工具耗时",
-  "ledgerTokens": "Token",
-  "ledgerTokenIn": "输入",
-  "ledgerTokenOut": "输出",
-  "ledgerTokenCache": "缓存",
-  "ledgerContextWindow": "上下文窗口",
-  "ledgerCost": "花费",
-  "ledgerGuessed": "按目录推测的最新会话",
-  "ledgerTailOnly": "只读了文件末尾",
-  "ledgerTools": "工具",
-  "ledgerToolCount": "次数",
-  "ledgerToolMedian": "中位",
-  "ledgerToolTimeShort": "耗时",
-  "ledgerYou": "你",
-  "ledgerThinking": "思考",
-  "ledgerNoResult": "没有结果",
-  "paneActionLedger": "会话账本",
-  "ledgerCallsCount": "{count} 次",
-  "@ledgerCallsCount": {
+  "traceTitle": "会话跟踪",
+  "traceReload": "重新读取",
+  "traceLoading": "正在读取会话记录",
+  "traceUnreachable": "现在读不到机器上的文件",
+  "traceUnreadable": "这个 agent 的会话记录读不了",
+  "traceEmpty": "这个目录下没有找到会话记录",
+  "traceModel": "模型",
+  "traceDirectory": "目录",
+  "traceTurns": "回合",
+  "traceToolCalls": "工具调用",
+  "traceToolTime": "工具耗时",
+  "traceTokens": "Token",
+  "traceTokenIn": "输入",
+  "traceTokenOut": "输出",
+  "traceTokenCache": "缓存",
+  "traceContextWindow": "上下文窗口",
+  "traceCost": "花费",
+  "traceGuessed": "按目录推测的最新会话",
+  "traceTailOnly": "只读了文件末尾",
+  "traceTools": "工具",
+  "traceToolCount": "次数",
+  "traceToolMedian": "中位",
+  "traceToolTimeShort": "耗时",
+  "traceYou": "你",
+  "traceThinking": "思考",
+  "traceNoResult": "没有结果",
+  "paneActionTrace": "会话跟踪",
+  "traceCallsCount": "{count} 次",
+  "@traceCallsCount": {
     "description": "工具调用次数。",
     "placeholders": {
       "count": {
@@ -711,8 +711,8 @@
       }
     }
   },
-  "ledgerFailuresCount": "失败 {count}",
-  "@ledgerFailuresCount": {
+  "traceFailuresCount": "失败 {count}",
+  "@traceFailuresCount": {
     "description": "其中失败的次数。",
     "placeholders": {
       "count": {
@@ -720,8 +720,8 @@
       }
     }
   },
-  "ledgerOpenCount": "{count} 次没有结果",
-  "@ledgerOpenCount": {
+  "traceOpenCount": "{count} 次没有结果",
+  "@traceOpenCount": {
     "description": "调用没有返回就结束了的次数。",
     "placeholders": {
       "count": {
@@ -729,8 +729,8 @@
       }
     }
   },
-  "ledgerSkipped": "{count} 行读不懂",
-  "@ledgerSkipped": {
+  "traceSkipped": "{count} 行读不懂",
+  "@traceSkipped": {
     "description": "记录里解释不了的行数。",
     "placeholders": {
       "count": {
@@ -738,8 +738,8 @@
       }
     }
   },
-  "ledgerTurnLabel": "回合 {index}",
-  "@ledgerTurnLabel": {
+  "traceTurnLabel": "回合 {index}",
+  "@traceTurnLabel": {
     "description": "第几个回合。",
     "placeholders": {
       "index": {
@@ -747,8 +747,8 @@
       }
     }
   },
-  "ledgerChars": "{count} 字",
-  "@ledgerChars": {
+  "traceChars": "{count} 字",
+  "@traceChars": {
     "description": "思考块的字数。",
     "placeholders": {
       "count": {
@@ -756,9 +756,9 @@
       }
     }
   },
-  "settingsLedger": "会话账本（Beta）",
-  "settingsLedgerNote": "读 agent 自己的会话记录：回合、工具、token。目前支持 pi 和 codex。",
-  "ledgerFailuresShort": "✗",
-  "ledgerNoTurns": "这个会话还没有对话",
-  "ledgerAssistant": "助手"
+  "settingsTrace": "会话跟踪（Beta）",
+  "settingsTraceNote": "读 agent 自己的会话记录：回合、工具、token。目前支持 pi、dsh 和 codex。",
+  "traceFailuresShort": "✗",
+  "traceNoTurns": "这个会话还没有对话",
+  "traceAssistant": "助手"
 }

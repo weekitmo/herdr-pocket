@@ -40,7 +40,7 @@ void main() {
       'flutter.settings.autoUpdateCheck': false,
       'flutter.settings.sessionCommand': 'zsh -l',
       'flutter.settings.scrollbackLines': 12345,
-      'flutter.settings.ledgerEnabled': true,
+      'flutter.settings.traceEnabled': true,
     });
     final prefs = await SharedPreferences.getInstance();
     final settings = launch(prefs).read(settingsProvider);
@@ -61,7 +61,22 @@ void main() {
     expect(settings.autoUpdateCheck, isFalse);
     expect(settings.sessionCommand, 'zsh -l');
     expect(settings.scrollbackLines, 12345);
-    expect(settings.ledgerEnabled, isTrue);
+    expect(settings.traceEnabled, isTrue);
+  });
+
+  test('a switch set before the rename is not silently turned off', () async {
+    // The feature was called "ledger" when it first shipped, and the stored key
+    // went with the name. Reading only the new key would reset a choice the
+    // user had to go and find — which is indistinguishable from the feature
+    // disappearing, and this project has been burned by exactly that shape.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'flutter.settings.ledgerEnabled': true,
+    });
+    final settings = launch(
+      await SharedPreferences.getInstance(),
+    ).read(settingsProvider);
+
+    expect(settings.traceEnabled, isTrue);
   });
 
   test('what one launch writes is what the next launch reads', () async {
@@ -78,7 +93,7 @@ void main() {
     await first.read(settingsProvider.notifier).setAutoUpdateCheck(enabled: false);
     await first.read(settingsProvider.notifier).setSessionCommand('fish -l');
     await first.read(settingsProvider.notifier).setScrollbackLines(20000);
-    await first.read(settingsProvider.notifier).setLedgerEnabled(enabled: true);
+    await first.read(settingsProvider.notifier).setTraceEnabled(enabled: true);
 
     // A second launch against the same store — which is what closing and
     // reopening the app does.
@@ -90,7 +105,7 @@ void main() {
     expect(second.autoUpdateCheck, isFalse);
     expect(second.sessionCommand, 'fish -l');
     expect(second.scrollbackLines, 20000);
-    expect(second.ledgerEnabled, isTrue);
+    expect(second.traceEnabled, isTrue);
 
     // And clearing goes all the way back to the built-in palette rather than
     // leaving a stale id that no longer exists.
@@ -110,9 +125,9 @@ void main() {
     // not the design, and this app's material is the point of it.
     expect(settings.glassEnabled, isTrue);
     expect(settings.autoConnect, isFalse);
-    // The beta ledger is OFF out of the box: it reads another program's private
+    // The beta trace is OFF out of the box: it reads another program's private
     // files, so it is the one screen whose failures the user should opt into.
-    expect(settings.ledgerEnabled, isFalse);
+    expect(settings.traceEnabled, isFalse);
     expect(settings.textScale, 1.0);
     expect(settings.keyBarKeys, defaultKeyBar);
     // The themed set is the DELIBERATE default — it was chosen with the

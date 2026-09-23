@@ -1,4 +1,4 @@
-/// Turning the ledger's numbers into something short enough for a phone.
+/// Turning the trace's numbers into something short enough for a phone.
 ///
 /// Pure, and separate from the page, for the same reason as the stats: a table
 /// column that says `1.2s` in one row and `2 minutes 4 seconds` in the next is

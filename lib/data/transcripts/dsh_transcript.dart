@@ -16,7 +16,7 @@
 ///   tool/result        {turn, step, message}
 ///   step/end, turn/end {turn, step, reason}
 ///
-/// So the ledger gets to use the agent's own turn numbers instead of counting
+/// So the trace gets to use the agent's own turn numbers instead of counting
 /// the window it happens to have read — the one place in this feature where a
 /// number on screen is the agent's rather than ours.
 ///
@@ -29,7 +29,7 @@ library;
 import 'dart:convert';
 
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 class DshTranscript implements TranscriptAdapter {
   const DshTranscript();
@@ -135,7 +135,7 @@ class DshTranscript implements TranscriptAdapter {
           final current = turn();
           // A reasoning block is the agent THINKING, and dsh keeps its text in
           // plain sight — unlike codex, whose reasoning arrives as an encrypted
-          // blob with a one-line summary. Dropping it would leave the ledger
+          // blob with a one-line summary. Dropping it would leave the trace
           // with the answer and no sign of how it got there.
           for (final block in listOf(message?['content'])) {
             final entry = mapOf(block);
@@ -145,9 +145,9 @@ class DshTranscript implements TranscriptAdapter {
             if (blockText.trim().isEmpty) continue;
             switch (blockType) {
               case 'reasoning':
-                current.items.add(LedgerThinking(blockText));
+                current.items.add(TraceThinking(blockText));
               case 'text':
-                current.items.add(LedgerText(blockText));
+                current.items.add(TraceText(blockText));
               case _:
                 // `tool-call` blocks repeat the `tool/call` records; reading
                 // both would double every call in the table.
@@ -166,7 +166,7 @@ class DshTranscript implements TranscriptAdapter {
           final id = stringOf(data['callId']) ?? '';
           final current = turn();
           current.items.add(
-            LedgerToolCall(
+            TraceToolCall(
               id: id,
               name: stringOf(data['name']) ?? '?',
               arguments: stringOf(data['arguments']) ?? '',
@@ -184,7 +184,7 @@ class DshTranscript implements TranscriptAdapter {
           final text = _resultTextOf(data['message']);
           if (site == null) {
             final current = turn();
-            if (text.isNotEmpty) current.items.add(LedgerNote(text));
+            if (text.isNotEmpty) current.items.add(TraceNote(text));
             break;
           }
           final started = site.startedAt;
@@ -192,8 +192,8 @@ class DshTranscript implements TranscriptAdapter {
               ? null
               : at.difference(started);
           final previous = site.turn.items[site.index];
-          if (previous is LedgerToolCall) {
-            site.turn.items[site.index] = LedgerToolCall(
+          if (previous is TraceToolCall) {
+            site.turn.items[site.index] = TraceToolCall(
               id: previous.id,
               name: previous.name,
               arguments: previous.arguments,
@@ -216,7 +216,7 @@ class DshTranscript implements TranscriptAdapter {
     }
 
     return ParsedTranscript(
-      LedgerSession(
+      TraceSession(
         agentId: agentId,
         sessionId: sessionId,
         cwd: cwd,
@@ -321,9 +321,9 @@ class _TurnBuilder {
   DateTime? at;
   String? prompt;
   TokenUsage? usage;
-  final List<LedgerItem> items = [];
+  final List<TraceItem> items = [];
 
-  LedgerTurn freeze({required int index}) => LedgerTurn(
+  TraceTurn freeze({required int index}) => TraceTurn(
     index: index,
     prompt: prompt,
     startedAt: at,

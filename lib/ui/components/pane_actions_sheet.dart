@@ -21,7 +21,7 @@ Future<PaneAction?> showPaneActions(
   BuildContext context, {
   required PaneInfo pane,
   bool withOpen = false,
-  List<String> ledgerAgents = const [],
+  List<String> traceAgents = const [],
 }) {
   final l10n = AppLocalizations.of(context);
   return showCupertinoModalPopup<PaneAction>(
@@ -47,7 +47,7 @@ Future<PaneAction?> showPaneActions(
         for (final action in paneActionsFor(
           pane,
           withOpen: withOpen,
-          ledgerAgents: ledgerAgents,
+          traceAgents: traceAgents,
         ))
           CupertinoActionSheetAction(
             onPressed: () => Navigator.of(sheetContext).pop(action),
@@ -76,7 +76,7 @@ Future<PaneAction?> showPaneActions(
   // thing in it to "a structured list of what happened", and the row's label
   // does the rest of the work. A proper doc icon means fetching one into
   // `assets/ui_icons/` and re-recording the manifest.
-  PaneAction.ledger => (UiIconName.panes, CupertinoIcons.doc_text),
+  PaneAction.trace => (UiIconName.panes, CupertinoIcons.doc_text),
   PaneAction.focus => (UiIconName.aim, CupertinoIcons.scope),
 };
 
@@ -89,6 +89,6 @@ String labelForPaneAction(PaneAction action, AppLocalizations l10n) =>
       PaneAction.open => l10n.actionOpen,
       PaneAction.browseFiles => l10n.filesTitle,
       PaneAction.git => l10n.gitTitle,
-      PaneAction.ledger => l10n.paneActionLedger,
+      PaneAction.trace => l10n.paneActionTrace,
       PaneAction.focus => l10n.workspacesFocusPane,
     };

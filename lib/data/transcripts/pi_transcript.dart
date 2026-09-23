@@ -14,14 +14,14 @@
 ///
 /// A TOOL CALL AND ITS RESULT ARE TWO LINES, so the call is kept open until its
 /// result arrives and the pairing is by id. A result that never comes leaves
-/// the call open, which the ledger shows as such rather than as a zero-second
+/// the call open, which the trace shows as such rather than as a zero-second
 /// success — an interrupted session really does end that way.
 library;
 
 import 'dart:convert';
 
 import 'package:herdr_pocket/data/transcripts/transcript_adapter.dart';
-import 'package:herdr_pocket/domain/transcript/session_ledger.dart';
+import 'package:herdr_pocket/domain/transcript/session_trace.dart';
 
 class PiTranscript implements TranscriptAdapter {
   const PiTranscript();
@@ -136,14 +136,14 @@ class PiTranscript implements TranscriptAdapter {
                 // An empty thinking block is normal — the agent kept only a
                 // signature. Drawing an empty box would be worse than nothing.
                 if (text.trim().isNotEmpty) {
-                  turn.items.add(LedgerThinking(text));
+                  turn.items.add(TraceThinking(text));
                 }
               case 'text':
                 final text = stringOf(map['text']) ?? '';
-                if (text.trim().isNotEmpty) turn.items.add(LedgerText(text));
+                if (text.trim().isNotEmpty) turn.items.add(TraceText(text));
               case 'toolCall':
                 final id = stringOf(map['id']) ?? '';
-                final call = LedgerToolCall(
+                final call = TraceToolCall(
                   id: id,
                   name: stringOf(map['name']) ?? '?',
                   arguments: _argumentsOf(map['arguments']),
@@ -167,7 +167,7 @@ class PiTranscript implements TranscriptAdapter {
             // caught the throw and reported it as an absence. Any window of a
             // file has to parse, so this opens a turn rather than assuming one.
             if (turns.isEmpty) turns.add(_TurnBuilder(at: at));
-            turns.last.items.add(LedgerNote(text));
+            turns.last.items.add(TraceNote(text));
             break;
           }
           final started = site.startedAt;
@@ -175,8 +175,8 @@ class PiTranscript implements TranscriptAdapter {
               ? null
               : at.difference(started);
           final previous = turns[site.turn].items[site.index];
-          if (previous is LedgerToolCall) {
-            turns[site.turn].items[site.index] = LedgerToolCall(
+          if (previous is TraceToolCall) {
+            turns[site.turn].items[site.index] = TraceToolCall(
               id: previous.id,
               name: previous.name,
               arguments: previous.arguments,
@@ -197,7 +197,7 @@ class PiTranscript implements TranscriptAdapter {
     }
 
     return ParsedTranscript(
-      LedgerSession(
+      TraceSession(
         agentId: agentId,
         model: model,
         sessionId: sessionId,
@@ -232,7 +232,7 @@ class PiTranscript implements TranscriptAdapter {
   }
 
   /// `arguments` is an object here, but it is stored as whatever the model
-  /// produced. Kept as text so the ledger can show it without deciding what it
+  /// produced. Kept as text so the trace can show it without deciding what it
   /// means — and so a future version that writes a string still reads.
   static String _argumentsOf(Object? value) {
     if (value == null) return '';
@@ -274,9 +274,9 @@ class _TurnBuilder {
   DateTime? at;
   String? prompt;
   TokenUsage? usage;
-  final List<LedgerItem> items = [];
+  final List<TraceItem> items = [];
 
-  LedgerTurn freeze({required int index}) => LedgerTurn(
+  TraceTurn freeze({required int index}) => TraceTurn(
     index: index,
     prompt: prompt,
     startedAt: at,
