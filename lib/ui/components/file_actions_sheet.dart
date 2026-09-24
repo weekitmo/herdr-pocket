@@ -15,8 +15,19 @@ enum FileMoreAction {
   /// Open the document view of a Markdown file.
   previewMarkdown,
 
-  /// Open the plain-text view — from the document view, "show me the source".
+  /// Open the picture view of an SVG — a picture whose bytes are text.
+  previewImage,
+
+  /// Open the plain-text view, from one of the other two views: "show me the
+  /// source".
   viewText,
+
+  /// Put the whole file on the clipboard.
+  ///
+  /// NOT the same promise as selecting the text on screen: the code view is a
+  /// lazily built list, so its selection only covers the rows that have been
+  /// built. This row copies the file.
+  copyText,
 
   /// Size, times, permissions, ownership.
   info,
@@ -33,18 +44,21 @@ enum FileMoreAction {
 /// already on. Building two sheets is how the two copies start to differ — one
 /// gains an action, the other keeps yesterday's wording.
 ///
-/// [markdownPreview], [viewText] and [download] are the caller's answers, not
-/// this function's: only the tree knows whether file transfer is switched on,
-/// and only the page knows which view it is. There is deliberately no guard for
-/// "nothing to offer": the info row is unconditional, so an empty sheet is
-/// impossible — and a guard was written once anyway, silently swallowing the
-/// only action a plain `.txt` file had.
+/// [markdownPreview], [imagePreview], [viewText], [copyText] and [download] are
+/// the caller's answers, not this function's: only the tree knows whether file
+/// transfer is switched on, only the page knows which view it is, and only the
+/// page has the text to copy. There is deliberately no guard for "nothing to
+/// offer": the info row is unconditional, so an empty sheet is impossible — and
+/// a guard was written once anyway, silently swallowing the only action a plain
+/// `.txt` file had.
 Future<FileMoreAction?> showFileMoreActions(
   BuildContext context, {
   required String name,
   required String path,
   bool markdownPreview = false,
+  bool imagePreview = false,
   bool viewText = false,
+  bool copyText = false,
   bool download = false,
 }) {
   final l10n = AppLocalizations.of(context);
@@ -70,11 +84,23 @@ Future<FileMoreAction?> showFileMoreActions(
                 Navigator.of(sheetContext).pop(FileMoreAction.previewMarkdown),
             child: actionSheetLabel(l10n.fileActionPreviewMarkdown),
           ),
+        if (imagePreview)
+          CupertinoActionSheetAction(
+            onPressed: () =>
+                Navigator.of(sheetContext).pop(FileMoreAction.previewImage),
+            child: actionSheetLabel(l10n.fileActionPreviewImage),
+          ),
         if (viewText)
           CupertinoActionSheetAction(
             onPressed: () =>
                 Navigator.of(sheetContext).pop(FileMoreAction.viewText),
             child: actionSheetLabel(l10n.fileActionViewText),
+          ),
+        if (copyText)
+          CupertinoActionSheetAction(
+            onPressed: () =>
+                Navigator.of(sheetContext).pop(FileMoreAction.copyText),
+            child: actionSheetLabel(l10n.fileActionCopyText),
           ),
         CupertinoActionSheetAction(
           onPressed: () => Navigator.of(sheetContext).pop(FileMoreAction.info),

@@ -486,13 +486,42 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get fileImageLoadFailed => '读不到这张图片';
+
+  @override
+  String fileImageTooLarge(String size) {
+    return '图片 $size，超过手机上预览的大小上限';
+  }
+
+  @override
+  String get fileImageTooLargeUnknown => '图片超过手机上预览的大小上限';
+
+  @override
+  String get fileImageUnreadable => '这个文件不是这台设备能显示的图片';
+
+  @override
+  String get fileImageZoom => '查看图片';
+
+  @override
+  String get filePdfNoPreview => '应用里不渲染 PDF。下载到手机后用 PDF 应用打开。';
+
+  @override
   String get fileMoreActions => '更多操作';
 
   @override
   String get fileActionPreviewMarkdown => 'Markdown 预览';
 
   @override
+  String get fileActionPreviewImage => '图片预览';
+
+  @override
   String get fileActionViewText => '查看原文';
+
+  @override
+  String get fileActionCopyText => '复制全部文本';
+
+  @override
+  String get fileTextCopied => '已复制';
 
   @override
   String get fileActionInfo => '查看文件信息';

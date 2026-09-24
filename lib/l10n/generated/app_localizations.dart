@@ -1004,6 +1004,42 @@ abstract class AppLocalizations {
   /// **'{count} lines'**
   String filePreviewLines(int count);
 
+  /// No description provided for @fileImageLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read this image'**
+  String get fileImageLoadFailed;
+
+  /// No description provided for @fileImageTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Image is {size} — past the size a phone preview can hold'**
+  String fileImageTooLarge(String size);
+
+  /// No description provided for @fileImageTooLargeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'This image is past the size a phone preview can hold'**
+  String get fileImageTooLargeUnknown;
+
+  /// No description provided for @fileImageUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Not an image this device can show'**
+  String get fileImageUnreadable;
+
+  /// No description provided for @fileImageZoom.
+  ///
+  /// In en, this message translates to:
+  /// **'View image'**
+  String get fileImageZoom;
+
+  /// No description provided for @filePdfNoPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'PDFs are not rendered in this app. Download it to the phone and open it there.'**
+  String get filePdfNoPreview;
+
   /// No description provided for @fileMoreActions.
   ///
   /// In en, this message translates to:
@@ -1016,11 +1052,29 @@ abstract class AppLocalizations {
   /// **'Preview Markdown'**
   String get fileActionPreviewMarkdown;
 
+  /// No description provided for @fileActionPreviewImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview image'**
+  String get fileActionPreviewImage;
+
   /// No description provided for @fileActionViewText.
   ///
   /// In en, this message translates to:
   /// **'View source'**
   String get fileActionViewText;
+
+  /// No description provided for @fileActionCopyText.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all text'**
+  String get fileActionCopyText;
+
+  /// No description provided for @fileTextCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get fileTextCopied;
 
   /// No description provided for @fileActionInfo.
   ///

@@ -505,13 +505,44 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get fileImageLoadFailed => 'Could not read this image';
+
+  @override
+  String fileImageTooLarge(String size) {
+    return 'Image is $size — past the size a phone preview can hold';
+  }
+
+  @override
+  String get fileImageTooLargeUnknown =>
+      'This image is past the size a phone preview can hold';
+
+  @override
+  String get fileImageUnreadable => 'Not an image this device can show';
+
+  @override
+  String get fileImageZoom => 'View image';
+
+  @override
+  String get filePdfNoPreview =>
+      'PDFs are not rendered in this app. Download it to the phone and open it there.';
+
+  @override
   String get fileMoreActions => 'More actions';
 
   @override
   String get fileActionPreviewMarkdown => 'Preview Markdown';
 
   @override
+  String get fileActionPreviewImage => 'Preview image';
+
+  @override
   String get fileActionViewText => 'View source';
+
+  @override
+  String get fileActionCopyText => 'Copy all text';
+
+  @override
+  String get fileTextCopied => 'Copied';
 
   @override
   String get fileActionInfo => 'File info';

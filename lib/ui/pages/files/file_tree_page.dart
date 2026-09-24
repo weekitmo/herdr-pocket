@@ -147,6 +147,14 @@ class _FileTreePageState extends ConsumerState<FileTreePage> {
       case FileMoreAction.viewText:
         // Never offered here: tapping the row already opens the text.
         break;
+      case FileMoreAction.previewImage:
+        // Never offered here either: tapping an image row opens the picture
+        // directly, which is what the preview row would do.
+        break;
+      case FileMoreAction.copyText:
+        // Never offered here: this sheet has no text to copy — the file has not
+        // been read. The preview page owns that row.
+        break;
     }
   }
 

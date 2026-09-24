@@ -214,9 +214,25 @@
       }
     }
   },
+  "fileImageLoadFailed": "读不到这张图片",
+  "fileImageTooLarge": "图片 {size}，超过手机上预览的大小上限",
+  "@fileImageTooLarge": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "fileImageTooLargeUnknown": "图片超过手机上预览的大小上限",
+  "fileImageUnreadable": "这个文件不是这台设备能显示的图片",
+  "fileImageZoom": "查看图片",
+  "filePdfNoPreview": "应用里不渲染 PDF。下载到手机后用 PDF 应用打开。",
   "fileMoreActions": "更多操作",
   "fileActionPreviewMarkdown": "Markdown 预览",
+  "fileActionPreviewImage": "图片预览",
   "fileActionViewText": "查看原文",
+  "fileActionCopyText": "复制全部文本",
+  "fileTextCopied": "已复制",
   "fileActionInfo": "查看文件信息",
   "fileInfoSize": "大小",
   "fileInfoModified": "修改时间",

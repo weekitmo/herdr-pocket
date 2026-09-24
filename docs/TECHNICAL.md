@@ -82,10 +82,38 @@ control 模式从 stdin 读 `terminal.input` / `resize` / `scroll` / `release`�
   「未记录」，不画成 1970。
 - **Markdown 预览**（`lib/ui/markdown/`）：`markdown` 包解析成 AST，自己画成本项目的
   Cupertino 组件 —— 不引 `flutter_markdown`（那是一层 Material，ADR-004）。代码块用
-  `highlight` 的 **core 入口**只注册 24 种 README 常见语言（默认入口 import 即注册 190 种）。
+  `highlight` 的 **core 入口**注册 47 种语言（默认入口 import 即注册 190 种）。
+  语言表与 token 角色在 **`lib/domain/highlight/syntax.dart`**（纯 Dart、无 Flutter），
+  于是同一套分类既供 Markdown 围栏、也供**整份源文件**；颜色仍只由
+  `ui/markdown/code_highlighting.dart` 的 `CodePalette` 决定（对比度由
+  `test/ui/code_palette_test.dart` 从常量重算：两种主题 × 两种表面）。
   ```mermaid 围栏用 `mermaid_core` + `mermaid_flutter` **原生渲染**（纯 Dart，无 WebView、
   无 JS），同步渲染一张流程图实测约 160 ms，所以块是懒构建的。长按文件 → 操作面板
   （Markdown 预览 / 查看文件信息 / 下载）。
+- **源码查看器**（`lib/ui/pages/files/`）按**文件名**分流，四条路：
+
+  | 文件 | 怎么读 | 怎么画 |
+  |---|---|---|
+  | `.py` `.ts` `.go` `.rs` `.json` `.yaml` `Dockerfile` … | `head -c`（shell） | `CodeView`：行号 + 语法色 + 可选中复制 |
+  | `.png` `.jpg` `.gif` `.webp` `.bmp` | **SFTP**（`lib/data/remote_bytes.dart`，上限 24 MiB） | `Image.memory`（decode 上限 4096 px）→ 点开全屏捏合 |
+  | `.svg` | `head -c`（它是文本） | `SvgPicture.string`；面板里可「查看原文」 |
+  | `.pdf` | **不读** | 一句话 + 下载（纯 Dart 没有 PDF 渲染器） |
+
+  - 文件名 → 语法：`lib/domain/files/source_language.dart`（扩展名表 + 特殊文件名表）。
+    **不认识的扩展名不给颜色** —— `.m` 可能是 MATLAB 也可能是 Objective-C，
+    猜错就是在文件上画自信的错误颜色，比不画差。
+  - 分词按**整份文件**做、再按行切：块注释与三引号字符串都跨行，逐行调语法会让
+    注释的第二行变成「代码」。实测 256 KB Dart 78 ms / 100 KB Python 71 ms（桌面 JIT）
+    ⇒ 在 **isolate** 里算（`compute`，结果只有 String + 枚举，可跨 isolate），
+    并且**先上屏纯文本、算完再上色**。
+  - 可选中复制用 **`SelectableRegion`（widgets 层）**，不是 `SelectionArea` ——
+    后者在 `material` 层，import 它会破 no-Material 铁律。句柄与工具条用
+    `cupertinoTextSelectionHandleControls` + `CupertinoAdaptiveTextSelectionToolbar`。
+    行号用 `SelectionContainer.disabled` 排除在选择之外（复制代码不该带行号），
+    工具条里**只留「复制」**：列表是懒构建的，「全选」只会复制已建出来的那几十行，
+    而结果看起来像一个整文件；整份文件的复制在操作面板里单独一行。
+  - 图片视图用 `SizedBox.expand` 撑满**帧**而不是围着位图：`Image` 没解码完之前自身尺寸是 0，
+    围着它居中就等于「图还没解码时点不到」。
 - git：`git status --porcelain=v2 --branch --untracked-files=all -z`、`git diff`，以及
   未跟踪文件的 **`git diff --no-index -- /dev/null <path>`**。herdr 自己没有任何 git API，
   只有 `worktree.list`（一个分支名和拓扑，没有改动文件）。三件事都是被同一个 bug 逼出来的，
@@ -260,7 +288,9 @@ Dart 侧的 keepalive（10s）只在进程活着时有效；**进后台被冻结
 | SSH 直连终端（PTY、无 herdr） | `lib/data/transport/shell_transport.dart`、`lib/ui/pages/shell/` |
 | 看板状态、fail-closed 分组 | `lib/domain/agent/` |
 | 读目录、读文件、读元信息 | `lib/data/remote_fs.dart`、`lib/data/remote_files.dart` |
+| 读字节（图片预览，SFTP） | `lib/data/remote_bytes.dart` |
 | Markdown 预览（解析 / 高亮 / Mermaid） | `lib/ui/markdown/`、`lib/domain/files/file_meta.dart` |
+| 源码查看器（语法高亮 / 图片 / 选择） | `lib/domain/highlight/syntax.dart`、`lib/domain/files/{preview_kind,source_language}.dart`、`lib/ui/pages/files/` |
 | git（status / diff） | `lib/data/git_client.dart`、`lib/domain/git/` |
 | skills 与 MCP 探测 | `lib/data/remote_capabilities.dart` |
 | 文件传输（SFTP） | `lib/data/remote_download.dart`、`lib/data/remote_upload.dart` |
@@ -279,7 +309,7 @@ Dart 侧的 keepalive（10s）只在进程活着时有效；**进后台被冻结
 
 三条命令，见 README 的「测试」一节。这里只说它们背后那条规矩和 CI 多出来的闸：
 
-- **`flutter test`** 约 1100 个测试（实测 1127 passed / ~52s）。
+- **`flutter test`** 1300 多个测试（实测 1378 passed / 7 skipped / ~55s）。
 - **`sh tool/ci_tests.sh`** 起 headless daemon + 一次性 sshd，跑完后**只要有测试被跳过就失败**。
   没有这道闸，一个坏掉的 SSH 传输照样是绿色勾。`HP_LIVE_WRITES=1` 才跑会创建东西的测试。
 - 那个 sshd 是 **/tmp 里的第二个**，自带主机密钥和 `authorized_keys`（`tool/test_sshd.sh`），

@@ -50,6 +50,38 @@ void main() {
     }
   });
 
+  test('the same palette is legible on the PAGE, where the code viewer paints', () {
+    // The Markdown code block paints the palette on `surfaceRaised`; the file
+    // preview paints it straight onto the page's `ground`. The measured numbers
+    // above are the block's, so the page's are recomputed here rather than
+    // assumed: a palette that is only legible on one of the two surfaces is a
+    // palette that was checked once.
+    for (final colors in [HerdrColors.dark, HerdrColors.light]) {
+      final palette = CodePalette.of(colors.brightness);
+      for (final entry in <String, Color>{
+        'plain': palette.plain,
+        'keyword': palette.keyword,
+        'string': palette.string,
+        'number': palette.number,
+        'comment': palette.comment,
+        'function': palette.function,
+        'type': palette.type,
+        'attribute': palette.attribute,
+        'punctuation': palette.punctuation,
+        'inserted': palette.inserted,
+        'deleted': palette.deleted,
+      }.entries) {
+        final ratio = _contrast(entry.value, colors.ground);
+        expect(
+          ratio,
+          greaterThanOrEqualTo(4.5),
+          reason: '${colors.brightness.name} ${entry.key} on the page: '
+              '${ratio.toStringAsFixed(2)}:1',
+        );
+      }
+    }
+  });
+
   test('inline code is readable on its own background', () {
     for (final colors in [HerdrColors.dark, HerdrColors.light]) {
       final palette = MarkdownPalette(

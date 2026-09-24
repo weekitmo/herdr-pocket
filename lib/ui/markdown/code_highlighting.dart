@@ -1,40 +1,25 @@
-/// Syntax highlighting for fenced code blocks in a Markdown preview.
+/// The COLOURS of syntax highlighting, and the bridge from tokens to spans.
 ///
-/// The grammars are highlight.js's, ported to Dart by the `highlight` package
-/// and used here through its CORE entry point rather than its default one: the
-/// default registers all 190 grammars at import time, and a phone that reads a
-/// README does not need a Verilog tokenizer in its APK. The curated list below
-/// is the languages a repository's README actually fences; anything else
-/// renders as plain monospace text, which is what a wrong guess would look like
-/// anyway.
+/// The tokens themselves — which grammar a name gets, and what role each of its
+/// classes plays — are computed in `lib/domain/highlight/syntax.dart`, because
+/// the file preview tokenises whole files off the UI thread and has to carry the
+/// result in a form that knows nothing about Flutter. This file is the other
+/// half of that seam: the only place that decides what a `keyword` or a
+/// `comment` LOOKS like.
+///
+/// Both the Markdown renderer and the source-file viewer go through
+/// [highlightedSpans], so one token cannot be two colours depending on which
+/// screen it was found on.
 library;
 
 import 'package:flutter/widgets.dart';
-import 'package:highlight/highlight_core.dart';
-import 'package:highlight/languages/bash.dart';
-import 'package:highlight/languages/cpp.dart';
-import 'package:highlight/languages/cs.dart';
-import 'package:highlight/languages/css.dart';
-import 'package:highlight/languages/dart.dart';
-import 'package:highlight/languages/diff.dart';
-import 'package:highlight/languages/dockerfile.dart';
-import 'package:highlight/languages/go.dart';
-import 'package:highlight/languages/ini.dart';
-import 'package:highlight/languages/java.dart';
-import 'package:highlight/languages/javascript.dart';
-import 'package:highlight/languages/json.dart';
-import 'package:highlight/languages/kotlin.dart';
-import 'package:highlight/languages/makefile.dart';
-import 'package:highlight/languages/markdown.dart';
-import 'package:highlight/languages/php.dart';
-import 'package:highlight/languages/python.dart';
-import 'package:highlight/languages/ruby.dart';
-import 'package:highlight/languages/rust.dart';
-import 'package:highlight/languages/sql.dart';
-import 'package:highlight/languages/swift.dart';
-import 'package:highlight/languages/typescript.dart';
-import 'package:highlight/languages/xml.dart';
-import 'package:highlight/languages/yaml.dart';
+import 'package:herdr_pocket/domain/highlight/syntax.dart';
+
+// Re-exported so this file stays the one place the rest of the UI imports:
+// `languageId` and `highlightLanguageId` are asked by the Markdown renderer
+// (does this fence mean "draw me a diagram"?) and by the file preview (which
+// grammar does this name get?), and both of them mean the same thing.
+export 'package:herdr_pocket/domain/highlight/syntax.dart';
 
 /// The colours one code block uses, by token role.
 ///
@@ -148,93 +133,6 @@ class CodePalette {
   );
 }
 
-/// The grammars this app can colour.
-///
-/// Curated, tiny, and registered once at first use. `registerLanguage` also
-/// registers each mode's own aliases, so ` ```sh `, ` ```yml ` and ` ```py `
-/// resolve without a second table — the alias list is the grammar's own.
-final Map<String, Mode> _languages = {
-  'bash': bash,
-  'cpp': cpp,
-  'cs': cs,
-  'css': css,
-  'dart': dart,
-  'diff': diff,
-  'dockerfile': dockerfile,
-  'go': go,
-  'ini': ini,
-  'java': java,
-  'javascript': javascript,
-  'json': json,
-  'kotlin': kotlin,
-  'makefile': makefile,
-  'markdown': markdown,
-  'php': php,
-  'python': python,
-  'ruby': ruby,
-  'rust': rust,
-  'sql': sql,
-  'swift': swift,
-  'typescript': typescript,
-  'xml': xml,
-  'yaml': yaml,
-};
-
-/// The parser, built once.
-final Highlight _highlighter = () {
-  final highlighter = Highlight();
-  _languages.forEach(highlighter.registerLanguage);
-  return highlighter;
-}();
-
-/// Every name a fence may spell, mapped to the grammar's canonical name.
-///
-/// Both halves, lower-cased: `bash` → `bash`, but also `sh` → `bash`, `py` →
-/// `python` and `yml` → `yaml`. The aliases are the GRAMMAR's own, so a fence
-/// written in any of them colours without a second table — and mapping them to
-/// the canonical name is what lets the block's label say `bash` for a fence that
-/// said `sh`, which is the difference between a label and a copy of the input.
-final Map<String, String> _canonicalNames = () {
-  final names = <String, String>{};
-  _languages.forEach((name, mode) {
-    names[name.toLowerCase()] = name;
-    for (final alias in mode.aliases ?? const <String>[]) {
-      names[alias.toLowerCase()] = name;
-    }
-  });
-  return names;
-}();
-
-/// The language id a fence's info string names, in canonical form, or null.
-///
-/// Markdown hands the info string through as written, and every project spells
-/// it its own way: `dart`, `Dart`, `language-dart`, `lang-dart`, `dart linenums`.
-/// Only the FIRST token is a language — the rest is options for other renderers
-/// (`linenums`, `title=…`) — and the `language-` prefix is a class name from
-/// the HTML world that leaks into fences because that is what a highlighter on
-/// the web consumes.
-///
-/// This is the SPELLING normaliser: `mermaid` comes back as `mermaid` even
-/// though no grammar is registered for it, because the caller that wants to
-/// know whether a fence means "draw me" is not the caller that wants to know
-/// whether a grammar exists. See [highlightLanguageId] for the second question.
-String? languageId(String? info) {
-  if (info == null) return null;
-  final first = info.trim().split(RegExp(r'\s+')).first;
-  if (first.isEmpty) return null;
-  var id = first.toLowerCase();
-  if (id.startsWith('language-')) id = id.substring('language-'.length);
-  if (id.startsWith('lang-')) id = id.substring('lang-'.length);
-  return id.isEmpty ? null : id;
-}
-
-/// The id of the grammar this fence names, or null when it names none we
-/// colour.
-String? highlightLanguageId(String? info) {
-  final id = languageId(info);
-  return id == null ? null : _canonicalNames[id];
-}
-
 /// The spans for one fenced block, or a single plain span when the language is
 /// unknown.
 ///
@@ -246,140 +144,33 @@ List<InlineSpan> highlightedSpans(
   required TextStyle base,
   required CodePalette palette,
 }) {
-  final id = highlightLanguageId(info);
-  if (id == null) return [TextSpan(text: source, style: base)];
-
-  final nodes = _highlighter.parse(source, language: id).nodes;
-  if (nodes == null || nodes.isEmpty) return [TextSpan(text: source, style: base)];
-
-  final spans = <InlineSpan>[];
-  _walk(nodes, base, palette, spans);
-  return spans;
+  final runs = highlightRuns(source, info);
+  return [for (final run in runs) TextSpan(text: run.text, style: codeStyle(run, base, palette))];
 }
 
-void _walk(
-  List<Node> nodes,
-  TextStyle current,
-  CodePalette palette,
-  List<InlineSpan> out,
-) {
-  for (final node in nodes) {
-    final style = _styleFor(node, current, palette);
-    if (node.value != null && node.value!.isNotEmpty) {
-      out.add(TextSpan(text: node.value, style: style));
-    } else if (node.children != null) {
-      _walk(node.children!, style, palette, out);
-    }
-  }
-}
-
-/// The style for one node.
+/// One token's text style: the base (font, size, family) plus its role's ink.
 ///
-/// A class name can carry SEVERAL classes — highlight.js emits `title
-/// function_` for a call, and `title class_` for a type — so the first name
-/// this table knows wins, and a name built by suffixing an underscore is
-/// stripped first. A node with no class inherits whatever the enclosing token
-/// established; that is what makes a nested `string` inside a `meta` keep the
-/// string colour.
-TextStyle _styleFor(Node node, TextStyle inherited, CodePalette palette) {
-  final className = node.className;
-  if (className == null || className.isEmpty) return inherited;
+/// Emphasis comes from the RUN rather than from its role, because the two
+/// compose: a `@param` inside a doc comment is a keyword in an italic comment,
+/// and a role-only mapping would drop the italic on the way in.
+TextStyle codeStyle(CodeRun run, TextStyle base, CodePalette palette) =>
+    base.copyWith(
+      color: codeInk(run.role, palette),
+      fontStyle: run.italic ? FontStyle.italic : null,
+      fontWeight: run.bold ? FontWeight.w600 : null,
+    );
 
-  var style = inherited;
-  for (final name in className.split(' ')) {
-    final role = _roleFor(name);
-    if (role == null) continue;
-    style = _applyRole(role, style, palette);
-    break;
-  }
-  return style;
-}
-
-/// The colour and weight a role paints with.
-TextStyle _applyRole(_CodeRole role, TextStyle style, CodePalette palette) =>
-    switch (role) {
-      _CodeRole.keyword => style.copyWith(color: palette.keyword),
-      _CodeRole.string => style.copyWith(color: palette.string),
-      _CodeRole.number => style.copyWith(color: palette.number),
-      _CodeRole.comment => style.copyWith(
-        color: palette.comment,
-        fontStyle: FontStyle.italic,
-      ),
-      _CodeRole.function => style.copyWith(color: palette.function),
-      _CodeRole.type => style.copyWith(color: palette.type),
-      _CodeRole.attribute => style.copyWith(color: palette.attribute),
-      _CodeRole.punctuation => style.copyWith(color: palette.punctuation),
-      _CodeRole.inserted => style.copyWith(color: palette.inserted),
-      _CodeRole.deleted => style.copyWith(color: palette.deleted),
-      _CodeRole.strong => style.copyWith(fontWeight: FontWeight.w600),
-      _CodeRole.emphasis => style.copyWith(fontStyle: FontStyle.italic),
+/// The ink for one role, in one theme.
+Color codeInk(CodeRole role, CodePalette palette) => switch (role) {
+      CodeRole.plain => palette.plain,
+      CodeRole.keyword => palette.keyword,
+      CodeRole.string => palette.string,
+      CodeRole.number => palette.number,
+      CodeRole.comment => palette.comment,
+      CodeRole.function => palette.function,
+      CodeRole.type => palette.type,
+      CodeRole.attribute => palette.attribute,
+      CodeRole.punctuation => palette.punctuation,
+      CodeRole.inserted => palette.inserted,
+      CodeRole.deleted => palette.deleted,
     };
-
-/// The roles the palette paints.
-enum _CodeRole {
-  keyword,
-  string,
-  number,
-  comment,
-  function,
-  type,
-  attribute,
-  punctuation,
-  inserted,
-  deleted,
-  strong,
-  emphasis,
-}
-
-/// Which class names map to which role.
-///
-/// The list was taken from what the port actually emits, measured by running
-/// every curated grammar over a representative snippet and collecting the class
-/// names, rather than from highlight.js's documentation — the two differ, and
-/// an unmapped class silently renders as plain text.
-_CodeRole? _roleFor(String className) {
-  // highlight.js suffixes some classes with `_` in the Dart port (`title
-  // function_` arrives as `function_` in some grammars).
-  final name = className.endsWith('_')
-      ? className.substring(0, className.length - 1)
-      : className;
-
-  return switch (name) {
-    'keyword' ||
-    'selector-tag' ||
-    'meta' ||
-    'meta-keyword' ||
-    'doctag' ||
-    'section' => _CodeRole.keyword,
-    'string' ||
-    'char' ||
-    'regexp' ||
-    'symbol' ||
-    'link' ||
-    'code' ||
-    'meta-string' ||
-    'subst' => _CodeRole.string,
-    'number' || 'literal' => _CodeRole.number,
-    'comment' || 'quote' => _CodeRole.comment,
-    'title' || 'function' => _CodeRole.function,
-    'type' || 'class' || 'built_in' => _CodeRole.type,
-    'attr' ||
-    'attribute' ||
-    'variable' ||
-    'template-variable' ||
-    'params' ||
-    'property' ||
-    'name' ||
-    'tag' ||
-    'selector-id' ||
-    'selector-class' ||
-    'selector-attr' ||
-    'bullet' => _CodeRole.attribute,
-    'punctuation' || 'operator' => _CodeRole.punctuation,
-    'addition' => _CodeRole.inserted,
-    'deletion' => _CodeRole.deleted,
-    'strong' => _CodeRole.strong,
-    'emphasis' => _CodeRole.emphasis,
-    _ => null,
-  };
-}

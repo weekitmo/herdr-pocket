@@ -215,9 +215,25 @@
       }
     }
   },
+  "fileImageLoadFailed": "Could not read this image",
+  "fileImageTooLarge": "Image is {size} — past the size a phone preview can hold",
+  "@fileImageTooLarge": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "fileImageTooLargeUnknown": "This image is past the size a phone preview can hold",
+  "fileImageUnreadable": "Not an image this device can show",
+  "fileImageZoom": "View image",
+  "filePdfNoPreview": "PDFs are not rendered in this app. Download it to the phone and open it there.",
   "fileMoreActions": "More actions",
   "fileActionPreviewMarkdown": "Preview Markdown",
+  "fileActionPreviewImage": "Preview image",
   "fileActionViewText": "View source",
+  "fileActionCopyText": "Copy all text",
+  "fileTextCopied": "Copied",
   "fileActionInfo": "File info",
   "fileInfoSize": "Size",
   "fileInfoModified": "Modified",
