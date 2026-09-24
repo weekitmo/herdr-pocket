@@ -8,8 +8,10 @@
 
 | 版本 | 日期 | 一句话 |
 |---|---|---|
+| [0.5.0](#v050) | 2026-09-24 | 源码看得懂了（高亮 / 图片 / 可选中复制）；会话跟踪（Beta） |
 | [0.4.1](#v041) | 2026-09-22 | iOS（模拟器）：权限、图标、下载目录、文件选择器 |
-| [0.4.0](#v040) | 2026-09-20 | 应用锁（PIN + 指纹）；机器延迟；看板默认全展开并记住折叠；慢链路上的三步引导 || [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
+| [0.4.0](#v040) | 2026-09-20 | 应用锁（PIN + 指纹）；机器延迟；看板默认全展开并记住折叠；慢链路上的三步引导 |
+| [0.3.4](#v034) | 2026-09-18 | 文件里长按有更多操作；Markdown 能预览（表格 / 代码高亮 / Mermaid） |
 | [0.3.3](#v033) | 2026-09-18 | 从 shell 页返回后，界面不再假死 |
 | [0.3.2](#v032) | 2026-09-18 | 更新检查说真话；下载只能「取消」；shell 面板与聊天窗按钮归位；终端铺满 |
 | [0.3.1](#v031) | 2026-09-17 | 断了会自己接上；后台也保持连接；聊天窗能打中文 |
@@ -17,6 +19,81 @@
 | [0.2.1](#v021) | 2026-09-17 | 终端软键盘：输入框不再被键盘盖住、退格能删、画面完整；`hdp` 能配第二台手机 |
 | [0.2.0](#v020) | 2026-09-16 | 应用内更新：检查 / 下载 / 校验 / 交给系统安装器 |
 | [0.1.0](#v010) | 2026-09-16 | 首个版本：看板、终端、文件、Git、启动 agent、`hdp` 配对 CLI |
+
+---
+
+<a id="v050"></a>
+## [0.5.0] — 2026-09-24
+
+### 中文
+
+**新功能**
+
+- **源码查看器。** 点开一个代码文件，现在它是一份**能读的代码**，不是一个纯文本块。
+
+  - **语法高亮**，47 种语言：`json` / `yaml` / `toml` / `Dockerfile` / `Makefile` /
+    `CMakeLists.txt` / `.ts` / `.go` / `.rs` / `.js` / `.cs` / `.py` / `.dart` / `.sh` / `.sql` …
+    颜色与 Markdown 预览里的代码块**是同一套**（对比度是量过并断言的，深浅两种主题都 ≥ 4.5:1）。
+  - **不认识的扩展名保持纯文本。** `.m` 可能是 MATLAB 也可能是 Objective-C，
+    **猜错就是在你的文件上画自信的错误颜色** —— 那比不画差。
+  - **图片直接看**：PNG / JPEG / GIF / WebP / BMP 在页面里显示，**点一下全屏**、
+    双指放大。SVG 画成图，也能切回它的原文看。
+  - **文本可选中复制**：长按选中，工具条上只有**复制** ——
+    复制出来的东西**不带行号**（行号是给你看的，不是给你粘的）。
+    想整份拿走用「更多操作 → 复制全部文本」。
+
+- **会话跟踪（Beta，默认关）。** 打开「设置 → 会话跟踪（Beta）」后，终端的 `…` 菜单里
+  多一行：把 agent 自己写的会话记录读出来，按**回合**画成界面。
+
+  - 每个回合：你说了什么、思考了多久、助手回了什么（长文本会截断，**旁边一定有一个展开入口**）。
+  - 工具调用表：次数、中位耗时、总耗时、失败次数。逐回合的 token，以及整个会话的汇总
+    （模型、目录、输入 / 输出 / 缓存、上下文窗口、花费）。
+  - **目前支持 `pi`、`dsh`、`codex`。** 其余 agent 会自动退回终端 —— 记录不存在时不假装有。
+
+**说明**
+
+- 会话跟踪是三层的：agent 自己的记录 → 官方 `agent.read` → 终端画面。
+  **任何一层读不到，都会明说读不到**，不会显示成「这个会话没有内容」。
+  按目录推测出来的会话会标出来（那不是 daemon 给的答案，是猜的）。
+- 应用内**不渲染 PDF**：PDF 页面会直接告诉你去下载，用手机上的 PDF 应用打开
+  （在应用里塞一个 PDF 引擎是另一件事，没做）。
+
+### English
+
+**New**
+
+- **A source viewer.** Opening a code file now shows you *the code*, not a slab of text.
+
+  - **Syntax highlighting**, 47 languages: `json`, `yaml`, `toml`, `Dockerfile`, `Makefile`,
+    `CMakeLists.txt`, `.ts`, `.go`, `.rs`, `.js`, `.cs`, `.py`, `.dart`, `.sh`, `.sql` and more.
+    The colours are the same ones the Markdown preview's code blocks use — measured, and asserted
+    to clear 4.5:1 in both themes.
+  - **A name we do not recognise stays plain.** `.m` is MATLAB or it is Objective-C: a wrong
+    guess paints confidently wrong colours on your file, which is worse than none.
+  - **Images are shown**: PNG, JPEG, GIF, WebP and BMP render in the page, **tap for full screen**
+    and pinch to zoom. An SVG is drawn as a picture, and you can switch to its source.
+  - **Selectable text**: long press to select, and the toolbar offers **Copy only** —
+    what you get has **no line numbers** in it. For a whole file, use
+    *More actions → Copy all text*.
+
+- **Session trace (Beta, off by default).** Turn it on in *Settings → Session trace (Beta)* and the
+  terminal's `…` menu gains a row: the agent's own session record, rendered as **turns**.
+
+  - Each turn: what you asked, how long it thought, what it answered — truncated long text always
+    comes with a way to expand it.
+  - A tool-call table (calls, median, total, failures), per-turn tokens, and session totals
+    (model, directory, input / output / cached, context window, cost).
+  - **`pi`, `dsh` and `codex` for now.** Everything else falls back to the terminal rather than
+    pretending a record exists.
+
+**Notes**
+
+- The trace degrades through three layers: the agent's own record, then the official `agent.read`,
+  then the terminal screen. **A layer that cannot be read says so** — it is never shown as
+  "this session has nothing in it". A session found by guessing from the working directory is
+  labelled as a guess.
+- **PDFs are not rendered** in the app: the page says so and points you at the download, to open it
+  in a PDF app. Bundling a PDF engine is a separate decision, and it has not been made.
 
 ---
 
